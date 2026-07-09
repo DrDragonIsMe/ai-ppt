@@ -62,7 +62,7 @@ async function callOpenAI(prompt, options) {
 
   const isKimiEndpoint = baseUrl.includes('kimi.com/coding');
   const defaultModel = isKimiEndpoint ? 'kimi-for-coding' : 'gpt-4o-mini';
-  const model = options.openaiModel || process.env.OPENAI_MODEL || defaultModel;
+  const model = options.model || options.openaiModel || process.env.OPENAI_MODEL || defaultModel;
 
   let temperature = 0.6;
   if (process.env.AI_PPT_TEMPERATURE) {

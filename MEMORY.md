@@ -14,7 +14,7 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 | `--cream` | `#FAFAF7` | 页面背景 |
 | `--tile` | `#EDF1F0` | 卡片背景 |
 | `--tile-strong` | `#E3E9E7` | 卡片边框、分隔线 |
-| `--teal` | `#00B498` | 唯一情绪色（kicker、badge、icon、progress、强调） |
+| `--teal` | `#439288` | 唯一情绪色（kicker、badge、icon、progress、强调） |
 | `--navy` | `#0B1413` | 代码块、深色表面 |
 
 标题使用衬线字体 `Georgia / Noto Serif SC / Songti SC`，字重 400；正文使用同一衬线字体；UI 元素（kicker、badge、kbd）使用无衬线字体。
@@ -35,7 +35,7 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 | `scripts/export-pdf.mjs` | 可选 Puppeteer 打印 PDF，否则回退浏览器打印。 |
 | `scripts/backup.mjs` | 备份 projects/、skills/、web/、关键文档。 |
 | `scripts/upgrade-decks.mjs` | 将 ai-ppt-base 的 css/js 同步到所有项目。 |
-| `skills/` | CLI skill 定义：ppt-structure、ppt-preview、ppt-edit、ppt-export。 |
+| `skills/` | CLI skill 定义：ppt-structure、ppt-preview、ppt-edit、ppt-export、ppt-list、ppt-delete。 |
 | `install-skills.js` / `install-skills.sh` | 将 skills 安装到 ~/.agents/skills 与 ~/.kimi-code/skills。 |
 
 ## 配置规范
@@ -53,8 +53,14 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
     "audience": "管理层",
     "style": "商业汇报",
     "slideCount": 8,
-    "language": "zh-CN",
-    "model": "qwen-max"
+    "language": "zh-CN"
+  },
+  "modelConfig": {
+    "presetId": "kimi-code",
+    "provider": "kimi",
+    "baseUrl": "https://api.kimi.com/coding/v1",
+    "model": "kimi-for-coding",
+    "apiKey": ""
   },
   "status": "ready",
   "lastGeneratedAt": "2026-07-09T01:41:53.000Z",
@@ -69,7 +75,7 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 1. Web UI 调用 `POST /api/projects/:name/generate`。
 2. `server.mjs` spawn `scripts/generate-deck.mjs <name>`。
 3. `generate-deck.mjs` 读取 `ai-ppt.json`，提取 URL 或使用文章内容。
-4. 调用 `llm-adapter.mjs` 生成幻灯片 HTML；默认优先 OpenAI 兼容 API（Kimi Code），若 `OPENAI_API_KEY` 以 `sk-kimi-` 开头则自动路由到 Kimi Code。
+4. 调用 `llm-adapter.mjs` 生成幻灯片 HTML；优先使用项目 `modelConfig` 中的 OpenAI 兼容 API 配置，其次回退到环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL`；若 `OPENAI_API_KEY` 以 `sk-kimi-` 开头且未指定 Base URL，则自动路由到 Kimi Code。
 5. 如果 LLM 不可用，使用 `buildFallbackSlides` 确定性模板。
 6. 确保仅第一张 slide 带 `active` 类，写入 `index.html`。
 7. 通过 stdout NDJSON 发送进度事件，server 通过 SSE 转发给前端。

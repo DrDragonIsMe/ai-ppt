@@ -20,7 +20,11 @@
     inputStyle: document.getElementById('input-style'),
     inputSlideCount: document.getElementById('input-slide-count'),
     inputLanguage: document.getElementById('input-language'),
-    inputModel: document.getElementById('input-model'),
+    inputModelPreset: document.getElementById('input-model-preset'),
+    inputModelProvider: document.getElementById('input-model-provider'),
+    inputModelName: document.getElementById('input-model-name'),
+    inputModelBaseUrl: document.getElementById('input-model-base-url'),
+    inputModelApiKey: document.getElementById('input-model-api-key'),
     btnSave: document.getElementById('btn-save'),
     btnGenerate: document.getElementById('btn-generate'),
     btnPreview: document.getElementById('btn-preview'),
@@ -53,6 +57,8 @@
     { key: 'ready', label: '完成' },
   ];
 
+  let models = [];
+
   async function api(method, path, body) {
     const opts = { method, headers: {} };
     if (body) {
@@ -72,6 +78,20 @@
     els.toast.classList.add('show');
     clearTimeout(showToast.timer);
     showToast.timer = setTimeout(() => els.toast.classList.remove('show'), 2600);
+  }
+
+  async function loadModels() {
+    try {
+      models = await api('GET', '/api/models');
+    } catch {
+      models = [];
+    }
+    const select = els.inputModelPreset;
+    const current = select.value;
+    select.innerHTML = models.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join('');
+    if (current && models.some((m) => m.id === current)) {
+      select.value = current;
+    }
   }
 
   async function loadProjects(selectName = null) {
@@ -140,7 +160,18 @@
     els.inputStyle.value = cfg.params?.style || '商业汇报';
     els.inputSlideCount.value = cfg.params?.slideCount || 8;
     els.inputLanguage.value = cfg.params?.language || 'zh-CN';
-    els.inputModel.value = cfg.params?.model || 'qwen-max';
+
+    const mcfg = cfg.modelConfig || {};
+    const presetId = mcfg.presetId || 'kimi-code';
+    if (models.some((m) => m.id === presetId)) {
+      els.inputModelPreset.value = presetId;
+    } else {
+      els.inputModelPreset.value = 'custom';
+    }
+    els.inputModelProvider.value = mcfg.provider || '';
+    els.inputModelName.value = mcfg.model || '';
+    els.inputModelBaseUrl.value = mcfg.baseUrl || '';
+    els.inputModelApiKey.value = mcfg.apiKey || '';
 
     const canExport = cfg.status === 'ready';
     els.btnPreview.disabled = !canExport;
@@ -180,6 +211,8 @@
   function getConfigPayload() {
     const activeTab = document.querySelector('.tab.active');
     const sourceType = activeTab ? activeTab.dataset.source : 'article';
+    const presetId = els.inputModelPreset.value;
+    const preset = models.find((m) => m.id === presetId);
     return {
       sourceType,
       sourceUrl: els.inputUrl.value.trim(),
@@ -190,7 +223,13 @@
         style: els.inputStyle.value,
         slideCount: parseInt(els.inputSlideCount.value, 10) || 8,
         language: els.inputLanguage.value,
-        model: els.inputModel.value.trim() || 'qwen-max',
+      },
+      modelConfig: {
+        presetId,
+        provider: els.inputModelProvider.value.trim() || (preset?.provider || ''),
+        model: els.inputModelName.value.trim() || (preset?.model || ''),
+        baseUrl: els.inputModelBaseUrl.value.trim() || (preset?.baseUrl || ''),
+        apiKey: els.inputModelApiKey.value.trim(),
       },
     };
   }
@@ -361,6 +400,19 @@
   els.tabs.forEach((t) => {
     t.addEventListener('click', () => setSourceTab(t.dataset.source));
   });
+  els.inputModelPreset.addEventListener('change', () => {
+    const preset = models.find((m) => m.id === els.inputModelPreset.value);
+    if (!preset) return;
+    if (preset.id === 'custom') {
+      els.inputModelProvider.value = 'openai';
+      els.inputModelName.value = '';
+      els.inputModelBaseUrl.value = '';
+    } else {
+      els.inputModelProvider.value = preset.provider || '';
+      els.inputModelName.value = preset.model || '';
+      els.inputModelBaseUrl.value = preset.baseUrl || '';
+    }
+  });
   els.btnSave.addEventListener('click', saveConfig);
   els.btnGenerate.addEventListener('click', generate);
   els.btnPreview.addEventListener('click', openPreview);
@@ -416,5 +468,5 @@
     }
   });
 
-  loadProjects();
+  loadModels().then(loadProjects);
 })();

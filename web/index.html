@@ -84,9 +84,33 @@
                   <option value="en">English</option>
                 </select>
               </div>
+            </div>
+          </section>
+
+          <section class="card model-config-card">
+            <div class="card-title">模型配置</div>
+            <div class="fields-grid">
+              <div class="field field-wide">
+                <label>模型预设</label>
+                <select id="input-model-preset">
+                  <option value="">加载中...</option>
+                </select>
+              </div>
               <div class="field">
-                <label>模型</label>
-                <input type="text" id="input-model" placeholder="qwen-max">
+                <label>Provider</label>
+                <input type="text" id="input-model-provider" placeholder="kimi / openai">
+              </div>
+              <div class="field">
+                <label>模型名称</label>
+                <input type="text" id="input-model-name" placeholder="kimi-for-coding">
+              </div>
+              <div class="field field-wide">
+                <label>Base URL</label>
+                <input type="url" id="input-model-base-url" placeholder="https://api.kimi.com/coding/v1">
+              </div>
+              <div class="field field-wide">
+                <label>API Key <span class="hint-inline">留空则使用环境变量 OPENAI_API_KEY</span></label>
+                <input type="password" id="input-model-api-key" placeholder="sk-...">
               </div>
             </div>
           </section>

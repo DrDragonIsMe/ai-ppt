@@ -1,6 +1,6 @@
 # ai-ppt
 
-基于 HTML/CSS/JS 的轻量级幻灯片系统，支持键盘导航、全屏放映、多页预览、PDF 导出，以及通过 Web 界面从 URL 或文章内容自动生成完整 deck。附带 Claude CLI / Kimi CLI 的 skill 扩展：`/ppt-preview`、`/ppt-structure`、`/ppt-edit`、`/ppt-export`。
+基于 HTML/CSS/JS 的轻量级幻灯片系统，支持键盘导航、全屏放映、多页预览、PDF 导出，以及通过 Web 界面从 URL 或文章内容自动生成完整 deck。附带 Claude CLI / Kimi CLI 的 skill 扩展：`/ppt-preview`、`/ppt-structure`、`/ppt-edit`、`/ppt-export`、`/ppt-list`、`/ppt-delete`。
 
 ## 仓库结构
 
@@ -27,7 +27,9 @@ ai-ppt/
 │   ├── ppt-preview/              # /ppt-preview
 │   ├── ppt-structure/            # /ppt-structure
 │   ├── ppt-edit/                 # /ppt-edit
-│   └── ppt-export/               # /ppt-export
+│   ├── ppt-export/               # /ppt-export
+│   ├── ppt-list/                 # /ppt-list
+│   └── ppt-delete/               # /ppt-delete
 ├── scripts/                      # 升级、生成、导出、备份工具
 │   ├── upgrade-decks.mjs         # 用基座 css/js 覆盖所有项目
 │   ├── generate-deck.mjs         # 从 URL/文章生成 deck
@@ -66,7 +68,7 @@ npx ai-ppt-skills
 
 ### LLM 配置（可选，默认 Kimi Code）
 
-生成脚本默认优先使用 OpenAI 兼容 API（Kimi Code），其次 Bailian CLI (`bl chat`)，最后退化为确定性模板。
+每个项目可在 Web UI 的「模型配置」面板独立设置 Provider、Base URL、模型名称和 API Key；未填写时回退到以下环境变量。命令行生成同样遵循此优先级。
 
 ```bash
 # 方式 A：Kimi Code（推荐，默认）
@@ -220,6 +222,8 @@ npm run backup
 | `/ppt-structure <name>` | 从 `ai-ppt-base` 新建 deck |
 | `/ppt-edit [instruction]` | 修改幻灯片文字、布局 |
 | `/ppt-export [deck] [pdf\|pptx]` | 导出 PDF 或 PPTX |
+| `/ppt-list` | 列出所有 deck |
+| `/ppt-delete <deck>` | 删除指定 deck（需确认） |
 
 ## 发布到 npm
 
@@ -240,12 +244,9 @@ npx ai-ppt-skills
 | Deck | 说明 |
 |------|------|
 | `ai-ppt-base/` | PPT 引擎基座模板，可复用 |
-| `projects/aoji-company/` | 傲济公司宣传页 |
-| `projects/xinrenxinshi-huaxia-bank/` | 薪人薪事 × 华夏银行 |
-| `projects/xinrenxinshi-usagestobank/` | 薪人薪事 × 银行代发联合运营战略 |
-| `projects/yellow-books/` | 黄皮书小说 |
-| `projects/new-new-new/` | HR + AI 今日动态 |
 | `projects/q3-sales-preview/` | Q3 销售队伍建设动员 |
+| `projects/test-new-css/` | 测试新 CSS/配色效果 |
+| `projects/xinrenxinshi-huaxia-bank/` | 薪人薪事 × 华夏银行 |
 
 ## 更新日志
 
@@ -266,6 +267,13 @@ npx ai-ppt-skills
 - 标题字体改为衬线、字重 400，去除渐变效果，情绪色仅用于 kicker / badge / icon / progress。
 - PDF 导出改为逐页 Puppeteer 截图后合并，输出完整多页 PDF。
 - 可编辑 PPTX 同步更新配色与字体，更接近浏览器渲染效果。
+
+### v1.7.3 — 模型配置、新 skills、配色微调（2026-07）
+
+- 新增 `modelConfig` 配置项，支持在 Web UI 选择模型预设或自定义 Base URL / Model / API Key，默认 `kimi-code`。
+- Web UI 模型配置面板从 `/api/models` 加载模型列表。
+- 新增 `/ppt-list` skill 用于列出所有 deck，新增 `/ppt-delete` skill 用于删除 deck。
+- teal 情绪色从 `#00B498` 调整为 `#439288`。
 
 ### v1.4 — PDF 页眉标题 + 专业水印（2025-07）
 

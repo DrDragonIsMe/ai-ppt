@@ -134,6 +134,47 @@ export function deleteProject(name) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+export const PRESET_MODELS = [
+  {
+    id: 'kimi-code',
+    name: 'Kimi Code',
+    provider: 'kimi',
+    baseUrl: 'https://api.kimi.com/coding/v1',
+    model: 'kimi-for-coding',
+  },
+  {
+    id: 'openai-gpt-4o-mini',
+    name: 'OpenAI GPT-4o mini',
+    provider: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+  },
+  {
+    id: 'openai-gpt-4o',
+    name: 'OpenAI GPT-4o',
+    provider: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o',
+  },
+  {
+    id: 'custom',
+    name: '自定义',
+    provider: 'openai',
+    baseUrl: '',
+    model: '',
+  },
+];
+
+export function defaultModelConfig() {
+  return {
+    presetId: 'kimi-code',
+    provider: 'kimi',
+    baseUrl: 'https://api.kimi.com/coding/v1',
+    model: 'kimi-for-coding',
+    apiKey: '',
+  };
+}
+
 function defaultModel() {
   if (process.env.OPENAI_API_KEY?.startsWith('sk-kimi-')) {
     return process.env.OPENAI_MODEL || 'kimi-for-coding';
@@ -155,10 +196,20 @@ export function defaultConfig(name, title) {
       language: 'zh-CN',
       model: defaultModel(),
     },
+    modelConfig: defaultModelConfig(),
     status: 'draft',
     lastGeneratedAt: null,
     errorMessage: null,
   };
+}
+
+export function migrateModelConfig(cfg) {
+  if (cfg.modelConfig) return cfg;
+  const preset = PRESET_MODELS.find((m) => m.id === (cfg.params?.model || 'kimi-code'));
+  cfg.modelConfig = preset
+    ? { ...preset, presetId: preset.id, apiKey: '' }
+    : defaultModelConfig();
+  return cfg;
 }
 
 export function readConfig(name) {
@@ -167,7 +218,8 @@ export function readConfig(name) {
     return defaultConfig(name, name);
   }
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
+    const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return migrateModelConfig(cfg);
   } catch (err) {
     return defaultConfig(name, name);
   }

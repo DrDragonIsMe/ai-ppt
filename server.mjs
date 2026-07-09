@@ -12,6 +12,7 @@ import {
   readConfig,
   writeConfig,
   getProjectDir,
+  PRESET_MODELS,
 } from './scripts/config.mjs';
 import { exportPptx, exportPptxImage } from './scripts/export-pptx.mjs';
 import { exportPdf } from './scripts/export-pdf.mjs';
@@ -165,6 +166,9 @@ function reqOnClose(reqOrRes, fn) {
 }
 
 const routes = [
+  { method: 'GET', pattern: /^\/api\/models$/, handler: async (_req, res) => {
+    send(res, 200, PRESET_MODELS);
+  }},
   { method: 'GET', pattern: /^\/api\/projects$/, handler: async (_req, res) => {
     send(res, 200, listProjects());
   }},
@@ -198,6 +202,7 @@ const routes = [
     if (body.sourceUrl !== undefined) cfg.sourceUrl = body.sourceUrl;
     if (body.articleText !== undefined) cfg.articleText = body.articleText;
     if (body.params) cfg.params = { ...cfg.params, ...body.params };
+    if (body.modelConfig) cfg.modelConfig = { ...cfg.modelConfig, ...body.modelConfig };
     writeConfig(name, cfg);
     send(res, 200, cfg);
   }},

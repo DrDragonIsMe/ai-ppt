@@ -335,8 +335,15 @@ async function main() {
     const prompt = buildPrompt(cfg, content);
     emit('prompt', '正在构建生成提示词');
 
+    const modelOptions = cfg.modelConfig
+      ? {
+          apiKey: cfg.modelConfig.apiKey || undefined,
+          baseUrl: cfg.modelConfig.baseUrl || undefined,
+          model: cfg.modelConfig.model || cfg.params?.model,
+        }
+      : { model: cfg.params?.model };
     let slidesHtml = '';
-    const llmResult = await generateSlides(prompt, { model: cfg.params?.model });
+    const llmResult = await generateSlides(prompt, modelOptions);
     if (llmResult) {
       emit('llm', 'LLM 返回内容，正在解析');
       slidesHtml = extractMainContent(llmResult);

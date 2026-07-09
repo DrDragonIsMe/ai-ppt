@@ -166,8 +166,6 @@
     updateSlide();
   }
 
-  window.goToSlide = goTo;
-
   function updateSlide() {
     state.slides.forEach((slide, i) => {
       slide.classList.toggle('active', i === state.current);
