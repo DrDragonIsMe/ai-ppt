@@ -1,0 +1,290 @@
+# ai-ppt
+
+基于 HTML/CSS/JS 的轻量级幻灯片系统，支持键盘导航、全屏放映、多页预览、PDF 导出，以及通过 Web 界面从 URL 或文章内容自动生成完整 deck。附带 Claude CLI / Kimi CLI 的 skill 扩展：`/ppt-preview`、`/ppt-structure`、`/ppt-edit`、`/ppt-export`。
+
+## 仓库结构
+
+```
+ai-ppt/
+├── ai-ppt-base/                  # 可复用的 PPT 引擎基座（唯一升级源）
+│   ├── index.html                # 示例/默认 deck
+│   ├── css/ppt.css               # 主题与放映样式
+│   ├── js/ppt.js                 # 导航、全屏、预览、PDF 导出
+│   ├── theme-ref/                # 风格参考
+│   └── README.md                 # deck 级说明
+├── projects/                     # 所有业务 deck
+│   ├── aoji-company/
+│   ├── xinrenxinshi-huaxia-bank/
+│   ├── xinrenxinshi-usagestobank/
+│   ├── yellow-books/
+│   └── ...
+├── web/                          # Web 管理界面
+│   ├── index.html
+│   ├── css/web.css
+│   └── js/web.js
+├── server.mjs                    # Web 服务入口
+├── skills/                       # CLI skills
+│   ├── ppt-preview/              # /ppt-preview
+│   ├── ppt-structure/            # /ppt-structure
+│   ├── ppt-edit/                 # /ppt-edit
+│   └── ppt-export/               # /ppt-export
+├── scripts/                      # 升级、生成、导出、备份工具
+│   ├── upgrade-decks.mjs         # 用基座 css/js 覆盖所有项目
+│   ├── generate-deck.mjs         # 从 URL/文章生成 deck
+│   ├── export-pptx.mjs           # 导出 PPTX
+│   ├── export-pdf.mjs            # 导出 PDF（可选 Puppeteer）
+│   ├── backup.mjs                # 项目与技能备份
+│   └── config.mjs                # 项目配置读写
+├── install-skills.js             # Node 安装脚本
+├── install-skills.sh             # Shell 安装脚本
+├── package.json                  # npx 支持
+├── AGENTS.md                     # 项目约定与记忆
+├── MEMORY.md                     # 架构记忆
+└── README.md                     # 本文件
+```
+
+## 快速开始
+
+### 1. 安装 skills
+
+```bash
+# 方式一：Shell
+./install-skills.sh
+
+# 方式二：Node
+node install-skills.js
+
+# 方式三：npx（本地）
+npm link
+npx ai-ppt-skills
+
+# 方式四：npx（发布后）
+npx ai-ppt-skills
+```
+
+安装完成后重启 CLI 会话。
+
+### LLM 配置（可选，默认 Kimi Code）
+
+生成脚本默认优先使用 OpenAI 兼容 API（Kimi Code），其次 Bailian CLI (`bl chat`)，最后退化为确定性模板。
+
+```bash
+# 方式 A：Kimi Code（推荐，默认）
+export OPENAI_API_KEY=sk-kimi-...
+export OPENAI_BASE_URL=https://api.kimi.com/coding/v1
+export OPENAI_MODEL=kimi-for-coding
+
+# 方式 B：Bailian CLI
+bl login
+```
+
+如果 `OPENAI_API_KEY` 以 `sk-kimi-` 开头且未设置 `OPENAI_BASE_URL`，脚本会自动使用 `https://api.kimi.com/coding/v1` 和 `kimi-for-coding` 模型。
+
+也可以将上述环境变量写入 `.env.kimi`（已加入 `.gitignore`，不要提交到仓库），然后启动 Web 服务：
+
+```bash
+source .env.kimi && npm run web
+```
+
+### 2. 新建 deck
+
+```bash
+/ppt-structure q3-report
+```
+
+会生成：
+
+```
+projects/q3-report/
+├── README.md
+├── index.html
+├── css/ppt.css
+└── js/ppt.js
+```
+
+### 3. 编辑 deck
+
+```bash
+cd q3-report
+/ppt-edit slide 1 title "Q3 业务复盘"
+```
+
+或直接修改 `index.html`。
+
+### 4. 预览
+
+```bash
+/ppt-preview              # 预览当前目录 deck
+/ppt-preview q3-report    # 预览 projects/q3-report
+```
+
+### 5. 升级 deck 引擎
+
+当 `ai-ppt-base` 的样式或交互引擎更新后，同步到所有项目：
+
+```bash
+npm run upgrade-decks
+```
+
+仅升级指定项目：
+
+```bash
+npm run upgrade-decks -- --project q3-report
+```
+
+查看影响范围（不实际复制）：
+
+```bash
+npm run upgrade-decks -- --dry-run
+```
+
+### 6. Web 管理界面（推荐）
+
+启动 Web 控制台，在浏览器中管理项目、配置来源、自动生成幻灯片：
+
+```bash
+npm run web
+```
+
+默认打开 `http://localhost:3456`。
+
+- 创建/删除项目
+- 选择内容来源：网页 URL 或粘贴文章内容
+- 配置标题、受众、风格、页数、模型等参数
+- 点击“生成幻灯片”，实时查看流程进度
+- 生成完成后自动打开预览
+- 按 `Ctrl+P` / `Cmd+P` 打开导出面板（PDF / PPTX）
+
+### 7. 命令行生成与导出
+
+生成指定项目的幻灯片：
+
+```bash
+npm run generate -- q3-report
+```
+
+导出 PPTX（可编辑文字版，布局近似）：
+
+```bash
+npm run export-pptx -- q3-report
+```
+
+导出高清图片 PPTX（逐页截图，还原度最高）：
+
+```bash
+npm run export-pptx-image -- q3-report
+```
+
+导出 PDF（自动查找系统 Chrome，若未安装则提示使用浏览器打印）：
+
+```bash
+npm run export-pdf -- q3-report
+```
+
+产物保存在 `projects/<deck-name>/export/`：
+
+```
+projects/q3-report/export/
+├── deck.pptx        # 可编辑文字版
+├── deck-image.pptx  # 高清图片版
+└── deck.pdf         # PDF 版
+```
+
+### 8. 备份
+
+在批量修改前创建备份：
+
+```bash
+npm run backup
+```
+
+备份保存在 `.backup/<timestamp>/`。
+
+## 键盘快捷键
+
+| 按键 | 功能 |
+|------|------|
+| `→` / `←` | 下/上一页 |
+| `Cmd + →` / `Cmd + ←` | 尾页/首页 |
+| `↑` | 多页预览 |
+| `↓` | 导出 PDF |
+| `Ctrl + P` / `Cmd + P` | 打印 / 导出面板（Web UI） |
+| `F` | 全屏 |
+| `ESC` | 退出 |
+
+## 可用 skill
+
+| Skill | 作用 |
+|-------|------|
+| `/ppt-preview [deck]` | 启动本地服务器预览 deck |
+| `/ppt-structure <name>` | 从 `ai-ppt-base` 新建 deck |
+| `/ppt-edit [instruction]` | 修改幻灯片文字、布局 |
+| `/ppt-export [deck] [pdf\|pptx]` | 导出 PDF 或 PPTX |
+
+## 发布到 npm
+
+如果你想让其他人通过 npx 安装：
+
+```bash
+npm publish --access public
+```
+
+之后任何人都可以运行：
+
+```bash
+npx ai-ppt-skills
+```
+
+## 可用 Deck（项目目录）
+
+| Deck | 说明 |
+|------|------|
+| `ai-ppt-base/` | PPT 引擎基座模板，可复用 |
+| `projects/aoji-company/` | 傲济公司宣传页 |
+| `projects/xinrenxinshi-huaxia-bank/` | 薪人薪事 × 华夏银行 |
+| `projects/xinrenxinshi-usagestobank/` | 薪人薪事 × 银行代发联合运营战略 |
+| `projects/yellow-books/` | 黄皮书小说 |
+| `projects/new-new-new/` | HR + AI 今日动态 |
+| `projects/q3-sales-preview/` | Q3 销售队伍建设动员 |
+
+## 更新日志
+
+### v1.7 — Web 管理、自动生成、PPTX 导出（2026-07）
+
+- **Web 管理界面**：新增 `web/` + `server.mjs`，支持浏览器中创建项目、配置 URL/文章内容、调整生成参数。
+- **自动生成管线**：`scripts/generate-deck.mjs` 支持从 URL 或文章生成 HTML 幻灯片，优先 Bailian CLI，其次 OpenAI 兼容 API，最后确定性模板兜底。
+- **流程可视化**：生成过程通过 SSE 实时推送到 Web UI，完成后自动打开预览。
+- **PPTX 导出**：新增 `/ppt-export` skill 与 `scripts/export-pptx.mjs`，使用 `pptxgenjs` 生成 `.pptx`。
+- **高清图片 PPTX 导出**：新增 `npm run export-pptx-image`，使用 Puppeteer 截取每页最终状态并嵌入 PPTX。
+- **PDF 导出**：`scripts/export-pdf.mjs` 自动查找系统 Chrome，无需手动配置 `PUPPETEER_EXECUTABLE_PATH`；同时保留浏览器打印回退。
+- **项目备份**：新增 `scripts/backup.mjs` 与 `npm run backup`。
+- **LLM 配置**：支持通过 `.env.kimi` 配置 Kimi Code 等 OpenAI 兼容 API。
+
+### v1.7.2 — 配色与导出修复（2026-07）
+
+- 对齐 `teal-editorial` 参考配色：ink #151A19、cream #FAFAF7、tile #EDF1F0、tile-strong #E3E9E7、teal #00B498、navy #0B1413。
+- 标题字体改为衬线、字重 400，去除渐变效果，情绪色仅用于 kicker / badge / icon / progress。
+- PDF 导出改为逐页 Puppeteer 截图后合并，输出完整多页 PDF。
+- 可编辑 PPTX 同步更新配色与字体，更接近浏览器渲染效果。
+
+### v1.4 — PDF 页眉标题 + 专业水印（2025-07）
+
+- **PDF 导出页眉**：点击 `↓` 导出前自动设置静态文档标题，浏览器打印对话框显示正确文件名。
+- **打印水印**：每页添加半透明文字水印"内部资料，请勿非法传播"，防止外泄。
+- **页边距优化**：通过 `@page` 调整上下边距，避免内容被裁剪。
+
+### v1.3 — 打印输出介质自适应（2025-07）
+
+- **物理打印**：幻灯片以 `100vw × 100vh` 渲染，A4 纸等比缩放内容，不再强制压缩到 297mm。
+- **虚拟 PDF 导出**：浏览器 PDF 渲染器使用完整页面区域，保持满屏比例。
+- **预览空白修复**：向上箭头打开多页预览时，所有页面内容可见（`.overview-card .slide-content` 强制 `opacity: 1`）。
+- 影响全部 deck：`ai-ppt-base/`, `aoji-company/`, `xinrenxinshi-huaxia-bank/`, `xinrenxinshi-usagestobank/`, `yellow-books/`
+
+### v1.2 — PDF 导出与预览修复（2025-07）
+
+- **PDF 导出尺寸修复**：打印模式下幻灯片满屏渲染，解决 A4 纸上只占中心小区域的问题。
+- **预览空白修复**：向上箭头打开多页预览时，所有页面内容可见。
+
+## 许可证
+
+MIT

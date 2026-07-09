@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cool Editorial + Teal Accent</title>
+  <style>
+    :root {
+      --ink: #151A19;
+      --cream: #FAFAF7;
+      --tile: #EDF1F0;
+      --tile-strong: #E3E9E7;
+      --teal: #00B498;
+      --navy: #0B1413;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Georgia", "Noto Serif SC", "Songti SC", serif;
+      background: var(--cream);
+      color: var(--ink);
+      padding: 32px 24px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    .page {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .kicker {
+      display: inline-block;
+      background: var(--teal);
+      color: var(--cream);
+      font-family: "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 2px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin: 0 0 20px 0;
+      line-height: 1.2;
+    }
+
+    .lead {
+      font-size: 18px;
+      color: var(--ink);
+      opacity: 0.75;
+      margin-bottom: 32px;
+      max-width: 560px;
+    }
+
+    .tile {
+      background: var(--tile);
+      border: 1px solid var(--tile-strong);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .tile h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .tile p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.7;
+    }
+
+    .btn-primary {
+      display: inline-block;
+      background: var(--teal);
+      color: var(--cream);
+      font-family: "Helvetica Neue", "PingFang SC", sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 20px;
+      border-radius: 4px;
+      text-decoration: none;
+      letter-spacing: 0.02em;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    .btn-secondary {
+      display: inline-block;
+      background: transparent;
+      color: var(--ink);
+      font-family: "Helvetica Neue", "PingFang SC", sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 10px 20px;
+      border: 1px solid var(--tile-strong);
+      border-radius: 4px;
+      text-decoration: none;
+      margin-left: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      background: var(--tile);
+    }
+
+    .code-block {
+      background: var(--navy);
+      color: var(--cream);
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-size: 13px;
+      padding: 20px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 24px 0;
+      line-height: 1.6;
+    }
+
+    .code-block .comment { color: #6B8A83; }
+    .code-block .keyword { color: var(--teal); }
+    .code-block .string { color: #7DD3C0; }
+
+    .swatch-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
+      flex-wrap: wrap;
+    }
+
+    .swatch {
+      width: 80px;
+      text-align: center;
+    }
+
+    .swatch-color {
+      width: 80px;
+      height: 80px;
+      border-radius: 6px;
+      border: 1px solid var(--tile-strong);
+      margin-bottom: 6px;
+    }
+
+    .swatch-label {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 11px;
+      color: var(--ink);
+      opacity: 0.6;
+      line-height: 1.5;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--tile-strong);
+      margin: 32px 0;
+    }
+
+    .section-title {
+      font-family: "Helvetica Neue", "PingFang SC", sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink);
+      opacity: 0.4;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 600px) {
+      h1 { font-size: 28px; }
+      .lead { font-size: 16px; }
+      .swatch { width: 70px; }
+      .swatch-color { width: 70px; height: 70px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="kicker">Editorial Preview</div>
+    <h1>Cool editorial + teal accent</h1>
+    <p class="lead">
+      这套配色以冷调编辑感为底，奶油白做画布，深墨黑为字，电压青（#00B498）作为唯一的情绪色——不喧宾夺主，只在关键处亮一下。
+    </p>
+
+    <div class="section-title">Components</div>
+
+    <div class="tile">
+      <h3>卡片容器</h3>
+      <p>tile (#EDF1F0) 与 tile-strong (#E3E9E7) 的微妙层级，让界面有纸质杂志的呼吸感，而不是扁平的灰块。</p>
+    </div>
+
+    <div class="code-block">
+<span class="comment">/* voltage accent — 只在需要注意力的地方用 */</span><br>
+<span class="keyword">--teal</span>: <span class="string">#00B498</span>;<br>
+<span class="comment">/* dark/code surface — 代码块或深色模式底 */</span><br>
+<span class="keyword">--navy</span>: <span class="string">#0B1413</span>;
+    </div>
+
+    <a href="#" class="btn-primary">Primary Action</a>
+    <a href="#" class="btn-secondary">Secondary</a>
+
+    <div class="divider"></div>
+
+    <div class="section-title">Color Palette</div>
+
+    <div class="swatch-row">
+      <div class="swatch">
+        <div class="swatch-color" style="background: #151A19;"></div>
+        <div class="swatch-label">ink<br>#151A19</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #FAFAF7;"></div>
+        <div class="swatch-label">cream<br>#FAFAF7</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #EDF1F0;"></div>
+        <div class="swatch-label">tile<br>#EDF1F0</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #E3E9E7;"></div>
+        <div class="swatch-label">tile-strong<br>#E3E9E7</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #00B498;"></div>
+        <div class="swatch-label">teal<br>#00B498</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #0B1413;"></div>
+        <div class="swatch-label">navy<br>#0B1413</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
