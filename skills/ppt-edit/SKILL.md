@@ -52,6 +52,7 @@ The syntax above is a guide; the user may describe edits in natural language (e.
 
 4. **Apply the edit**
    - Use the `Edit` tool for targeted text/content changes.
+   - Follow the `/ppt-design` rules (skills/ppt-design/SKILL.md): layout rotation, kicker/section-title restraint (cover/closing only), no gradient-text, no invented data, paragraphs ≤3 lines.
    - Preserve all engine markup: `#overview`, `#help`, `#toast`, `#progress`, `#hud`, `<script src="js/ppt.js">`, and `<link rel="stylesheet" href="css/ppt.css">`.
    - When changing layout, prefer existing CSS classes (`.two-col`, `.tile-row`, `.tile`, `.ppt-table`, `.highlight-box`, `.cover-slide`, etc.) over inline styles.
    - When adding a slide, copy the `<section class="slide">` structure from an existing slide and set `class="slide active"` only on the new slide if it should be the first; otherwise use `class="slide"`.

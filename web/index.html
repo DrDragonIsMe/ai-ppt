@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ai-ppt 管理台</title>
+  <title>ai-ppt Workspace</title>
   <link rel="stylesheet" href="/css/web.css">
 </head>
 <body>
@@ -25,109 +25,210 @@
       </aside>
 
       <main class="workspace">
-        <div id="empty-state" class="empty-state">
+        <div id="empty-state" class="empty-state" style="padding: 60px 40px;">
           <h2>选择一个项目或创建新项目</h2>
           <p>在左侧选择项目，配置来源与参数后点击生成，即可自动创建 HTML 幻灯片。</p>
         </div>
 
         <div id="project-panel" class="project-panel hidden">
-          <div class="panel-header">
-            <h1 id="project-title"></h1>
-            <div class="status" id="project-status"></div>
+          <div class="workspace-split">
+            <div class="workspace-config">
+              <div class="workspace-config-scroll">
+                <div class="panel-header">
+                  <h1 id="project-title"></h1>
+                  <div class="status" id="project-status"></div>
+                </div>
+
+                <div class="config-tabs">
+                  <button class="config-tab active" data-tab="content">内容</button>
+                  <button class="config-tab" data-tab="style">主题</button>
+                  <button class="config-tab" data-tab="animation">动画</button>
+                  <button class="config-tab" data-tab="publish">发布</button>
+                </div>
+
+                <div class="config-panel active" data-panel="content">
+                  <section class="card">
+                    <div class="card-title">内容来源</div>
+                    <div class="tabs">
+                      <button class="tab active" data-source="article">文章内容</button>
+                      <button class="tab" data-source="url">网页 URL</button>
+                    </div>
+                    <div class="field" id="field-url">
+                      <label>网页 URL</label>
+                      <input type="url" id="input-url" placeholder="https://example.com/article">
+                    </div>
+                    <div class="field" id="field-article">
+                      <label>文章内容</label>
+                      <textarea id="input-article" rows="6" placeholder="粘贴文章或内容..."></textarea>
+                    </div>
+                  </section>
+
+                  <section class="card">
+                    <div class="card-title">生成参数</div>
+                    <div class="fields-grid">
+                      <div class="field">
+                        <label>演示标题</label>
+                        <input type="text" id="input-title">
+                      </div>
+                      <div class="field">
+                        <label>目标受众</label>
+                        <input type="text" id="input-audience">
+                      </div>
+                      <div class="field">
+                        <label>风格</label>
+                        <select id="input-style">
+                          <option>商业汇报</option>
+                          <option>学术演讲</option>
+                          <option>产品发布</option>
+                          <option>培训课件</option>
+                          <option>极简 keynote</option>
+                        </select>
+                      </div>
+                      <div class="field">
+                        <label>页数</label>
+                        <input type="number" id="input-slide-count" min="3" max="30">
+                      </div>
+                      <div class="field">
+                        <label>语言</label>
+                        <select id="input-language">
+                          <option value="zh-CN">中文</option>
+                          <option value="en">English</option>
+                        </select>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="card model-config-card">
+                    <div class="card-title">模型配置</div>
+                    <div class="fields-grid">
+                      <div class="field field-wide">
+                        <label>模型预设</label>
+                        <select id="input-model-preset">
+                          <option value="">加载中...</option>
+                        </select>
+                      </div>
+                      <div class="field">
+                        <label>Provider</label>
+                        <input type="text" id="input-model-provider" placeholder="kimi / openai">
+                      </div>
+                      <div class="field">
+                        <label>模型名称</label>
+                        <input type="text" id="input-model-name" placeholder="kimi-for-coding">
+                      </div>
+                      <div class="field field-wide">
+                        <label>Base URL</label>
+                        <input type="url" id="input-model-base-url" placeholder="https://api.kimi.com/coding/v1">
+                      </div>
+                      <div class="field field-wide">
+                        <label>API Key <span class="hint-inline">临时 · 仅本次生成, 不保存; 留空则用环境变量</span></label>
+                        <input type="password" id="input-model-api-key" placeholder="sk-...">
+                      </div>
+                    </div>
+                  </section>
+
+                  <div class="actions-bar">
+                    <button id="btn-save" class="btn-secondary">保存配置</button>
+                    <button id="btn-generate" class="btn-primary">生成幻灯片</button>
+                    <button id="btn-preview" class="btn-secondary" disabled>预览</button>
+                    <button id="btn-export-pptx" class="btn-secondary" disabled>导出 PPTX</button>
+                    <button id="btn-export-pptx-image" class="btn-secondary" disabled>导出高清 PPTX</button>
+                  </div>
+
+                  <section id="progress-card" class="card progress-card hidden">
+                    <div class="card-title">生成流程</div>
+                    <div id="progress-steps" class="progress-steps"></div>
+                    <div id="progress-log" class="progress-log"></div>
+                  </section>
+                </div>
+
+                <div class="config-panel" data-panel="style">
+                  <section class="card">
+                    <div class="card-title">选择主题</div>
+                    <div class="theme-grid" id="theme-grid">
+                    </div>
+                  </section>
+
+                  <section class="card">
+                    <div class="card-title">主题说明</div>
+                    <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7;">
+                      选择主题后，点击「保存配置」应用更改。主题会立即在右侧预览窗口中显示效果。
+                    </p>
+                  </section>
+
+                  <div class="actions-bar">
+                    <button id="btn-save-theme" class="btn-primary">保存配置</button>
+                  </div>
+                </div>
+
+                <div class="config-panel" data-panel="animation">
+                  <section class="card">
+                    <div class="card-title">动画类型</div>
+                    <div class="animation-options" id="animation-options">
+                    </div>
+                  </section>
+
+                  <section class="card">
+                    <div class="card-title">动画速度</div>
+                    <div class="field">
+                      <div class="speed-slider">
+                        <label>快速</label>
+                        <input type="range" id="animation-speed" min="1" max="3" value="2">
+                        <label>缓慢</label>
+                      </div>
+                    </div>
+                  </section>
+
+                  <div class="actions-bar">
+                    <button id="btn-save-animation" class="btn-primary">保存配置</button>
+                  </div>
+                </div>
+
+                <div class="config-panel" data-panel="publish">
+                  <section class="card">
+                    <div class="card-title">发布状态</div>
+                    <div class="publish-status">
+                      <div class="publish-status-icon">📝</div>
+                      <div class="publish-status-info">
+                        <div class="publish-status-title" id="publish-status-title">草稿状态</div>
+                        <div class="publish-status-desc" id="publish-status-desc">尚未发布过任何版本</div>
+                      </div>
+                    </div>
+
+                    <button id="btn-publish" class="btn-primary" style="width: 100%; margin-top: 12px;">发布当前版本</button>
+                  </section>
+
+                  <section class="card">
+                    <div class="card-title">访问链接</div>
+                    <div class="publish-history">
+                      <div class="publish-history-title">最新版本</div>
+                      <div id="publish-latest" style="padding: 12px; background: var(--tile); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; word-break: break-all; color: var(--ink); opacity: 0.6;">
+                        暂未发布
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="card">
+                    <div class="card-title">发布历史</div>
+                    <div class="publish-list" id="publish-list">
+                      <div style="padding: 40px 20px; text-align: center; opacity: 0.5; font-size: 13px;">
+                        暂无发布历史
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+
+            <div class="workspace-preview">
+              <div class="workspace-preview-header">
+                <div class="workspace-preview-title">实时预览</div>
+                <button id="btn-open-preview" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">在新窗口打开</button>
+              </div>
+              <div class="workspace-preview-frame">
+                <iframe id="preview-frame"></iframe>
+              </div>
+            </div>
           </div>
-
-          <section class="card">
-            <div class="card-title">内容来源</div>
-            <div class="tabs">
-              <button class="tab active" data-source="article">文章内容</button>
-              <button class="tab" data-source="url">网页 URL</button>
-            </div>
-            <div class="field" id="field-url">
-              <label>网页 URL</label>
-              <input type="url" id="input-url" placeholder="https://example.com/article">
-            </div>
-            <div class="field" id="field-article">
-              <label>文章内容</label>
-              <textarea id="input-article" rows="8" placeholder="粘贴文章或内容..."></textarea>
-            </div>
-          </section>
-
-          <section class="card">
-            <div class="card-title">生成参数</div>
-            <div class="fields-grid">
-              <div class="field">
-                <label>演示标题</label>
-                <input type="text" id="input-title">
-              </div>
-              <div class="field">
-                <label>目标受众</label>
-                <input type="text" id="input-audience">
-              </div>
-              <div class="field">
-                <label>风格</label>
-                <select id="input-style">
-                  <option>商业汇报</option>
-                  <option>学术演讲</option>
-                  <option>产品发布</option>
-                  <option>培训课件</option>
-                  <option>极简 keynote</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>页数</label>
-                <input type="number" id="input-slide-count" min="3" max="30">
-              </div>
-              <div class="field">
-                <label>语言</label>
-                <select id="input-language">
-                  <option value="zh-CN">中文</option>
-                  <option value="en">English</option>
-                </select>
-              </div>
-            </div>
-          </section>
-
-          <section class="card model-config-card">
-            <div class="card-title">模型配置</div>
-            <div class="fields-grid">
-              <div class="field field-wide">
-                <label>模型预设</label>
-                <select id="input-model-preset">
-                  <option value="">加载中...</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Provider</label>
-                <input type="text" id="input-model-provider" placeholder="kimi / openai">
-              </div>
-              <div class="field">
-                <label>模型名称</label>
-                <input type="text" id="input-model-name" placeholder="kimi-for-coding">
-              </div>
-              <div class="field field-wide">
-                <label>Base URL</label>
-                <input type="url" id="input-model-base-url" placeholder="https://api.kimi.com/coding/v1">
-              </div>
-              <div class="field field-wide">
-                <label>API Key <span class="hint-inline">留空则使用环境变量 OPENAI_API_KEY</span></label>
-                <input type="password" id="input-model-api-key" placeholder="sk-...">
-              </div>
-            </div>
-          </section>
-
-          <div class="actions-bar">
-            <button id="btn-save" class="btn-secondary">保存配置</button>
-            <button id="btn-generate" class="btn-primary">生成幻灯片</button>
-            <button id="btn-preview" class="btn-secondary" disabled>预览</button>
-            <button id="btn-export-pptx" class="btn-secondary" disabled>导出 PPTX</button>
-            <button id="btn-export-pptx-image" class="btn-secondary" disabled>导出高清图片 PPTX</button>
-          </div>
-
-          <section id="progress-card" class="card progress-card hidden">
-            <div class="card-title">生成流程</div>
-            <div id="progress-steps" class="progress-steps"></div>
-            <div id="progress-log" class="progress-log"></div>
-          </section>
         </div>
       </main>
     </div>

@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>主题展示 · ai-ppt</title>
+  <link rel="stylesheet" href="css/ppt.css">
+  <style>
+    .showcase-container {
+      padding: 40px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .showcase-header {
+      text-align: center;
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .showcase-title {
+      font-family: var(--font-heading);
+      font-size: 42px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+
+    .showcase-subtitle {
+      font-family: var(--font-body);
+      font-size: 18px;
+      color: var(--muted);
+    }
+
+    .showcase-hint {
+      margin-top: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--muted);
+      opacity: 0.7;
+    }
+
+    .themes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+
+    .theme-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .theme-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+      border-color: var(--border-strong);
+    }
+
+    .theme-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    .theme-preview {
+      aspect-ratio: 16/10;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .theme-preview-header {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .theme-preview-accent {
+      width: 48px;
+      height: 24px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+
+    .theme-preview-tiles {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .theme-preview-tile {
+      flex: 1;
+      height: 32px;
+      border-radius: 6px;
+    }
+
+    .theme-info {
+      padding: 16px 20px 20px;
+    }
+
+    .theme-name {
+      font-family: var(--font-heading);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+
+    .theme-desc {
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .theme-active-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 6px 12px;
+      background: var(--accent-light);
+      color: var(--accent-dark);
+      font-family: var(--font-heading);
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 999px;
+    }
+
+    .theme-active-badge svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .demo-section {
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }
+
+    .demo-title {
+      font-family: var(--font-heading);
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 24px;
+    }
+
+    .demo-components {
+      display: grid;
+      gap: 24px;
+    }
+
+    .demo-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .demo-label {
+      font-family: var(--font-heading);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      width: 100px;
+      flex-shrink: 0;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-heading);
+      font-size: 14px;
+      color: var(--muted);
+      text-decoration: none;
+      margin-bottom: 24px;
+      transition: color 0.15s ease;
+    }
+
+    .back-link:hover {
+      color: var(--ink);
+    }
+
+    .back-link svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .showcase-container {
+        padding: 24px;
+      }
+
+      .showcase-title {
+        font-size: 32px;
+      }
+
+      .themes-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="showcase-container">
+    <a href="index.html" class="back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15 18-6-6 6-6"></path>
+      </svg>
+      返回演示文稿
+    </a>
+
+    <header class="showcase-header">
+      <h1 class="showcase-title">主题展示</h1>
+      <p class="showcase-subtitle">8 种精心设计的主题，适配不同的演示场景</p>
+      <p class="showcase-hint">提示：点击主题卡片即可预览，按 T 键循环切换</p>
+    </header>
+
+    <div class="themes-grid" id="themes-grid"></div>
+
+    <section class="demo-section">
+      <h2 class="demo-title">组件预览</h2>
+      <div class="demo-components">
+        <div class="demo-row">
+          <span class="demo-label">标题</span>
+          <h1 style="margin: 0; font-size: 32px;">这是一级标题</h1>
+        </div>
+        <div class="demo-row">
+          <span class="demo-label">正文</span>
+          <p style="margin: 0; max-width: 500px;">这是一段正文内容，可以用来展示文字的阅读效果。好的字体层级能让观众更轻松地理解内容结构。</p>
+        </div>
+        <div class="demo-row">
+          <span class="demo-label">强调</span>
+          <span class="kicker">Kicker</span>
+          <a href="#" class="btn-primary" onclick="return false;">按钮</a>
+          <span class="badge">Badge</span>
+        </div>
+        <div class="demo-row">
+          <span class="demo-label">卡片</span>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div class="tile" style="min-width: 150px; margin: 0;">
+              <h3 style="margin: 0 0 6px; font-size: 14px;">卡片标题</h3>
+              <p style="margin: 0; font-size: 12px; color: var(--muted);">卡片描述文字</p>
+            </div>
+            <div class="tile" style="min-width: 150px; margin: 0;">
+              <h3 style="margin: 0 0 6px; font-size: 14px;">卡片标题</h3>
+              <p style="margin: 0; font-size: 12px; color: var(--muted);">卡片描述文字</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const themes = [
+        {
+          id: 'web-ui',
+          name: 'Web UI',
+          desc: '专业、克制、现代，默认主题',
+          accent: '#0D9488',
+          tiles: ['#F0FDFA', '#CCFBF1', '#99F6E4'],
+        },
+        {
+          id: 'business-blue',
+          name: '商务蓝',
+          desc: '稳重、专业、可信，适合金融、咨询',
+          accent: '#2563EB',
+          tiles: ['#EFF6FF', '#DBEAFE', '#BFDBFE'],
+        },
+        {
+          id: 'elegant-purple',
+          name: '优雅紫',
+          desc: '高端、创意、有格调，适合设计、时尚',
+          accent: '#7C3AED',
+          tiles: ['#F5F3FF', '#EDE9FE', '#DDD6FE'],
+        },
+        {
+          id: 'warm-orange',
+          name: '温暖橙',
+          desc: '活力、亲切、有温度，适合消费、零售',
+          accent: '#EA580C',
+          tiles: ['#FFF7ED', '#FFEDD5', '#FED7AA'],
+        },
+        {
+          id: 'sunset-red',
+          name: '日落红',
+          desc: '热情、活力、有冲击力，适合营销活动',
+          accent: '#E11D48',
+          tiles: ['#FFF1F2', '#FFE4E6', '#FECDD3'],
+        },
+        {
+          id: 'tech-green',
+          name: '科技绿',
+          desc: '环保、可持续、科技感，适合新能源',
+          accent: '#65A30D',
+          tiles: ['#F7FEE7', '#ECFCCB', '#D9F99D'],
+        },
+        {
+          id: 'minimal-gray',
+          name: '极简灰',
+          desc: '克制、高级、无印风，适合设计工作室',
+          accent: '#171717',
+          tiles: ['#F5F5F5', '#E5E5E5', '#D4D4D4'],
+        },
+        {
+          id: 'dark-mode',
+          name: '暗黑模式',
+          desc: '高端、沉浸、护眼，适合科技产品发布',
+          accent: '#22D3EE',
+          tiles: ['#164E63', '#0E7490', '#0891B2'],
+        },
+      ];
+
+      let currentTheme = localStorage.getItem('ai-ppt-theme') || 'web-ui';
+      let themeLink = null;
+
+      function init() {
+        themeLink = document.createElement('link');
+        themeLink.rel = 'stylesheet';
+        document.head.appendChild(themeLink);
+        applyTheme(currentTheme);
+        buildThemeCards();
+        bindKeyboard();
+      }
+
+      function buildThemeCards() {
+        const grid = document.getElementById('themes-grid');
+        if (!grid) return;
+
+        themes.forEach((theme) => {
+          const card = document.createElement('div');
+          card.className = 'theme-card' + (theme.id === currentTheme ? ' active' : '');
+          card.dataset.themeId = theme.id;
+          card.innerHTML = `
+            <div class="theme-preview" style="background: ${theme.id === 'dark-mode' ? '#020617' : 'var(--cream)'};">
+              <div class="theme-preview-header">
+                <div class="theme-preview-accent" style="background: ${theme.accent};"></div>
+                <div style="height: 8px; width: 80px; background: ${theme.id === 'dark-mode' ? '#334155' : 'var(--tile-strong)'}; border-radius: 4px;"></div>
+              </div>
+              <div style="height: 6px; width: 60%; background: ${theme.id === 'dark-mode' ? '#1E293B' : 'var(--tile)'}; border-radius: 3px;"></div>
+              <div style="height: 6px; width: 40%; background: ${theme.id === 'dark-mode' ? '#1E293B' : 'var(--tile)'}; border-radius: 3px;"></div>
+              <div class="theme-preview-tiles">
+                ${theme.tiles.map((color) => `<div class="theme-preview-tile" style="background: ${color};"></div>`).join('')}
+              </div>
+            </div>
+            <div class="theme-info">
+              <div class="theme-name">${theme.name}</div>
+              <div class="theme-desc">${theme.desc}</div>
+              ${theme.id === currentTheme ? `
+                <div class="theme-active-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  当前使用
+                </div>
+              ` : ''}
+            </div>
+          `;
+          card.addEventListener('click', () => selectTheme(theme.id));
+          grid.appendChild(card);
+        });
+      }
+
+      function selectTheme(themeId) {
+        currentTheme = themeId;
+        applyTheme(themeId);
+        localStorage.setItem('ai-ppt-theme', themeId);
+
+        const cards = document.querySelectorAll('.theme-card');
+        cards.forEach((card) => {
+          const isActive = card.dataset.themeId === themeId;
+          card.classList.toggle('active', isActive);
+
+          const badge = card.querySelector('.theme-active-badge');
+          if (isActive && !badge) {
+            const info = card.querySelector('.theme-info');
+            const newBadge = document.createElement('div');
+            newBadge.className = 'theme-active-badge';
+            newBadge.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              当前使用
+            `;
+            info.appendChild(newBadge);
+          } else if (!isActive && badge) {
+            badge.remove();
+          }
+        });
+      }
+
+      function applyTheme(themeId) {
+        if (themeId === 'web-ui') {
+          themeLink.href = '';
+        } else {
+          themeLink.href = `css/themes/${themeId}.css`;
+        }
+      }
+
+      function cycleTheme() {
+        const currentIndex = themes.findIndex((t) => t.id === currentTheme);
+        const nextIndex = (currentIndex + 1) % themes.length;
+        selectTheme(themes[nextIndex].id);
+      }
+
+      function bindKeyboard() {
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 't' || e.key === 'T') {
+            e.preventDefault();
+            cycleTheme();
+          }
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>

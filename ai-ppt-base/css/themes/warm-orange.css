@@ -1,0 +1,33 @@
+/* ===========================================
+   Theme: Warm Orange
+   - 温暖橙调
+   - 活力、亲切、有温度
+   - 适合消费、零售、生活方式
+   =========================================== */
+
+body.theme-warm-orange {
+  /* Brand / Accent */
+  --teal: #EA580C;
+  --teal-light: #F97316;
+  --accent: #EA580C;
+  --accent-light: #FFF7ED;
+  --accent-dark: #C2410C;
+
+  /* Ink + Neutrals */
+  --ink: #1C1917;
+  --navy: #0C0A09;
+  --slate: #44403C;
+  --muted: #78716C;
+  --cream: #FFFBF5;
+  --surface: #FFFFFF;
+  --surface-subtle: #FFF7ED;
+  --tile: #FFF7ED;
+  --tile-strong: #FFEDD5;
+  --border: #FFEDD5;
+  --border-strong: #FED7AA;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #059669;
+  --info: #2563EB;
+}

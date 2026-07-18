@@ -29,7 +29,7 @@ await page.keyboard.press('?');
 await sleep(300);
 
 for (let i = 0; i < Math.min(slides, 9); i++) {
-  await page.evaluate(idx => window.goToSlide && window.goToSlide(idx), i);
+  await page.evaluate(idx => window.goTo && window.goTo(idx), i);
   await sleep(1500);
   const file = path.join(outDir, `check-${String(i + 1).padStart(2, '0')}.png`);
   await page.screenshot({ path: file, fullPage: false });

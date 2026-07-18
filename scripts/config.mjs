@@ -11,9 +11,20 @@ const BASE_DIR = path.join(ROOT, 'ai-ppt-base');
 const BASE_CSS = path.join(BASE_DIR, 'css', 'ppt.css');
 const BASE_JS = path.join(BASE_DIR, 'js', 'ppt.js');
 const BASE_README = path.join(BASE_DIR, 'README.md');
+const BASE_THEMES_DIR = path.join(BASE_DIR, 'css', 'themes');
 
 export const ROOT_DIR = ROOT;
 export const PROJECTS_ROOT = PROJECTS_DIR;
+
+function getThemeFiles() {
+  if (!fs.existsSync(BASE_THEMES_DIR)) {
+    return [];
+  }
+  const entries = fs.readdirSync(BASE_THEMES_DIR, { withFileTypes: true });
+  return entries
+    .filter((e) => e.isFile() && e.name.endsWith('.css'))
+    .map((e) => path.join(BASE_THEMES_DIR, e.name));
+}
 
 export function ensureProjectsDir() {
   fs.mkdirSync(PROJECTS_DIR, { recursive: true });
@@ -44,14 +55,26 @@ export function projectExists(name) {
 
 export function ensureBaseEngine(name) {
   const dir = getProjectDir(name);
+  const themeFiles = getThemeFiles();
+
   fs.mkdirSync(path.join(dir, 'css'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'js'), { recursive: true });
   fs.copyFileSync(BASE_CSS, path.join(dir, 'css', 'ppt.css'));
   fs.copyFileSync(BASE_JS, path.join(dir, 'js', 'ppt.js'));
+
+  if (themeFiles.length > 0) {
+    const themesDest = path.join(dir, 'css', 'themes');
+    fs.mkdirSync(themesDest, { recursive: true });
+    for (const themeFile of themeFiles) {
+      fs.copyFileSync(themeFile, path.join(themesDest, path.basename(themeFile)));
+    }
+  }
 }
 
-export function createStarterHtml(name, title) {
+export function createStarterHtml(name, title, theme = 'web-ui', animation = 'slide') {
   const subtitle = '由 ai-ppt 自动生成';
+  const themeClass = theme !== 'web-ui' ? ` theme-${theme}` : '';
+  const animClass = animation !== 'none' ? ` anim-${animation}` : '';
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -59,8 +82,17 @@ export function createStarterHtml(name, title) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
   <link rel="stylesheet" href="css/ppt.css">
+  <link rel="stylesheet" href="css/themes/theme-switcher.css">
+  <link rel="stylesheet" href="css/themes/web-ui.css">
+  <link rel="stylesheet" href="css/themes/business-blue.css">
+  <link rel="stylesheet" href="css/themes/elegant-purple.css">
+  <link rel="stylesheet" href="css/themes/warm-orange.css">
+  <link rel="stylesheet" href="css/themes/sunset-red.css">
+  <link rel="stylesheet" href="css/themes/tech-green.css">
+  <link rel="stylesheet" href="css/themes/minimal-gray.css">
+  <link rel="stylesheet" href="css/themes/dark-mode.css">
 </head>
-<body>
+<body class="${themeClass}${animClass}">
   <div id="app">
     <main id="stage" class="stage">
       <section class="slide active">
@@ -95,7 +127,7 @@ export function createStarterHtml(name, title) {
       <div><kbd>←</kbd> 上一页 · <kbd>→</kbd> 下一页</div>
       <div><kbd>Cmd</kbd>+<kbd>←</kbd> 首页 · <kbd>Cmd</kbd>+<kbd>→</kbd> 尾页</div>
       <div><kbd>↑</kbd> 预览 · <kbd>↓</kbd> 导出 PDF</div>
-      <div><kbd>F</kbd> 全屏 · <kbd>?</kbd> 帮助</div>
+      <div><kbd>F</kbd> 全屏 · <kbd>T</kbd> 切换主题 · <kbd>?</kbd> 帮助</div>
     </div>
 
     <div id="toast" class="toast"></div>
@@ -119,9 +151,8 @@ export function createProject(name, title) {
   fs.mkdirSync(dir, { recursive: true });
   ensureBaseEngine(name);
   fs.copyFileSync(BASE_README, path.join(dir, 'README.md'));
-  fs.writeFileSync(path.join(dir, 'index.html'), createStarterHtml(name, title || name), 'utf8');
-
   const config = defaultConfig(name, title);
+  fs.writeFileSync(path.join(dir, 'index.html'), createStarterHtml(name, title || name, config.theme, config.animation), 'utf8');
   writeConfig(name, config);
   return config;
 }
@@ -171,7 +202,6 @@ export function defaultModelConfig() {
     provider: 'kimi',
     baseUrl: 'https://api.kimi.com/coding/v1',
     model: 'kimi-for-coding',
-    apiKey: '',
   };
 }
 
@@ -197,6 +227,8 @@ export function defaultConfig(name, title) {
       model: defaultModel(),
     },
     modelConfig: defaultModelConfig(),
+    theme: 'web-ui',
+    animation: 'slide',
     status: 'draft',
     lastGeneratedAt: null,
     errorMessage: null,
@@ -204,10 +236,14 @@ export function defaultConfig(name, title) {
 }
 
 export function migrateModelConfig(cfg) {
-  if (cfg.modelConfig) return cfg;
+  if (cfg.modelConfig) {
+    // Never persist API keys; strip on read in case an older config stored one.
+    delete cfg.modelConfig.apiKey;
+    return cfg;
+  }
   const preset = PRESET_MODELS.find((m) => m.id === (cfg.params?.model || 'kimi-code'));
   cfg.modelConfig = preset
-    ? { ...preset, presetId: preset.id, apiKey: '' }
+    ? { ...preset, presetId: preset.id }
     : defaultModelConfig();
   return cfg;
 }
@@ -227,7 +263,11 @@ export function readConfig(name) {
 
 export function writeConfig(name, config) {
   const file = path.join(getProjectDir(name), 'ai-ppt.json');
-  fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf8');
+  // Sanitize: API keys must never be persisted; params.model is superseded by modelConfig.model.
+  const safe = JSON.parse(JSON.stringify(config));
+  if (safe.modelConfig) delete safe.modelConfig.apiKey;
+  if (safe.params) delete safe.params.model;
+  fs.writeFileSync(file, JSON.stringify(safe, null, 2), 'utf8');
 }
 
 export function updateStatus(name, status, errorMessage = null) {
@@ -236,6 +276,39 @@ export function updateStatus(name, status, errorMessage = null) {
   if (errorMessage !== undefined) cfg.errorMessage = errorMessage;
   if (status === 'ready') cfg.lastGeneratedAt = new Date().toISOString();
   writeConfig(name, cfg);
+}
+
+export function applyThemeAndAnimation(name, theme, animation) {
+  const dir = getProjectDir(name);
+  const htmlPath = path.join(dir, 'index.html');
+  if (!fs.existsSync(htmlPath)) {
+    return false;
+  }
+
+  let html = fs.readFileSync(htmlPath, 'utf8');
+
+  // Build classes array
+  const classes = [];
+  if (theme && theme !== 'web-ui') {
+    classes.push(`theme-${theme}`);
+  }
+  if (animation && animation !== 'none') {
+    classes.push(`anim-${animation}`);
+  }
+
+  // Build the class string
+  const classStr = classes.join(' ');
+
+  // First, remove any existing body class
+  html = html.replace(/<body\s+class="[^"]*"\s*>/g, '<body>');
+
+  // Then add the new class if we have one
+  if (classStr) {
+    html = html.replace('<body>', `<body class="${classStr}">`);
+  }
+
+  fs.writeFileSync(htmlPath, html, 'utf8');
+  return true;
 }
 
 function escapeHtml(text) {

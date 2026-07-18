@@ -158,46 +158,27 @@ function extractPoint(line) {
 function buildFallbackSlides(cfg, content) {
   const title = cfg.params?.title || cfg.name;
   const sections = parseSections(content);
+  const subtitle = [cfg.params?.style, cfg.params?.audience]
+    .filter(Boolean)
+    .join(' · ');
 
   let slides = '';
-  slides += slideCover(title, '回到基本功 · 打赢持久战');
-  slides += slideQuote('销售是长跑。笨一点，透一点，时间会成为我们最忠诚的队友。');
+  slides += slideCover(title, subtitle);
 
   for (const sec of sections.slice(0, 6)) {
     slides += slideVisual(sec.title, sec.points.slice(0, 3));
   }
 
-  slides += slideHeroStats([
-    { value: '6', label: '核心要点' },
-    { value: 'Q3', label: '目标季度' },
-    { value: '∞', label: '持续复利' },
-  ]);
-  slides += slideThankYou('Q3，一起干');
+  slides += slideThankYou(title);
   return slides;
 }
 
 function slideCover(title, subtitle) {
   return `      <section class="slide active">
         <div class="slide-content section-hero" style="text-align: center;">
-          <div class="kicker">Q3 动员</div>
           <h1>${escapeHtml(title)}</h1>
-          <p class="lead" style="font-size: clamp(20px, 2.5vw, 34px);">${escapeHtml(subtitle)}</p>
+          ${subtitle ? `<p class="lead" style="font-size: clamp(20px, 2.5vw, 34px);">${escapeHtml(subtitle)}</p>` : ''}
           <div class="divider" style="margin: 40px auto; max-width: 160px;"></div>
-          <div class="badge-row">
-            <span class="badge">少文字</span>
-            <span class="badge outline">多图形</span>
-            <span class="badge">讲者驱动</span>
-          </div>
-        </div>
-      </section>\n`;
-}
-
-function slideQuote(quote) {
-  return `      <section class="slide">
-        <div class="slide-content" style="display: flex; align-items: center; justify-content: center;">
-          <div class="quote-block" style="width: 100%;">
-            <p>${escapeHtml(quote)}</p>
-          </div>
         </div>
       </section>\n`;
 }
@@ -208,7 +189,6 @@ function slideVisual(title, points) {
     : `            <div class="visual-card">\n              <div class="icon">★</div>\n              <p>详见讲演者口述</p>\n            </div>`;
   return `      <section class="slide">
         <div class="slide-content">
-          <div class="section-title">核心观点</div>
           <h2>${escapeHtml(title)}</h2>
           <div class="visual-row">
 ${cards}
@@ -217,35 +197,20 @@ ${cards}
       </section>\n`;
 }
 
-function slideHeroStats(stats) {
-  const items = stats.map((s) => `            <div class="hero-stat">\n              <div class="big-number">${escapeHtml(String(s.value))}</div>\n              <div class="big-number-label">${escapeHtml(s.label)}</div>\n            </div>`).join('\n');
-  return `      <section class="slide">
-        <div class="slide-content" style="text-align: center;">
-          <div class="section-title">Data</div>
-          <h2>关键数字</h2>
-          <div class="split-visual" style="margin-top: 40px;">
-${items}
-          </div>
-        </div>
-      </section>\n`;
-}
-
-function slideThankYou(closing) {
+function slideThankYou(title) {
   return `      <section class="slide">
         <div class="slide-content section-hero" style="text-align: center;">
-          <div class="kicker">Together</div>
-          <h1>${escapeHtml(closing)}</h1>
-          <p class="lead">回到基本功 · 打赢持久战</p>
-          <div class="badge-row">
-            <span class="badge">勤奋</span>
-            <span class="badge">复盘</span>
-            <span class="badge">AI</span>
-          </div>
+          <h1>谢谢观看</h1>
+          <p class="lead">${escapeHtml(title)}</p>
         </div>
       </section>\n`;
 }
 
-function wrapSlides(slidesHtml, title) {
+function wrapSlides(slidesHtml, title, cfg) {
+  const theme = cfg.theme || 'web-ui';
+  const animation = cfg.animation || 'slide';
+  const themeClass = theme !== 'web-ui' ? ` theme-${theme}` : '';
+  const animClass = animation !== 'none' ? ` anim-${animation}` : '';
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -253,8 +218,17 @@ function wrapSlides(slidesHtml, title) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
   <link rel="stylesheet" href="css/ppt.css">
+  <link rel="stylesheet" href="css/themes/theme-switcher.css">
+  <link rel="stylesheet" href="css/themes/web-ui.css">
+  <link rel="stylesheet" href="css/themes/business-blue.css">
+  <link rel="stylesheet" href="css/themes/elegant-purple.css">
+  <link rel="stylesheet" href="css/themes/warm-orange.css">
+  <link rel="stylesheet" href="css/themes/sunset-red.css">
+  <link rel="stylesheet" href="css/themes/tech-green.css">
+  <link rel="stylesheet" href="css/themes/minimal-gray.css">
+  <link rel="stylesheet" href="css/themes/dark-mode.css">
 </head>
-<body>
+<body class="${themeClass}${animClass}">
   <div id="app">
     <main id="stage" class="stage">
 ${slidesHtml}    </main>
@@ -269,7 +243,7 @@ ${slidesHtml}    </main>
       <div><kbd>Cmd</kbd>+<kbd>←</kbd> 首页 · <kbd>Cmd</kbd>+<kbd>→</kbd> 尾页</div>
       <div><kbd>↑</kbd> 预览 · <kbd>↓</kbd> 导出 PDF</div>
       <div><kbd>Ctrl</kbd>+<kbd>P</kbd> 打印 / 导出</div>
-      <div><kbd>F</kbd> 全屏 · <kbd>?</kbd> 帮助</div>
+      <div><kbd>F</kbd> 全屏 · <kbd>T</kbd> 切换主题 · <kbd>?</kbd> 帮助</div>
     </div>
 
     <div id="toast" class="toast"></div>
@@ -335,13 +309,16 @@ async function main() {
     const prompt = buildPrompt(cfg, content);
     emit('prompt', '正在构建生成提示词');
 
+    // API key comes from the environment (AI_PPT_API_KEY passed by the Web UI
+    // for this session, or OPENAI_API_KEY from .env.kimi) - never from the
+    // persisted config, where apiKey is stripped on write.
     const modelOptions = cfg.modelConfig
       ? {
-          apiKey: cfg.modelConfig.apiKey || undefined,
+          apiKey: process.env.AI_PPT_API_KEY || undefined,
           baseUrl: cfg.modelConfig.baseUrl || undefined,
-          model: cfg.modelConfig.model || cfg.params?.model,
+          model: cfg.modelConfig.model || cfg.params?.model || undefined,
         }
-      : { model: cfg.params?.model };
+      : { model: cfg.params?.model || undefined };
     let slidesHtml = '';
     const llmResult = await generateSlides(prompt, modelOptions);
     if (llmResult) {
@@ -373,7 +350,7 @@ async function main() {
 
     emit('build', '正在写入 index.html');
     ensureBaseEngine(name);
-    const html = wrapSlides(slidesHtml, cfg.params?.title || cfg.name);
+    const html = wrapSlides(slidesHtml, cfg.params?.title || cfg.name, cfg);
     fs.writeFileSync(path.join(projectDir, 'index.html'), html, 'utf8');
 
     setStatus(name, 'ready');
@@ -390,16 +367,26 @@ function buildPrompt(cfg, content) {
   const p = cfg.params || {};
   return `请根据以下内容为名为 "${p.title || cfg.name}" 的演示文稿生成 HTML 幻灯片片段。
 
-要求：
+输出格式：
 - 只返回 <main id="stage" class="stage"> 内部的内容，即多个 <section class="slide"> 元素。
 - 第一个 <section> 需要带有 class="slide active"，其余为 class="slide"。
-- 使用项目已有的 CSS 类：slide-content, kicker, section-title, h1, h2, h3, lead, tile-row, tile, two-col, ppt-table, divider。
-- 额外可用视觉类（优先使用）：big-number, big-number-label, hero-stat, visual-row, visual-card, icon, quote-block, timeline, timeline-item, badge-row, badge, split-visual, gradient-text, section-hero。
 - 目标受众：${p.audience || '通用'}；风格：${p.style || '商业汇报'}；语言：${p.language || 'zh-CN'}；大约 ${p.slideCount || 8} 页。
-- 设计原则：少文字、多图形、大气 keynote 风格；每页只保留 1-3 个核心词/短句，详细内容由讲演者口述。
-- 用大字标题、巨型数字、图标卡片、引用块、时间轴、标签云等视觉元素突出重点，避免大段正文。
-- 幻灯片正文使用纯文本，不要使用 Markdown 语法（#、**、>、-、\`[链接]\` 等）。
 - 不要输出 <html>, <head>, <body>, <script>, <style> 或任何解释文字。
+- 幻灯片正文使用纯文本，不要使用 Markdown 语法（#、**、>、-、\`[链接]\` 等）。
+
+可用 CSS 类（只能使用这些，禁止手写 style 属性和新组件）：
+- 结构：slide-content, h1, h2, h3, lead, divider, section-hero。
+- 要点并列：tile-row, tile, two-col, visual-row, visual-card, icon。
+- 数据：split-visual, hero-stat, big-number, big-number-label, chart-bar, chart-bar-item, progress-ring, data-matrix, waterfall, waterfall-item, ppt-table。
+- 流程与强调：chart-steps, timeline, timeline-item, timeline-horizontal, quote-block, badge-row, badge。
+
+设计原则（必须遵守，优先级高于一切）：
+- 一页只讲一个核心观点，标题即结论；每页保留 1-3 个核心词/短句，详细内容由讲演者口述，任何正文段落不超过 3 行。
+- 版式必须轮换：相邻两页不使用同一种结构；卡片式页面（tile-row / visual-row）不超过总页数的 1/3，能用表格、图表、时间轴、大数字表达的不要用卡片。
+- 内容中有数据、指标、百分比时，优先用可视化组件展示（big-number、chart-bar、progress-ring、waterfall、timeline-horizontal 等）；数字只使用来源内容中真实存在的，禁止编造；同一行大数字不超过 4 个。
+- kicker / section-title 只允许出现在封面和收尾页；内容页一律不用。
+- 禁止使用 gradient-text 类；禁止在封面放置描述演示原则的标签（badge）；封面只放标题、副标题、署名/日期。
+- 标题不超过 20 个汉字，避免折行溢出。
 
 来源内容（已提取关键文本）：
 ${content.slice(0, 6000)}

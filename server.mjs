@@ -13,6 +13,7 @@ import {
   writeConfig,
   getProjectDir,
   PRESET_MODELS,
+  applyThemeAndAnimation,
 } from './scripts/config.mjs';
 import { exportPptx, exportPptxImage } from './scripts/export-pptx.mjs';
 import { exportPdf } from './scripts/export-pdf.mjs';
@@ -22,6 +23,7 @@ const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname);
 const WEB_DIR = path.join(ROOT, 'web');
 const PROJECTS_DIR = path.join(ROOT, 'projects');
+const PUBLISHED_DIR = path.join(ROOT, 'published');
 const PORT = process.env.AI_PPT_PORT || 3456;
 
 const generators = new Map();
@@ -39,6 +41,30 @@ const MIME = {
   '.pdf': 'application/pdf',
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };
+
+// Load .env.kimi (gitignored) at startup so LLM keys are available to the
+// generator child process via env inheritance. Never overrides existing env.
+function loadEnvFile() {
+  const envPath = path.join(ROOT, '.env.kimi');
+  if (!fs.existsSync(envPath)) return;
+  try {
+    const content = fs.readFileSync(envPath, 'utf8');
+    for (const line of content.split('\n')) {
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (!m) continue;
+      const key = m[1];
+      if (process.env[key] !== undefined) continue;
+      let val = m[2].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      process.env[key] = val;
+    }
+  } catch {
+    // ignore env file read errors
+  }
+}
+loadEnvFile();
 
 function send(res, status, data, type = 'application/json') {
   const body = typeof data === 'string' ? data : JSON.stringify(data);
@@ -76,16 +102,22 @@ async function readBody(req) {
   });
 }
 
-function spawnGenerator(name) {
+function spawnGenerator(name, apiKey) {
   if (generators.has(name)) {
     const g = generators.get(name);
     if (!g.done) return g;
   }
 
+  // Pass a session-only API key (if provided by the Web UI) to the child via
+  // env. It is never written to disk; generate-deck.mjs prefers it over the
+  // ambient OPENAI_API_KEY.
+  const env = { ...process.env };
+  if (apiKey) env.AI_PPT_API_KEY = apiKey;
+
   const child = spawn(process.execPath, [
     path.join(ROOT, 'scripts', 'generate-deck.mjs'),
     name,
-  ], { cwd: ROOT });
+  ], { cwd: ROOT, env });
 
   const state = {
     name,
@@ -165,6 +197,18 @@ function reqOnClose(reqOrRes, fn) {
   reqOrRes.on('error', fn);
 }
 
+// Confine a resolved path under its root to prevent path traversal (../).
+function isWithinRoot(rootPath, relPath) {
+  const root = path.resolve(rootPath);
+  // Strip leading slashes: path.resolve(root, '/x') treats '/x' as filesystem-absolute,
+  // which would both break legit assets like /css/x and bypass '..' confinement.
+  const rel = String(relPath).replace(/^\/+/, '');
+  const target = path.resolve(root, rel);
+  return target === root || target.startsWith(root + path.sep);
+}
+
+const PROJECT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+
 const routes = [
   { method: 'GET', pattern: /^\/api\/models$/, handler: async (_req, res) => {
     send(res, 200, PRESET_MODELS);
@@ -203,13 +247,23 @@ const routes = [
     if (body.articleText !== undefined) cfg.articleText = body.articleText;
     if (body.params) cfg.params = { ...cfg.params, ...body.params };
     if (body.modelConfig) cfg.modelConfig = { ...cfg.modelConfig, ...body.modelConfig };
-    writeConfig(name, cfg);
-    send(res, 200, cfg);
+    if (body.theme !== undefined) cfg.theme = body.theme;
+    if (body.animation !== undefined) cfg.animation = body.animation;
+    writeConfig(name, cfg); // writeConfig strips apiKey/params.model
+    // Apply theme and animation to existing HTML file
+    try {
+      applyThemeAndAnimation(name, cfg.theme || 'web-ui', cfg.animation || 'slide');
+    } catch (err) {
+      // Don't fail the request if HTML update fails
+      console.error('Failed to apply theme/animation:', err);
+    }
+    send(res, 200, readConfig(name));
   }},
   { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/generate$/, handler: async (req, res, matches) => {
     const name = matches[1];
     if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    spawnGenerator(name);
+    const body = await readBody(req);
+    spawnGenerator(name, body.apiKey);
     send(res, 202, { message: '生成已启动', name });
   }},
   { method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/generate\/events$/, handler: async (req, res, matches) => {
@@ -255,6 +309,27 @@ const routes = [
       send(res, 500, { error: err.message });
     }
   }},
+  // Publish endpoints
+  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/publish$/, handler: async (req, res, matches) => {
+    const name = matches[1];
+    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+    try {
+      const result = await publishProject(name);
+      send(res, 201, result);
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
+  { method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/publish$/, handler: async (req, res, matches) => {
+    const name = matches[1];
+    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+    const history = getPublishHistory(name);
+    send(res, 200, history);
+  }},
+  { method: 'GET', pattern: /^\/api\/published$/, handler: async (req, res) => {
+    const list = listPublishedProjects();
+    send(res, 200, list);
+  }},
 ];
 
 function projectExists(name) {
@@ -262,6 +337,11 @@ function projectExists(name) {
 }
 
 function serveStatic(req, res, root, urlPath) {
+  // Prevent path traversal: resolved target must stay under root.
+  if (!isWithinRoot(root, urlPath)) {
+    res.writeHead(403);
+    return res.end('Forbidden');
+  }
   let filePath = path.join(root, urlPath);
   const stat = fs.existsSync(filePath) && fs.statSync(filePath);
   if (stat && stat.isDirectory()) {
@@ -279,13 +359,19 @@ function serveStatic(req, res, root, urlPath) {
   sendFile(res, filePath);
 }
 
+const LOCAL_ORIGIN_RE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const pathname = decodeURIComponent(url.pathname);
 
-    // CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // CORS: local tool only - reflect origin for localhost browsers, deny others.
+    const origin = req.headers.origin;
+    if (origin && LOCAL_ORIGIN_RE.test(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') {
@@ -308,7 +394,25 @@ const server = http.createServer(async (req, res) => {
     const projectMatch = pathname.match(/^\/projects\/([^/]+)\/(.*)$/);
     if (projectMatch) {
       const [, name, sub] = projectMatch;
+      if (!PROJECT_NAME_RE.test(name)) {
+        res.writeHead(404);
+        return res.end('Not found');
+      }
       const dir = getProjectDir(name);
+      if (fs.existsSync(dir)) {
+        return serveStatic(req, res, dir, sub || 'index.html');
+      }
+    }
+
+    // Static files under /published/<name>/<version>/
+    const publishedMatch = pathname.match(/^\/published\/([^/]+)\/([^/]+)\/(.*)$/);
+    if (publishedMatch) {
+      const [, name, version, sub] = publishedMatch;
+      if (!PROJECT_NAME_RE.test(name)) {
+        res.writeHead(404);
+        return res.end('Not found');
+      }
+      const dir = path.join(PUBLISHED_DIR, name, version);
       if (fs.existsSync(dir)) {
         return serveStatic(req, res, dir, sub || 'index.html');
       }
@@ -321,6 +425,124 @@ const server = http.createServer(async (req, res) => {
     send(res, 500, { error: err.message });
   }
 });
+
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function copyDirSync(src, dst) {
+  ensureDir(dst);
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const dstPath = path.join(dst, entry.name);
+    if (entry.isDirectory()) {
+      copyDirSync(srcPath, dstPath);
+    } else {
+      fs.copyFileSync(srcPath, dstPath);
+    }
+  }
+}
+
+function getPublishHistory(name) {
+  const projectPublishDir = path.join(PUBLISHED_DIR, name);
+  if (!fs.existsSync(projectPublishDir)) return [];
+  const entries = fs.readdirSync(projectPublishDir, { withFileTypes: true });
+  const versions = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name === 'latest') continue;
+    const metaPath = path.join(projectPublishDir, entry.name, 'meta.json');
+    if (fs.existsSync(metaPath)) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        versions.push(meta);
+      } catch {
+        // skip invalid meta
+      }
+    }
+  }
+  versions.sort((a, b) => {
+    const va = parseInt(a.version.replace('v', ''), 10);
+    const vb = parseInt(b.version.replace('v', ''), 10);
+    return vb - va;
+  });
+  return versions;
+}
+
+function listPublishedProjects() {
+  if (!fs.existsSync(PUBLISHED_DIR)) return [];
+  const entries = fs.readdirSync(PUBLISHED_DIR, { withFileTypes: true });
+  const projects = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const history = getPublishHistory(entry.name);
+    projects.push({
+      name: entry.name,
+      latest: history[0] || null,
+      versions: history.length,
+    });
+  }
+  return projects;
+}
+
+async function publishProject(name) {
+  const cfg = readConfig(name);
+  const projectDir = getProjectDir(name);
+  if (!fs.existsSync(path.join(projectDir, 'index.html'))) {
+    throw new Error('项目尚未生成幻灯片，请先生成再发布');
+  }
+
+  ensureDir(PUBLISHED_DIR);
+  const projectPublishDir = path.join(PUBLISHED_DIR, name);
+  ensureDir(projectPublishDir);
+
+  const history = getPublishHistory(name);
+  const nextVersionNum = history.length > 0
+    ? parseInt(history[0].version.replace('v', ''), 10) + 1
+    : 1;
+  const version = `v${nextVersionNum}`;
+  const versionDir = path.join(projectPublishDir, version);
+  const latestDir = path.join(projectPublishDir, 'latest');
+
+  // Copy to version dir
+  copyDirSync(projectDir, versionDir);
+
+  // Write meta
+  const meta = {
+    version,
+    publishedAt: new Date().toISOString(),
+    theme: cfg.theme || 'web-ui',
+    animation: cfg.animation || 'slide',
+    url: `/published/${name}/${version}/index.html`,
+  };
+  fs.writeFileSync(path.join(versionDir, 'meta.json'), JSON.stringify(meta, null, 2));
+
+  // Update latest symlink/copy
+  if (fs.existsSync(latestDir)) {
+    if (fs.lstatSync(latestDir).isSymbolicLink()) {
+      fs.unlinkSync(latestDir);
+    } else {
+      fs.rmSync(latestDir, { recursive: true, force: true });
+    }
+  }
+  try {
+    // Try symlink first
+    fs.symlinkSync(version, latestDir, 'dir');
+  } catch {
+    // Fallback to copy on Windows or when symlink fails
+    copyDirSync(versionDir, latestDir);
+  }
+
+  // Also update latest meta
+  fs.writeFileSync(path.join(latestDir, 'meta.json'), JSON.stringify({
+    ...meta,
+    version: 'latest',
+    url: `/published/${name}/latest/index.html`,
+  }, null, 2));
+
+  return meta;
+}
 
 server.listen(PORT, () => {
   console.log(`ai-ppt web server running at http://localhost:${PORT}`);

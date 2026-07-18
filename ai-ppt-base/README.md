@@ -1,6 +1,6 @@
 # HTML 幻灯片演示系统
 
-一个基于 HTML/CSS/JS 的轻量级幻灯片方案，采用冷调编辑感 + 电压青（#00B498）accent 风格，支持全屏放映、键盘导航、多页预览与 PDF 导出。
+一个基于 HTML/CSS/JS 的轻量级幻灯片方案，采用冷调编辑感 + 青绿（#0D9488）accent 风格，支持全屏放映、键盘导航、多页预览与 PDF 导出。
 
 ## 项目结构
 
@@ -37,6 +37,7 @@
 
 - 全屏模式下，点击鼠标左键可翻页。
 - 非全屏模式下，左键不触发翻页，避免误操作。
+- 全屏下帮助面板、主题切换、HUD 等悬浮 UI 默认隐藏；移动鼠标或触屏时短暂显示，2 秒无活动后自动淡出。
 
 ## 编辑幻灯片
 
@@ -60,26 +61,33 @@
 
 ## 可用样式类
 
-- `.kicker` — 顶部小标签
-- `.section-title` — 章节标题
+- `.kicker` — 顶部小标签（节制使用：仅封面/章节页）
+- `.section-title` — 章节标题（同上，节制使用）
 - `.section-hero` — 居中式封面/章节页
+- `.chapter-progress` / `.chapter-progress-item`（`.done` / `.current`）— 章节分隔页进度条，已完成点亮、当前高亮
 - `.lead` — 导语/大段落
 - `.tile` — 卡片容器
 - `.tile-row` — 卡片网格（自动多列）
 - `.visual-card` — 视觉化卡片（带图标/数字，居中）
 - `.visual-row` — 视觉卡片网格
 - `.big-number` / `.big-number-label` — 巨型数字与标签
-- `.hero-stat` — 居中数字强调区
+- `.hero-stat` — 居中数字强调区（配合 `.split-visual`，一行 ≤4 个）
 - `.quote-block` — 引用块
-- `.timeline` / `.timeline-item` — 时间轴
+- `.timeline` / `.timeline-item` — 纵向时间轴
+- `.timeline-horizontal` — 横向时间轴（里程碑）
+- `.chart-steps` / `.chart-step` — 步骤条（流程、路径、框架）
+- `.chart-bar` — 柱状图
+- `.progress-ring` — 进度环（数值用 `--progress-pct: 84`，旧 `--progress` dashoffset 写法兼容）
+- `.waterfall` — 瀑布图
+- `.data-matrix` — 2×2 数据象限
 - `.badge-row` / `.badge` — 标签云
 - `.ppt-table` — 幻灯片表格
 - `.two-col` — 双栏/多栏布局
 - `.split-visual` — 左右分栏视觉区
 - `.highlight-box` — 高亮数据卡片
-- `.gradient-text` — 渐变文字
 - `.code-block` — 代码块
 - `.btn-primary` / `.btn-secondary` — 按钮
+- ~~`.gradient-text`~~ — **已弃用**（仅保留兼容，新内容禁用，见 `/ppt-design` 规则）
 
 ## 导出 PDF / PPTX
 
@@ -128,6 +136,14 @@ npx ai-ppt-skills
 安装后重启 CLI 会话即可使用 `/ppt-preview`、`/ppt-structure`、`/ppt-edit`、`/ppt-export`。
 
 ## 更新日志
+
+### v1.7.4–v1.7.6 — 设计规范、全屏与预览修复（2026-07）
+
+- **新增 `/ppt-design` skill**：蒸馏自 GitHub 的 impeccable 与 taste-skill，覆盖设计解读、版式轮换、排版对比度与交付前检查清单；`generate-deck.mjs` 生成 prompt 已内置核心规则，兜底模板去除硬编码文案与编造数据。
+- **主题声明生效**：`<body>` 上硬编码的 `theme-*` 类不再被 localStorage 覆盖，`ai-ppt.json` 的 `theme` 字段真正生效。
+- **全屏 UI 自动隐藏**：修复全屏时帮助面板等悬浮 UI 常驻遮挡内容的问题——默认隐藏，鼠标活动时短暂显示，2 秒无活动自动淡出。
+- **多页预览修复**：修复 `↑` 预览缩略图全空白的 bug——克隆页按固定 1280×800 设计尺寸整体缩放进卡片，进度环/瀑布图渲染终态。
+- **新组件与能力**：`.chapter-progress` 章节进度条（分隔页点亮）；`progress-ring` 支持 `--progress-pct` 百分比写法；标题 `text-wrap: balance` 防溢出；全站 `prefers-reduced-motion` 动画降级；`.gradient-text` 标记弃用。
 
 ### v1.7 — Web 管理、PPTX 与高清图片导出（2026-07）
 

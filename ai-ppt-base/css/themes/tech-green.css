@@ -1,0 +1,33 @@
+/* ===========================================
+   Theme: Tech Green
+   - 科技绿
+   - 环保、可持续、科技感
+   - 适合新能源、环保、科技初创
+   =========================================== */
+
+body.theme-tech-green {
+  /* Brand / Accent */
+  --teal: #65A30D;
+  --teal-light: #84CC16;
+  --accent: #65A30D;
+  --accent-light: #F7FEE7;
+  --accent-dark: #4D7C0F;
+
+  /* Ink + Neutrals */
+  --ink: #052E16;
+  --navy: #022C22;
+  --slate: #365314;
+  --muted: #71717A;
+  --cream: #F0FDF4;
+  --surface: #FFFFFF;
+  --surface-subtle: #F0FDF4;
+  --tile: #F0FDF4;
+  --tile-strong: #D9F99D;
+  --border: #D9F99D;
+  --border-strong: #BEF264;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #22C55E;
+  --info: #0EA5E9;
+}

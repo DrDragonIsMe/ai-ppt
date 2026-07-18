@@ -1,0 +1,52 @@
+/* ===========================================
+   Theme: Dark Mode
+   - 暗黑模式
+   - 高端、沉浸、护眼
+   - 适合科技产品、发布会、夜间展示
+   =========================================== */
+
+body.theme-dark-mode {
+  /* Brand / Accent */
+  --teal: #22D3EE;
+  --teal-light: #67E8F9;
+  --accent: #22D3EE;
+  --accent-light: #164E63;
+  --accent-dark: #06B6D4;
+
+  /* Ink + Neutrals (inverted for dark mode) */
+  --ink: #F8FAFC;
+  --navy: #020617;
+  --slate: #CBD5E1;
+  --muted: #94A3B8;
+  --cream: #020617;
+  --surface: #0F172A;
+  --surface-subtle: #1E293B;
+  --tile: #1E293B;
+  --tile-strong: #334155;
+  --border: #334155;
+  --border-strong: #475569;
+
+  /* Status */
+  --danger: #FB7185;
+  --success: #4ADE80;
+  --info: #60A5FA;
+}
+
+/* Dark mode specific overrides */
+body.theme-dark-mode {
+  -webkit-font-smoothing: antialiased;
+}
+
+body.theme-dark-mode .tile,
+body.theme-dark-mode .visual-card {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+body.theme-dark-mode .tile:hover,
+body.theme-dark-mode .visual-card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+body.theme-dark-mode .overview {
+  background: rgba(2, 6, 23, 0.98);
+}

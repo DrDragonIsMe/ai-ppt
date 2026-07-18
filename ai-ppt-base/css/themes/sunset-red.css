@@ -1,0 +1,33 @@
+/* ===========================================
+   Theme: Sunset Red
+   - 日落红调
+   - 热情、活力、有冲击力
+   - 适合营销、活动、消费品
+   =========================================== */
+
+body.theme-sunset-red {
+  /* Brand / Accent */
+  --teal: #E11D48;
+  --teal-light: #F43F5E;
+  --accent: #E11D48;
+  --accent-light: #FFF1F2;
+  --accent-dark: #BE123C;
+
+  /* Ink + Neutrals */
+  --ink: #1C1917;
+  --navy: #0C0A09;
+  --slate: #44403C;
+  --muted: #78716C;
+  --cream: #FFFBFA;
+  --surface: #FFFFFF;
+  --surface-subtle: #FFF1F2;
+  --tile: #FFF1F2;
+  --tile-strong: #FECDD3;
+  --border: #FECDD3;
+  --border-strong: #FDA4AF;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #16A34A;
+  --info: #F59E0B;
+}

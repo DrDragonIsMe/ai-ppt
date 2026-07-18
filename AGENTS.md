@@ -89,6 +89,15 @@ ai-ppt/
    - 在批量修改项目、生成、升级 skills 前，运行 `npm run backup`。
    - 备份保存到 `.backup/<timestamp>/`，包含 `projects/`、`skills/`、`web/`、`server.mjs`、关键文档。
 
+10. **关键数字 / 数据页排版原则**
+    - 同一行展示，元素不超过 4 个；超过 4 个时应拆页或改用表格/卡片。
+    - 使用 `.split-visual` + `.hero-stat` + `.big-number` 布局，数字字号由 `.big-number` 统一控制（当前 `clamp(44px, 5.5vw, 80px)`），并禁止换行。
+    - 数字项等宽分布，随视口自动缩放，最大宽度 240px。
+
+11. **主题使用约定**
+    - deck 只能使用默认主题（`web-ui`）或 `ai-ppt-base/css/themes/` 中已预设的主题之一。
+    - 没有用户明确指令时，一律使用默认主题，不要自行更换预设主题，更不要新创主题或配色。
+
 ## Skill 行为
 
 - `/ppt-structure <name>`：在 `projects/<name>/` 创建 deck，复制 `ai-ppt-base` 的 `css/ppt.css`、`js/ppt.js`、`README.md`，生成初始 `index.html` 与 `ai-ppt.json`。
@@ -97,6 +106,7 @@ ai-ppt/
 - `/ppt-export [name] [pdf|pptx]`：导出 deck 为 PDF（浏览器打印或可选 Puppeteer）或 PPTX（服务端生成）。
 - `/ppt-list`：列出 `projects/` 下所有 deck 的标识、标题、状态与最后生成时间。
 - `/ppt-delete <name>`：删除 `projects/<name>/`，操作前会要求确认。
+- `/ppt-design`：幻灯片设计规范（蒸馏自 GitHub 的 impeccable 与 taste-skill）。生成、搭建、编辑、审查 deck 时遵循：先出"设计解读"，版式轮换、眉毛（kicker/section-title）节制、禁渐变文字、禁编造数据，附交付前检查清单。
 
 ## 安装与同步 skills
 
@@ -120,3 +130,6 @@ node install-skills.js
 - v1.7.1 高清图片 PPTX 导出禁用动画以截取最终状态；修复 `.two-col > .visual-card` 在可编辑 PPTX 中缺失内容；PDF 导出支持自动查找 Chrome；支持 `.env.kimi` 配置 Kimi Code。
 - v1.7.2 全面对齐 `teal-editorial` 配色（ink #151A19 / cream #FAFAF7 / tile #EDF1F0 / tile-strong #E3E9E7 / teal #00B498 / navy #0B1413）；标题改为衬线、字重 400；PDF 导出改为逐页截图并合并，输出完整多页 PDF；可编辑 PPTX 同步更新配色与字体。
 - v1.7.3 新增模型配置 `modelConfig`（预设 / Base URL / Model / API Key），Web UI 加载模型列表，默认 `kimi-code`；teal 情绪色改为 `#439288`；新增 `/ppt-list` 与 `/ppt-delete` skill。
+- v1.7.4 引入 GitHub 设计 skill（impeccable + taste-skill）的蒸馏版 `/ppt-design`；`generate-deck.mjs` prompt 内置反模板化设计规则，兜底模板去除硬编码文案与编造数据；基座标题增加 `text-wrap: balance`、新增 `prefers-reduced-motion` 兜底；`progress-ring` 支持直观的 `--progress-pct` 百分比（旧 `--progress` dashoffset 写法保持兼容）；`.gradient-text` 标记弃用（保留兼容）；演示 deck 数字页改用标准 `split-visual` + `hero-stat`；修复 `ppt.js` 初始化时用 localStorage/默认主题覆盖 `<body>` 上硬编码 `theme-*` 类的问题——现在 `ai-ppt.json` 的 `theme` 字段在页面加载后真正生效。
+- v1.7.5 修复全屏时左上角帮助面板（`#help`）等悬浮 UI 常驻遮挡内容的问题：原实现用 `:fullscreen:hover` 控制显隐，鼠标只要停留在页面上 UI 就一直可见。改为 JS 无活动检测——全屏下默认隐藏帮助面板/主题切换/HUD/全屏按钮，`mousemove`/`touchstart` 时通过 `<html>.fs-ui-visible` 短暂显示，2 秒无活动后自动淡出；进入和退出全屏时重置该状态。
+- v1.7.6 修复 ↑ 预览（overview）缩略图全空白的 bug：克隆的 `.slide` 继承了基座规则的 `opacity: 0` 和视口相对 padding，旧的 `.slide-content scale(0.22)` 缩放方案因此失效。改为在 `buildOverview()` 中把克隆节点按固定 1280×800 设计尺寸布局后整体 `scale()` 进卡片，缩略图与真实页面一致；同时让 `progress-ring` 与 `waterfall` 组件在缩略图中渲染终态（动画只在 `.slide.active` 上播放）。

@@ -92,7 +92,6 @@ Use this structure for the new deck:
       </section>
       <section class="slide">
         <div class="slide-content">
-          <div class="section-title">Section</div>
           <h2>内容页标题</h2>
           <p class="lead">在这里添加核心观点。</p>
           <div class="tile">

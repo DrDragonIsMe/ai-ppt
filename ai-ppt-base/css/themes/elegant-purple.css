@@ -1,0 +1,33 @@
+/* ===========================================
+   Theme: Elegant Purple
+   - 优雅紫调
+   - 高端、创意、有格调
+   - 适合设计、时尚、高端服务
+   =========================================== */
+
+body.theme-elegant-purple {
+  /* Brand / Accent */
+  --teal: #7C3AED;
+  --teal-light: #8B5CF6;
+  --accent: #7C3AED;
+  --accent-light: #F5F3FF;
+  --accent-dark: #6D28D9;
+
+  /* Ink + Neutrals */
+  --ink: #1E1B4B;
+  --navy: #0C0A1D;
+  --slate: #4C4660;
+  --muted: #6D6480;
+  --cream: #FAFAFF;
+  --surface: #FFFFFF;
+  --surface-subtle: #F5F3FF;
+  --tile: #F5F3FF;
+  --tile-strong: #EDE9FE;
+  --border: #EDE9FE;
+  --border-strong: #DDD6FE;
+
+  /* Status */
+  --danger: #DB2777;
+  --success: #10B981;
+  --info: #7C3AED;
+}

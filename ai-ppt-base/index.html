@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>薪人薪事 — 新一代智能人事薪酬平台</title>
   <link rel="stylesheet" href="css/ppt.css">
+  <link rel="stylesheet" href="css/themes/theme-switcher.css">
+  <link rel="stylesheet" href="css/themes/web-ui.css">
+  <link rel="stylesheet" href="css/themes/business-blue.css">
+  <link rel="stylesheet" href="css/themes/elegant-purple.css">
+  <link rel="stylesheet" href="css/themes/warm-orange.css">
+  <link rel="stylesheet" href="css/themes/sunset-red.css">
+  <link rel="stylesheet" href="css/themes/tech-green.css">
+  <link rel="stylesheet" href="css/themes/minimal-gray.css">
+  <link rel="stylesheet" href="css/themes/dark-mode.css">
 </head>
 <body>
   <div id="app">
@@ -220,22 +229,22 @@
           <p class="lead">
             基于已上线客户的平均改善指标（匿名聚合统计）：
           </p>
-          <div class="two-col" style="margin-top: 32px;">
-            <div class="tile" style="text-align: center;">
-              <h3 style="font-size: clamp(36px, 4vw, 56px); color: var(--teal);">80%</h3>
-              <p>算薪时间缩短</p>
+          <div class="split-visual" style="margin-top: 32px;">
+            <div class="hero-stat">
+              <div class="big-number">80%</div>
+              <div class="big-number-label">算薪时间缩短</div>
             </div>
-            <div class="tile" style="text-align: center;">
-              <h3 style="font-size: clamp(36px, 4vw, 56px); color: var(--teal);">99.7%</h3>
-              <p>薪酬计算准确率</p>
+            <div class="hero-stat">
+              <div class="big-number">99.7%</div>
+              <div class="big-number-label">薪酬计算准确率</div>
             </div>
-            <div class="tile" style="text-align: center;">
-              <h3 style="font-size: clamp(36px, 4vw, 56px); color: var(--teal);">3周</h3>
-              <p>平均上线周期</p>
+            <div class="hero-stat">
+              <div class="big-number">3周</div>
+              <div class="big-number-label">平均上线周期</div>
             </div>
-            <div class="tile" style="text-align: center;">
-              <h3 style="font-size: clamp(36px, 4vw, 56px); color: var(--teal);">2000+</h3>
-              <p>服务企业客户</p>
+            <div class="hero-stat">
+              <div class="big-number">2000+</div>
+              <div class="big-number-label">服务企业客户</div>
             </div>
           </div>
         </div>
@@ -275,7 +284,257 @@
         </div>
       </section>
 
-      <!-- Slide 10: Thank You -->
+      <!-- Slide 10: Data Metrics -->
+      <section class="slide">
+        <div class="slide-content">
+          <div class="section-title">Data</div>
+          <h2>关键数据指标</h2>
+          <div class="data-compare">
+            <div class="data-compare-item">
+              <div class="data-compare-title">算薪效率</div>
+              <div class="data-compare-value">80%</div>
+              <div class="data-compare-sub">效率提升</div>
+            </div>
+            <div class="data-compare-item">
+              <div class="data-compare-title">准确率</div>
+              <div class="data-compare-value">99.7%</div>
+              <div class="data-compare-sub">计算准确</div>
+            </div>
+            <div class="data-compare-item">
+              <div class="data-compare-title">上线时间</div>
+              <div class="data-compare-value">3周</div>
+              <div class="data-compare-sub">平均周期</div>
+            </div>
+            <div class="data-compare-item">
+              <div class="data-compare-title">客户规模</div>
+              <div class="data-compare-value">2000+</div>
+              <div class="data-compare-sub">服务企业</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide 11: Bar Chart -->
+      <section class="slide">
+        <div class="slide-content">
+          <div class="section-title">Growth</div>
+          <h2>季度增长趋势</h2>
+          <p class="lead">过去四个季度客户增长率</p>
+          <div class="chart-bar">
+            <div class="chart-bar-item">
+              <div class="chart-bar-bar" style="height: 100px;"></div>
+              <div class="chart-bar-value">45%</div>
+              <div class="chart-bar-label">Q1</div>
+            </div>
+            <div class="chart-bar-item">
+              <div class="chart-bar-bar" style="height: 130px;"></div>
+              <div class="chart-bar-value">58%</div>
+              <div class="chart-bar-label">Q2</div>
+            </div>
+            <div class="chart-bar-item">
+              <div class="chart-bar-bar" style="height: 160px;"></div>
+              <div class="chart-bar-value">72%</div>
+              <div class="chart-bar-label">Q3</div>
+            </div>
+            <div class="chart-bar-item">
+              <div class="chart-bar-bar" style="height: 190px;"></div>
+              <div class="chart-bar-value">85%</div>
+              <div class="chart-bar-label">Q4</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide 12: Progress Rings -->
+      <section class="slide">
+        <div class="slide-content">
+          <div class="section-title">Adoption</div>
+          <h2>功能使用覆盖度</h2>
+          <div class="progress-ring">
+            <div class="progress-ring-item">
+              <svg class="progress-ring-svg" viewBox="0 0 120 120">
+                <circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle>
+                <circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct: 84;"></circle>
+              </svg>
+              <div class="progress-ring-value">84%</div>
+              <div class="progress-ring-label">薪酬计算</div>
+            </div>
+            <div class="progress-ring-item">
+              <svg class="progress-ring-svg" viewBox="0 0 120 120">
+                <circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle>
+                <circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct: 75;"></circle>
+              </svg>
+              <div class="progress-ring-value">75%</div>
+              <div class="progress-ring-label">考勤排班</div>
+            </div>
+            <div class="progress-ring-item">
+              <svg class="progress-ring-svg" viewBox="0 0 120 120">
+                <circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle>
+                <circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct: 62;"></circle>
+              </svg>
+              <div class="progress-ring-value">62%</div>
+              <div class="progress-ring-label">人才管理</div>
+            </div>
+            <div class="progress-ring-item">
+              <svg class="progress-ring-svg" viewBox="0 0 120 120">
+                <circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle>
+                <circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct: 48;"></circle>
+              </svg>
+              <div class="progress-ring-value">48%</div>
+              <div class="progress-ring-label">数据分析</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide 13: Steps Chart -->
+      <section class="slide">
+        <div class="slide-content">
+          <div class="section-title">Workflow</div>
+          <h2>实施流程</h2>
+          <div class="chart-steps">
+            <div class="chart-step">
+              <div class="chart-step-number">1</div>
+              <div class="chart-step-content">
+                <div class="chart-step-title">需求调研</div>
+                <div class="chart-step-desc">了解企业情况，确认需求范围和目标</div>
+              </div>
+            </div>
+            <div class="chart-step">
+              <div class="chart-step-number">2</div>
+              <div class="chart-step-content">
+                <div class="chart-step-title">系统配置</div>
+                <div class="chart-step-desc">部署系统，配置薪酬规则和流程</div>
+              </div>
+            </div>
+            <div class="chart-step">
+              <div class="chart-step-number">3</div>
+              <div class="chart-step-content">
+                <div class="chart-step-title">数据迁移</div>
+                <div class="chart-step-desc">导入历史数据，验证数据准确性</div>
+              </div>
+            </div>
+            <div class="chart-step">
+              <div class="chart-step-number">4</div>
+              <div class="chart-step-content">
+                <div class="chart-step-title">上线培训</div>
+                <div class="chart-step-desc">用户培训，系统正式上线使用</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide 14: Data Matrix -->
+      <section class="slide">
+        <div class="slide-content">
+          <div class="section-title">Radar</div>
+          <h2>能力象限评估</h2>
+          <div class="data-matrix data-matrix-2x2">
+            <div class="data-matrix-cell hot">
+              <div class="data-matrix-value">高</div>
+              <div class="data-matrix-label">效率提升</div>
+            </div>
+            <div class="data-matrix-cell warm">
+              <div class="data-matrix-value">中</div>
+              <div class="data-matrix-label">成本优化</div>
+            </div>
+            <div class="data-matrix-cell warm">
+              <div class="data-matrix-value">高</div>
+              <div class="data-matrix-label">风险控制</div>
+            </div>
+            <div class="data-matrix-cell">
+              <div class="data-matrix-value">高</div>
+              <div class="data-matrix-label">员工体验</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide 15: Waterfall Chart -->
+      <section class="slide">
+        <div class="slide-content">
+          <div class="section-title">Cost</div>
+          <h2>成本构成分析</h2>
+          <div class="waterfall">
+            <div class="waterfall-item">
+              <div class="waterfall-label">基础成本</div>
+              <div class="waterfall-bar">
+                <div class="waterfall-fill neutral" style="--width: 40%; width: 40%;"></div>
+              </div>
+              <div class="waterfall-value">100万</div>
+            </div>
+            <div class="waterfall-item">
+              <div class="waterfall-label">效率提升</div>
+              <div class="waterfall-bar">
+                <div class="waterfall-fill negative" style="--width: 25%; width: 25%;"></div>
+              </div>
+              <div class="waterfall-value">-40万</div>
+            </div>
+            <div class="waterfall-item">
+              <div class="waterfall-label">风险控制</div>
+              <div class="waterfall-bar">
+                <div class="waterfall-fill negative" style="--width: 18%; width: 18%;"></div>
+              </div>
+              <div class="waterfall-value">-30万</div>
+            </div>
+            <div class="waterfall-item">
+              <div class="waterfall-label">规模效应</div>
+              <div class="waterfall-bar">
+                <div class="waterfall-fill negative" style="--width: 12%; width: 12%;"></div>
+              </div>
+              <div class="waterfall-value">-20万</div>
+            </div>
+            <div class="waterfall-item">
+              <div class="waterfall-label">实际成本</div>
+              <div class="waterfall-bar">
+                <div class="waterfall-fill positive" style="--width: 10%; width: 10%;"></div>
+              </div>
+              <div class="waterfall-value">10万</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide 16: Timeline Horizontal -->
+      <section class="slide">
+        <div class="slide-content">
+          <div class="section-title">Roadmap</div>
+          <h2>发展里程碑</h2>
+          <div class="timeline-horizontal">
+            <div class="timeline-horizontal-item">
+              <div class="timeline-horizontal-dot"></div>
+              <div class="timeline-horizontal-content">
+                <div class="timeline-horizontal-title">2022</div>
+                <div class="timeline-horizontal-desc">产品1.0上线</div>
+              </div>
+            </div>
+            <div class="timeline-horizontal-item">
+              <div class="timeline-horizontal-dot"></div>
+              <div class="timeline-horizontal-content">
+                <div class="timeline-horizontal-title">2023</div>
+                <div class="timeline-horizontal-desc">500家客户</div>
+              </div>
+            </div>
+            <div class="timeline-horizontal-item">
+              <div class="timeline-horizontal-dot"></div>
+              <div class="timeline-horizontal-content">
+                <div class="timeline-horizontal-title">2024</div>
+                <div class="timeline-horizontal-desc">AI赋能升级</div>
+              </div>
+            </div>
+            <div class="timeline-horizontal-item">
+              <div class="timeline-horizontal-dot"></div>
+              <div class="timeline-horizontal-content">
+                <div class="timeline-horizontal-title">2025</div>
+                <div class="timeline-horizontal-desc">生态平台</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide 17: Thank You -->
       <section class="slide">
         <div class="slide-content" style="text-align: center;">
           <div class="kicker">Thank You</div>
@@ -297,7 +556,9 @@
       <div><kbd>←</kbd> 上一页 · <kbd>→</kbd> 下一页</div>
       <div><kbd>Cmd</kbd>+<kbd>←</kbd> 首页 · <kbd>Cmd</kbd>+<kbd>→</kbd> 尾页</div>
       <div><kbd>↑</kbd> 预览 · <kbd>↓</kbd> 导出 PDF</div>
-      <div><kbd>F</kbd> 全屏 · <kbd>?</kbd> 帮助</div>
+      <div><kbd>Ctrl</kbd>+<kbd>P</kbd> 打印 / 导出</div>
+      <div><kbd>F</kbd> 全屏 · <kbd>T</kbd> 切换主题 · <kbd>?</kbd> 帮助</div>
+      <div style="margin-top:8px;opacity:0.65;font-size:0.9em;">全屏时：点击右侧/左侧翻页</div>
     </div>
 
     <div id="toast" class="toast"></div>

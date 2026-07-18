@@ -19,6 +19,12 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 
 标题使用衬线字体 `Georgia / Noto Serif SC / Songti SC`，字重 400；正文使用同一衬线字体；UI 元素（kicker、badge、kbd）使用无衬线字体。
 
+## 关键数字 / 数据页排版原则
+
+- 同一行展示，元素不超过 4 个；超过 4 个时应拆页或改用表格/卡片。
+- 使用 `.split-visual` + `.hero-stat` + `.big-number` 时，数字字号由 `.big-number` 统一控制（当前 `clamp(44px, 5.5vw, 80px)`），并设置 `white-space: nowrap` 禁止换行。
+- 数字项等宽分布，最大宽度 240px，间距随 viewport 缩放。
+
 ## 核心文件与职责
 
 | 文件/目录 | 职责 |

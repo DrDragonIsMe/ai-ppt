@@ -1,0 +1,33 @@
+/* ===========================================
+   Theme: Web UI (Default)
+   - 基于 Web UI 的青色调
+   - 专业、克制、现代
+   =========================================== */
+
+:root,
+body.theme-web-ui {
+  /* Brand / Accent */
+  --teal: #0D9488;
+  --teal-light: #14B8A6;
+  --accent: #0D9488;
+  --accent-light: #F0FDFA;
+  --accent-dark: #0F766E;
+
+  /* Ink + Neutrals */
+  --ink: #1A2332;
+  --navy: #0F172A;
+  --slate: #475569;
+  --muted: #64748B;
+  --cream: #F7F8FA;
+  --surface: #FFFFFF;
+  --surface-subtle: #EEF1F5;
+  --tile: #EEF1F5;
+  --tile-strong: #E0E4EA;
+  --border: #E0E4EA;
+  --border-strong: #CBD5E1;
+
+  /* Status */
+  --danger: #EF4444;
+  --success: #10B981;
+  --info: #3B82F6;
+}

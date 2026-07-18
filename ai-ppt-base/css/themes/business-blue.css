@@ -1,0 +1,33 @@
+/* ===========================================
+   Theme: Business Blue
+   - 商务蓝调
+   - 稳重、专业、可信
+   - 适合金融、咨询、B2B
+   =========================================== */
+
+body.theme-business-blue {
+  /* Brand / Accent */
+  --teal: #2563EB;
+  --teal-light: #3B82F6;
+  --accent: #2563EB;
+  --accent-light: #EFF6FF;
+  --accent-dark: #1D4ED8;
+
+  /* Ink + Neutrals */
+  --ink: #0F172A;
+  --navy: #020617;
+  --slate: #334155;
+  --muted: #64748B;
+  --cream: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-subtle: #F1F5F9;
+  --tile: #F1F5F9;
+  --tile-strong: #E2E8F0;
+  --border: #E2E8F0;
+  --border-strong: #CBD5E1;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #16A34A;
+  --info: #2563EB;
+}

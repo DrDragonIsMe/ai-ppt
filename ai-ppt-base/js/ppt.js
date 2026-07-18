@@ -7,7 +7,20 @@
     overview: false,
     help: true,
     transitioning: false,
+    currentTheme: 'web-ui',
   };
+
+  // Theme definitions
+  const themes = [
+    { id: 'web-ui', name: 'Web UI', color: '#0D9488' },
+    { id: 'business-blue', name: '商务蓝', color: '#2563EB' },
+    { id: 'elegant-purple', name: '优雅紫', color: '#7C3AED' },
+    { id: 'warm-orange', name: '温暖橙', color: '#EA580C' },
+    { id: 'sunset-red', name: '日落红', color: '#E11D48' },
+    { id: 'tech-green', name: '科技绿', color: '#65A30D' },
+    { id: 'minimal-gray', name: '极简灰', color: '#171717' },
+    { id: 'dark-mode', name: '暗黑模式', color: '#22D3EE' },
+  ];
 
   const stage = document.getElementById('stage');
   const overviewEl = document.getElementById('overview');
@@ -18,16 +31,183 @@
   const helpEl = document.getElementById('help');
   const originalTitle = document.title || 'ai-ppt';
 
+  let themeLink = null;
+  let themeSwitcherEl = null;
+  let themePanelEl = null;
+  let fullscreenBtn = null;
+  let fullscreenTimeout = null;
+
   function init() {
     state.slides = Array.from(document.querySelectorAll('.slide'));
     if (state.slides.length === 0) return;
 
+    initThemes();
     buildOverview();
+    buildFullscreenBtn();
     updateSlide();
     bindEvents();
 
     window.addEventListener('resize', onResize);
     onResize();
+  }
+
+  function initThemes() {
+    // A theme class hard-coded on <body> (set by generate-deck wrapSlides from
+    // ai-ppt.json `theme`) takes precedence; otherwise fall back to the theme
+    // the user last picked in this browser.
+    const preset = themes.map(t => t.id).find((id) => document.body.classList.contains(`theme-${id}`));
+    if (preset) {
+      state.currentTheme = preset;
+    } else {
+      const savedTheme = localStorage.getItem('ai-ppt-theme');
+      if (savedTheme) {
+        state.currentTheme = savedTheme;
+      }
+    }
+
+    // Apply initial theme
+    applyTheme(state.currentTheme);
+
+    // Build theme switcher UI
+    buildThemeSwitcher();
+  }
+
+  function buildThemeSwitcher() {
+    themeSwitcherEl = document.createElement('div');
+    themeSwitcherEl.className = 'theme-switcher';
+    themeSwitcherEl.innerHTML = `
+      <button class="theme-switcher-toggle" type="button" aria-label="切换主题">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2"></path>
+          <path d="M12 20v2"></path>
+          <path d="m4.93 4.93 1.41 1.41"></path>
+          <path d="m17.66 17.66 1.41 1.41"></path>
+          <path d="M2 12h2"></path>
+          <path d="M20 12h2"></path>
+          <path d="m6.34 17.66-1.41 1.41"></path>
+          <path d="m19.07 4.93-1.41 1.41"></path>
+        </svg>
+        <span>主题</span>
+      </button>
+      <div class="theme-switcher-panel">
+        <div class="theme-switcher-title">选择主题</div>
+        <div class="theme-list"></div>
+      </div>
+    `;
+
+    themePanelEl = themeSwitcherEl.querySelector('.theme-switcher-panel');
+    const themeList = themeSwitcherEl.querySelector('.theme-list');
+
+    themes.forEach((theme) => {
+      const option = document.createElement('div');
+      option.className = 'theme-option' + (theme.id === state.currentTheme ? ' active' : '');
+      option.dataset.themeId = theme.id;
+      option.innerHTML = `
+        <span class="theme-swatch" style="background: ${theme.color};"></span>
+        <span class="theme-name">${theme.name}</span>
+      `;
+      option.addEventListener('click', () => selectTheme(theme.id));
+      themeList.appendChild(option);
+    });
+
+    const toggleBtn = themeSwitcherEl.querySelector('.theme-switcher-toggle');
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleThemePanel();
+    });
+
+    document.addEventListener('click', () => {
+      closeThemePanel();
+    });
+
+    themePanelEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    document.body.appendChild(themeSwitcherEl);
+
+    // Add hint
+    const hint = document.createElement('div');
+    hint.className = 'theme-hint';
+    hint.textContent = '按 T 键快速切换主题';
+    document.body.appendChild(hint);
+  }
+
+  function toggleThemePanel() {
+    const isOpen = themePanelEl.classList.contains('open');
+    if (isOpen) {
+      closeThemePanel();
+    } else {
+      openThemePanel();
+    }
+  }
+
+  function openThemePanel() {
+    themePanelEl.classList.add('open');
+  }
+
+  function closeThemePanel() {
+    themePanelEl.classList.remove('open');
+  }
+
+  function selectTheme(themeId) {
+    if (themeId === state.currentTheme) {
+      closeThemePanel();
+      return;
+    }
+
+    state.currentTheme = themeId;
+    applyTheme(themeId);
+    localStorage.setItem('ai-ppt-theme', themeId);
+
+    // Update UI
+    const options = themeSwitcherEl.querySelectorAll('.theme-option');
+    options.forEach((option) => {
+      option.classList.toggle('active', option.dataset.themeId === themeId);
+    });
+
+    closeThemePanel();
+
+    const theme = themes.find((t) => t.id === themeId);
+    showToast(`已切换到「${theme?.name || themeId}」主题`);
+  }
+
+  function applyTheme(themeId) {
+    document.body.classList.remove(...themes.map(t => `theme-${t.id}`));
+    if (themeId !== 'web-ui') {
+      document.body.classList.add(`theme-${themeId}`);
+    }
+  }
+
+  function buildFullscreenBtn() {
+    fullscreenBtn = document.createElement('button');
+    fullscreenBtn.className = 'fullscreen-btn';
+    fullscreenBtn.innerHTML = `
+      <svg class="enter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 3H3v5"></path>
+        <path d="M21 8V3h-5"></path>
+        <path d="M3 16v5h5"></path>
+        <path d="M16 21h5v-5"></path>
+      </svg>
+      <svg class="exit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 14h6v6"></path>
+        <path d="M14 4h6v6"></path>
+        <path d="M14 14h6v6"></path>
+        <path d="M4 4h6v6"></path>
+        <path d="M14 14l6-6"></path>
+        <path d="M4 20l6-6"></path>
+      </svg>
+      <span>全屏</span>
+    `;
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+    document.body.appendChild(fullscreenBtn);
+  }
+
+  function cycleTheme() {
+    const currentIndex = themes.findIndex((t) => t.id === state.currentTheme);
+    const nextIndex = (currentIndex + 1) % themes.length;
+    selectTheme(themes[nextIndex].id);
   }
 
   function bindEvents() {
@@ -41,6 +221,21 @@
 
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    document.addEventListener('mousemove', onFullscreenActivity);
+    document.addEventListener('touchstart', onFullscreenActivity, { passive: true });
+  }
+
+  // In fullscreen the overlay UI (help panel, theme switcher, hud,
+  // fullscreen button) stays hidden; any pointer activity reveals it
+  // briefly, then a timer hides it again.
+  function onFullscreenActivity() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      document.documentElement.classList.add('fs-ui-visible');
+      clearTimeout(fullscreenTimeout);
+      fullscreenTimeout = setTimeout(() => {
+        document.documentElement.classList.remove('fs-ui-visible');
+      }, 2000);
+    }
   }
 
   function onKeyDown(e) {
@@ -84,6 +279,8 @@
         toggleOverview(false);
       } else if (document.fullscreenElement) {
         exitFullscreen();
+      } else if (themePanelEl && themePanelEl.classList.contains('open')) {
+        closeThemePanel();
       }
       return;
     }
@@ -91,6 +288,12 @@
     if (e.key === 'f' || e.key === 'F') {
       e.preventDefault();
       toggleFullscreen();
+      return;
+    }
+
+    if (e.key === 't' || e.key === 'T') {
+      e.preventDefault();
+      cycleTheme();
       return;
     }
 
@@ -110,14 +313,20 @@
   function onClick(e) {
     if (state.overview || state.transitioning) return;
 
-    const isFullscreen = !!document.fullscreenElement;
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
     if (!isFullscreen) return;
 
     const target = e.target;
-    if (target.closest('a') || target.closest('button')) return;
+    if (target.closest('a') || target.closest('button') || target.closest('.help') || target.closest('.theme-switcher') || target.closest('.fullscreen-btn')) return;
 
     if (e.button === 0) {
-      next();
+      const x = e.clientX;
+      const w = window.innerWidth;
+      if (x < w * 0.3) {
+        prev();
+      } else if (x > w * 0.7) {
+        next();
+      }
     }
   }
 
@@ -166,6 +375,8 @@
     updateSlide();
   }
 
+  window.goTo = goTo;
+
   function updateSlide() {
     state.slides.forEach((slide, i) => {
       slide.classList.toggle('active', i === state.current);
@@ -191,6 +402,11 @@
 
   function buildOverview() {
     overviewGrid.innerHTML = '';
+    // Thumbnails: clone each slide at a fixed design size, then scale the
+    // whole clone to the card width (uniform transform), preserving the
+    // slide's real layout.
+    const BASE_W = 1280;
+    const BASE_H = 800;
 
     state.slides.forEach((slide, i) => {
       const card = document.createElement('div');
@@ -204,10 +420,31 @@
       const clone = slide.cloneNode(true);
       clone.classList.remove('active');
       clone.removeAttribute('id');
+      clone.style.width = `${BASE_W}px`;
+      clone.style.height = `${BASE_H}px`;
+
+      // Render animated components at their final state in the thumbnail
+      // (the fill animations only run on .slide.active in the live deck).
+      clone.querySelectorAll('.progress-ring-circle').forEach((c) => {
+        const legacy = parseFloat(c.style.getPropertyValue('--progress'));
+        const pct = parseFloat(c.style.getPropertyValue('--progress-pct'));
+        c.style.strokeDashoffset = Number.isFinite(legacy)
+          ? legacy
+          : 314 - (314 * (Number.isFinite(pct) ? pct : 0)) / 100;
+      });
+      clone.querySelectorAll('.waterfall-fill').forEach((f) => {
+        f.style.width = f.style.getPropertyValue('--width') || '0%';
+      });
 
       card.appendChild(indexBadge);
       card.appendChild(clone);
       overviewGrid.appendChild(card);
+
+      requestAnimationFrame(() => {
+        const scale = card.clientWidth / BASE_W;
+        clone.style.transform = `scale(${scale})`;
+        clone.style.transformOrigin = 'top left';
+      });
     });
   }
 
@@ -227,7 +464,7 @@
   }
 
   function toggleFullscreen() {
-    if (document.fullscreenElement) {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
       exitFullscreen();
     } else {
       requestFullscreen(document.documentElement);
@@ -251,8 +488,18 @@
   }
 
   function onFullscreenChange() {
-    if (document.fullscreenElement) {
-      showToast('全屏模式：点击左键翻页，ESC 退出');
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    clearTimeout(fullscreenTimeout);
+    document.documentElement.classList.remove('fs-ui-visible');
+    if (isFullscreen) {
+      showToast('全屏模式：点击右侧翻下页，左侧翻上页，ESC 退出');
+      if (fullscreenBtn) {
+        fullscreenBtn.querySelector('span').textContent = '退出';
+      }
+    } else {
+      if (fullscreenBtn) {
+        fullscreenBtn.querySelector('span').textContent = '全屏';
+      }
     }
   }
 

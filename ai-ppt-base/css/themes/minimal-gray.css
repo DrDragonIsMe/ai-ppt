@@ -1,0 +1,33 @@
+/* ===========================================
+   Theme: Minimal Gray
+   - 极简灰调
+   - 克制、高级、无印风
+   - 适合设计工作室、极简品牌
+   =========================================== */
+
+body.theme-minimal-gray {
+  /* Brand / Accent */
+  --teal: #171717;
+  --teal-light: #404040;
+  --accent: #171717;
+  --accent-light: #F5F5F5;
+  --accent-dark: #0A0A0A;
+
+  /* Ink + Neutrals */
+  --ink: #171717;
+  --navy: #0A0A0A;
+  --slate: #525252;
+  --muted: #737373;
+  --cream: #FAFAFA;
+  --surface: #FFFFFF;
+  --surface-subtle: #F5F5F5;
+  --tile: #F5F5F5;
+  --tile-strong: #E5E5E5;
+  --border: #E5E5E5;
+  --border-strong: #D4D4D4;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #16A34A;
+  --info: #2563EB;
+}
