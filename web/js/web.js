@@ -64,6 +64,10 @@
     exportPptxModal: document.getElementById('export-pptx'),
     exportPptxImageModal: document.getElementById('export-pptx-image'),
     toast: document.getElementById('toast'),
+    btnHelp: document.getElementById('btn-help'),
+    helpPanel: document.getElementById('help-panel'),
+    btnCloseHelp: document.getElementById('btn-close-help'),
+    helpOverlay: document.querySelector('.help-panel-overlay'),
 
     configTabs: document.querySelectorAll('.config-tab'),
     themeGrid: document.getElementById('theme-grid'),
@@ -148,13 +152,19 @@
 
   function renderProjects() {
     els.projectList.innerHTML = '';
-    projects.forEach((p) => {
+    projects.forEach((p, idx) => {
       const item = document.createElement('div');
       item.className = 'project-item' + (p.name === currentProject ? ' active' : '');
+      item.dataset.index = idx;
       item.innerHTML = `
-        <div>
-          <div class="project-name">${escapeHtml(p.title || p.name)}</div>
-          <div class="project-meta">${escapeHtml(p.name)} · ${statusLabel(p.status)}</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-mono);background:${idx < 9 ? 'var(--tile)' : 'transparent'};border-radius:4px;color:var(--ink);opacity:0.6;">
+            ${idx < 9 ? idx + 1 : ''}
+          </div>
+          <div>
+            <div class="project-name">${escapeHtml(p.title || p.name)}</div>
+            <div class="project-meta">${escapeHtml(p.name)} · ${statusLabel(p.status)}</div>
+          </div>
         </div>
         <button class="project-delete" title="删除">×</button>
       `;
@@ -541,6 +551,19 @@
     els.exportModal.classList.add('hidden');
   }
 
+  function openHelpPanel() {
+    els.helpPanel.classList.remove('hidden');
+  }
+
+  function closeHelpPanel() {
+    els.helpPanel.classList.add('hidden');
+  }
+
+  function isInputActive() {
+    const active = document.activeElement;
+    return active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+  }
+
   async function createProject() {
     const name = els.newProjectName.value.trim();
     const title = els.newProjectTitle.value.trim();
@@ -630,13 +653,110 @@
       exportPptxImage();
     });
 
+    els.btnHelp.addEventListener('click', openHelpPanel);
+    els.btnCloseHelp.addEventListener('click', closeHelpPanel);
+    els.helpOverlay.addEventListener('click', closeHelpPanel);
+
     document.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
-        if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
-          return;
+      // 如果在输入框中，只处理 Esc 和 ?
+      if (isInputActive()) {
+        if (e.key === 'Escape') {
+          if (!els.helpPanel.classList.contains('hidden')) {
+            closeHelpPanel();
+          } else if (!els.exportModal.classList.contains('hidden')) {
+            closeExportModal();
+          } else if (!els.createModal.classList.contains('hidden')) {
+            els.createModal.classList.add('hidden');
+          }
         }
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      const isMod = e.ctrlKey || e.metaKey;
+
+      // 帮助面板
+      if (key === '?') {
+        e.preventDefault();
+        if (els.helpPanel.classList.contains('hidden')) {
+          openHelpPanel();
+        } else {
+          closeHelpPanel();
+        }
+        return;
+      }
+
+      // Esc 关闭面板
+      if (key === 'escape') {
+        if (!els.helpPanel.classList.contains('hidden')) {
+          closeHelpPanel();
+        } else if (!els.exportModal.classList.contains('hidden')) {
+          closeExportModal();
+        } else if (!els.createModal.classList.contains('hidden')) {
+          els.createModal.classList.add('hidden');
+        }
+        return;
+      }
+
+      // 新建项目
+      if (isMod && key === 'n') {
+        e.preventDefault();
+        els.createModal.classList.remove('hidden');
+        return;
+      }
+
+      // 保存配置
+      if (isMod && key === 's') {
+        e.preventDefault();
+        saveConfig();
+        return;
+      }
+
+      // 导出面板
+      if (isMod && key === 'p') {
         e.preventDefault();
         openExportModal();
+        return;
+      }
+
+      // 生成幻灯片
+      if (isMod && key === 'g') {
+        e.preventDefault();
+        if (currentProject && !els.btnGenerate.disabled) {
+          generate();
+        }
+        return;
+      }
+
+      // 打开预览
+      if (isMod && key === 'o') {
+        e.preventDefault();
+        if (currentProject && !els.btnPreview.disabled) {
+          openPreview();
+        }
+        return;
+      }
+
+      // 数字键 1-9 快速切换项目
+      if (/^[1-9]$/.test(key)) {
+        const idx = parseInt(key, 10) - 1;
+        if (projects[idx]) {
+          selectProject(projects[idx].name);
+        }
+        return;
+      }
+
+      // Tab 切换配置标签
+      if (key === 'tab' && !e.shiftKey) {
+        const activeTab = document.querySelector('.config-tab.active');
+        if (activeTab) {
+          e.preventDefault();
+          const tabs = Array.from(els.configTabs);
+          const currentIdx = tabs.indexOf(activeTab);
+          const nextIdx = (currentIdx + 1) % tabs.length;
+          tabs[nextIdx].click();
+        }
+        return;
       }
     });
   }

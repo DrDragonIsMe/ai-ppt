@@ -14,6 +14,13 @@
         <div class="tagline">HTML 幻灯片生成与管理</div>
       </div>
       <div class="actions">
+        <button id="btn-help" class="btn-secondary btn-icon" title="快捷键 (?)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <path d="M12 17h.01"></path>
+          </svg>
+        </button>
         <button id="btn-create" class="btn-primary">+ 新建项目</button>
       </div>
     </header>
@@ -270,6 +277,51 @@
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <div id="help-panel" class="help-panel hidden">
+    <div class="help-panel-overlay"></div>
+    <div class="help-panel-content">
+      <div class="help-panel-header">
+        <div class="help-panel-title">键盘快捷键</div>
+        <button id="btn-close-help" class="btn-secondary btn-icon" title="关闭">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="help-panel-body">
+        <div class="help-section">
+          <div class="help-section-title">通用</div>
+          <div class="help-grid">
+            <div class="help-key-row"><kbd>?</kbd><span>显示/隐藏帮助</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>N</kbd><span>新建项目</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>S</kbd><span>保存配置</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>导出面板</span></div>
+          </div>
+        </div>
+        <div class="help-section">
+          <div class="help-section-title">项目操作</div>
+          <div class="help-grid">
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>G</kbd><span>生成幻灯片</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>O</kbd><span>打开预览</span></div>
+            <div class="help-key-row"><kbd>1</kbd>-<kbd>9</kbd><span>快速切换项目</span></div>
+          </div>
+        </div>
+        <div class="help-section">
+          <div class="help-section-title">配置面板</div>
+          <div class="help-grid">
+            <div class="help-key-row"><kbd>Tab</kbd><span>切换配置标签</span></div>
+            <div class="help-key-row"><kbd>Esc</kbd><span>关闭弹窗/面板</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="help-panel-footer">
+        <span>提示：在输入框中时快捷键会暂时失效</span>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/web.js"></script>
 </body>
 </html>
