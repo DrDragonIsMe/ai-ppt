@@ -8,6 +8,7 @@
     help: true,
     transitioning: false,
     currentTheme: 'web-ui',
+    sidebarOpen: true,
   };
 
   // Theme definitions
@@ -31,6 +32,9 @@
   const helpEl = document.getElementById('help');
   const originalTitle = document.title || 'ai-ppt';
 
+  let sidebarEl = null;
+  let sidebarContentEl = null;
+
   let themeLink = null;
   let themeSwitcherEl = null;
   let themePanelEl = null;
@@ -42,6 +46,7 @@
     if (state.slides.length === 0) return;
 
     initThemes();
+    buildSidebar();
     buildOverview();
     buildFullscreenBtn();
     updateSlide();
@@ -180,6 +185,116 @@
     }
   }
 
+  function buildSidebar() {
+    sidebarEl = document.createElement('div');
+    sidebarEl.className = 'sidebar';
+    sidebarEl.innerHTML = `
+      <button class="sidebar-toggle" type="button" aria-label="切换侧边栏">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"></path>
+        </svg>
+      </button>
+      <div class="sidebar-header">
+        <div class="sidebar-title">幻灯片</div>
+      </div>
+      <div class="sidebar-content"></div>
+    `;
+
+    sidebarContentEl = sidebarEl.querySelector('.sidebar-content');
+
+    const toggleBtn = sidebarEl.querySelector('.sidebar-toggle');
+    toggleBtn.addEventListener('click', () => toggleSidebar());
+
+    // Build sidebar thumbnails
+    buildSidebarThumbnails();
+
+    // Insert sidebar into DOM (before stage)
+    stage.parentNode.insertBefore(sidebarEl, stage);
+
+    // Apply initial sidebar state
+    updateSidebarState();
+  }
+
+  function buildSidebarThumbnails() {
+    if (!sidebarContentEl) return;
+    sidebarContentEl.innerHTML = '';
+    const BASE_W = 1280;
+    const BASE_H = 800;
+
+    state.slides.forEach((slide, i) => {
+      const card = document.createElement('div');
+      card.className = 'sidebar-card';
+      card.dataset.index = String(i);
+
+      const indexBadge = document.createElement('div');
+      indexBadge.className = 'sidebar-index';
+      indexBadge.textContent = String(i + 1);
+
+      const clone = slide.cloneNode(true);
+      clone.classList.remove('active');
+      clone.removeAttribute('id');
+      clone.style.width = `${BASE_W}px`;
+      clone.style.height = `${BASE_H}px`;
+
+      // Render animated components at their final state in the thumbnail
+      clone.querySelectorAll('.progress-ring-circle').forEach((c) => {
+        const legacy = parseFloat(c.style.getPropertyValue('--progress'));
+        const pct = parseFloat(c.style.getPropertyValue('--progress-pct'));
+        c.style.strokeDashoffset = Number.isFinite(legacy)
+          ? legacy
+          : 314 - (314 * (Number.isFinite(pct) ? pct : 0)) / 100;
+      });
+      clone.querySelectorAll('.waterfall-fill').forEach((f) => {
+        f.style.width = f.style.getPropertyValue('--width') || '0%';
+      });
+
+      card.appendChild(indexBadge);
+      card.appendChild(clone);
+      sidebarContentEl.appendChild(card);
+
+      requestAnimationFrame(() => {
+        const scale = card.clientWidth / BASE_W;
+        clone.style.transform = `scale(${scale})`;
+        clone.style.transformOrigin = 'top left';
+      });
+
+      card.addEventListener('click', () => {
+        goTo(i);
+      });
+    });
+  }
+
+  function toggleSidebar(open) {
+    if (typeof open === 'boolean') {
+      state.sidebarOpen = open;
+    } else {
+      state.sidebarOpen = !state.sidebarOpen;
+    }
+    updateSidebarState();
+  }
+
+  function updateSidebarState() {
+    if (!sidebarEl) return;
+    sidebarEl.classList.toggle('collapsed', !state.sidebarOpen);
+    stage.classList.toggle('sidebar-open', state.sidebarOpen);
+
+    // Adjust positions of other UI elements
+    const leftOffset = state.sidebarOpen ? '220px' : '0px';
+    progressEl.style.left = leftOffset;
+    hudEl.style.left = `calc(50% + ${state.sidebarOpen ? '110px' : '0px'})`;
+
+    const toggleBtn = sidebarEl.querySelector('.sidebar-toggle');
+    if (toggleBtn) {
+      toggleBtn.innerHTML = state.sidebarOpen
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <path d="M15 18l-6-6 6-6"></path>
+           </svg>`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <path d="M9 18l6-6-6-6"></path>
+           </svg>`;
+    }
+  }
+
   function buildFullscreenBtn() {
     fullscreenBtn = document.createElement('button');
     fullscreenBtn.className = 'fullscreen-btn';
@@ -297,6 +412,12 @@
       return;
     }
 
+    if (e.key === 's' || e.key === 'S') {
+      e.preventDefault();
+      toggleSidebar();
+      return;
+    }
+
     if (e.key === '?') {
       e.preventDefault();
       toggleHelp();
@@ -389,6 +510,20 @@
     document.title = `${originalTitle} · ${state.current + 1} / ${state.slides.length}`;
 
     updateOverviewActive();
+    updateSidebarActive();
+  }
+
+  function updateSidebarActive() {
+    if (!sidebarContentEl) return;
+    const cards = sidebarContentEl.querySelectorAll('.sidebar-card');
+    cards.forEach((card, i) => {
+      card.classList.toggle('active', i === state.current);
+    });
+    // Scroll the active card into view
+    const activeCard = sidebarContentEl.querySelector('.sidebar-card.active');
+    if (activeCard) {
+      activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 
   function toggleOverview(show) {
