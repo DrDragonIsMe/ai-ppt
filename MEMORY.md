@@ -33,7 +33,8 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 | `projects/<name>/` | 业务 deck，包含 index.html、ai-ppt.json、css/、js/、export/。 |
 | `web/` | Web 管理界面（index.html、css/web.css、js/web.js）。 |
 | `server.mjs` | Web 服务入口，提供 API 与静态文件服务。 |
-| `scripts/config.mjs` | 项目配置读写、创建、删除。 |
+| `scripts/config.mjs` | 项目配置读写、创建、删除；模型默认配置现在来自 `global-config.mjs`。 |
+| `scripts/global-config.mjs` | 系统级别全局配置读写（当前仅 `modelConfig`），存储于 `.ai-ppt-config.json`。
 | `scripts/generate-deck.mjs` | 从 URL/文章生成 deck，输出 NDJSON 进度事件。 |
 | `scripts/content-extractor.mjs` | URL 抓取与正文提取。 |
 | `scripts/llm-adapter.mjs` | LLM 调用适配：LM Studio / OpenAI 兼容 / Bailian CLI，多后端自动路由与回退。 |
@@ -51,7 +52,9 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 
 ## 配置规范
 
-每个项目必须包含 `ai-ppt.json`：
+### 项目配置 `ai-ppt.json`
+
+每个项目必须包含 `ai-ppt.json`，但**模型配置已移除**（提升为系统级别，见下文）：
 
 ```json
 {
@@ -65,13 +68,6 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
     "style": "商业汇报",
     "slideCount": 8,
     "language": "zh-CN"
-  },
-  "modelConfig": {
-    "presetId": "kimi-code",
-    "provider": "kimi",
-    "baseUrl": "https://api.kimi.com/coding/v1",
-    "model": "kimi-for-coding",
-    "apiKey": ""
   },
   "status": "ready",
   "lastGeneratedAt": "2026-07-09T01:41:53.000Z",
@@ -88,6 +84,23 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 ```
 
 `status` 取值：`draft`、`generating`、`ready`、`error`。
+
+### 系统级别模型配置 `.ai-ppt-config.json`
+
+保存在项目根目录，对所有项目生效：
+
+```json
+{
+  "modelConfig": {
+    "presetId": "volc-ark-doubao-seed-2.0-lite",
+    "provider": "openai",
+    "baseUrl": "https://ark.cn-beijing.volces.com/api/coding/v3",
+    "model": "doubao-seed-2.0-lite"
+  }
+}
+```
+
+优先级：环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` > `.ai-ppt-config.json` > 内置默认。API Key 不写入该文件。
 
 ## 生成管线
 

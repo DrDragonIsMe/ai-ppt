@@ -66,9 +66,15 @@ npx ai-ppt-skills
 
 安装完成后重启 CLI 会话。
 
-### LLM 配置（可选，默认火山方舟 doubao-seed-2.0-lite）
+### LLM 配置（系统级别，默认火山方舟 doubao-seed-2.0-lite）
 
-每个项目可在 Web UI 的「模型配置」面板独立设置 Provider、Base URL、模型名称和 API Key；未填写时回退到以下环境变量。命令行生成同样遵循此优先级。
+模型配置已提升为**系统级别**：在 Web UI「模型配置」面板修改后对所有项目生效，保存在 `.ai-ppt-config.json`（已加入 `.gitignore`）。命令行生成同样读取该全局配置。
+
+优先级（从高到低）：
+
+1. 环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL`
+2. `.ai-ppt-config.json` 中的 `modelConfig`
+3. 内置默认（火山方舟 doubao-seed-2.0-lite）
 
 ```bash
 # 方式 A：火山方舟 doubao-seed-2.0-lite（默认）
@@ -285,6 +291,7 @@ npx ai-ppt-skills
 - **Web UI 布局重设计**：采用「顶部工具栏 + 左侧可折叠项目列表 + 中间大画布预览 + 右侧属性面板」的类 Canva / Google Slides 布局，预览区更宽敞；属性面板分为内容/主题/动画/组件/版本/AI 修改标签页；顶部工具栏集成项目下拉、编辑模式、生成、导出、预览与全局搜索。
 - **导出下拉菜单**：顶部工具栏新增导出下拉（PPTX / 高清图片 PPTX / PDF / 单文件 HTML），同时保留 `Ctrl+P` 导出面板。
 - **测试覆盖**：`scripts/test-smoke.mjs` 新增 `save user edits` 用例。
+- **系统级别模型配置**：模型配置从 `ai-ppt.json` 提升到 `.ai-ppt-config.json`，Web UI「模型配置」面板对所有项目生效；`generate-deck.mjs` / `chat-modify.mjs` 通过 `scripts/global-config.mjs` 读取全局模型。
 
 ### v1.8.1 — 演讲者模式、主题编辑器与组件库（2026-07）
 

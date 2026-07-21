@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readGlobalConfig } from './global-config.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -236,22 +237,12 @@ export const PRESET_MODELS = [
 ];
 
 export function defaultModelConfig() {
-  return {
-    presetId: 'volc-ark-doubao-seed-2.0-lite',
-    provider: 'openai',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
-    model: 'doubao-seed-2.0-lite',
-  };
+  return readGlobalConfig().modelConfig;
 }
 
 function defaultModel() {
-  if (process.env.OPENAI_API_KEY?.startsWith('sk-kimi-')) {
-    return process.env.OPENAI_MODEL || 'kimi-for-coding';
-  }
-  if (process.env.OPENAI_BASE_URL?.includes('volces.com')) {
-    return process.env.OPENAI_MODEL || 'doubao-seed-2.0-lite';
-  }
-  return 'qwen-max';
+  const cfg = readGlobalConfig().modelConfig;
+  return cfg.model || 'qwen-max';
 }
 
 export function defaultConfig(name, title) {
@@ -268,7 +259,6 @@ export function defaultConfig(name, title) {
       language: 'zh-CN',
       model: defaultModel(),
     },
-    modelConfig: defaultModelConfig(),
     theme: 'web-ui',
     animation: 'slide',
     status: 'draft',
@@ -278,15 +268,9 @@ export function defaultConfig(name, title) {
 }
 
 export function migrateModelConfig(cfg) {
-  if (cfg.modelConfig) {
-    // Never persist API keys; strip on read in case an older config stored one.
-    delete cfg.modelConfig.apiKey;
-    return cfg;
-  }
-  const preset = PRESET_MODELS.find((m) => m.id === (cfg.params?.model || 'kimi-code'));
-  cfg.modelConfig = preset
-    ? { ...preset, presetId: preset.id }
-    : defaultModelConfig();
+  // Model config is now system-level. Per-project modelConfig is kept for
+  // backwards compatibility but no longer used as the source of truth.
+  delete cfg.modelConfig;
   return cfg;
 }
 

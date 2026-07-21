@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import { readConfig, writeConfig, getProjectDir, ensureBaseEngine } from './config.mjs';
+import { readGlobalConfig } from './global-config.mjs';
 import { extractFromUrl } from './content-extractor.mjs';
 import { generateSlides } from './llm-adapter.mjs';
 import { injectThemeOverrides } from './theme-overrides.mjs';
@@ -332,17 +333,17 @@ async function main() {
     const prompt = buildPrompt(cfg, content);
     emit('prompt', '正在构建生成提示词');
 
-    // API key comes from the environment (AI_PPT_API_KEY passed by the Web UI
-    // for this session, or OPENAI_API_KEY from .env.kimi) - never from the
-    // persisted config, where apiKey is stripped on write.
-    const modelOptions = cfg.modelConfig
-      ? {
-          apiKey: process.env.AI_PPT_API_KEY || undefined,
-          baseUrl: cfg.modelConfig.baseUrl || undefined,
-          model: cfg.modelConfig.model || cfg.params?.model || undefined,
-          provider: cfg.modelConfig.provider || undefined,
-        }
-      : { model: cfg.params?.model || undefined };
+    // Model config is now system-level (global config). The API key comes from
+    // the environment (AI_PPT_API_KEY passed by the Web UI for this session, or
+    // OPENAI_API_KEY from .env.kimi) - never from persisted config.
+    const globalCfg = readGlobalConfig();
+    const mcfg = globalCfg.modelConfig || {};
+    const modelOptions = {
+      apiKey: process.env.AI_PPT_API_KEY || undefined,
+      baseUrl: mcfg.baseUrl || undefined,
+      model: mcfg.model || cfg.params?.model || undefined,
+      provider: mcfg.provider || undefined,
+    };
     let slidesHtml = '';
     const llmResult = await generateSlides(prompt, modelOptions);
     if (llmResult) {

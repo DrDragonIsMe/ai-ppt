@@ -14,7 +14,9 @@ import {
   getProjectDir,
   PRESET_MODELS,
   applyThemeAndAnimation,
+  defaultModelConfig,
 } from './scripts/config.mjs';
+import { readGlobalConfig, writeGlobalConfig } from './scripts/global-config.mjs';
 import { listModels } from './scripts/llm-adapter.mjs';
 import { search } from './scripts/search.mjs';
 import { createSnapshot, listSnapshots, restoreSnapshot, deleteSnapshot } from './scripts/snapshot.mjs';
@@ -216,6 +218,18 @@ function isWithinRoot(rootPath, relPath) {
 const PROJECT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 const routes = [
+  { method: 'GET', pattern: /^\/api\/config$/, handler: async (_req, res) => {
+    send(res, 200, readGlobalConfig());
+  }},
+  { method: 'POST', pattern: /^\/api\/config$/, handler: async (req, res) => {
+    const body = await readBody(req);
+    try {
+      const cfg = writeGlobalConfig(body);
+      send(res, 200, cfg);
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
   { method: 'GET', pattern: /^\/api\/models$/, handler: async (_req, res) => {
     send(res, 200, PRESET_MODELS);
   }},

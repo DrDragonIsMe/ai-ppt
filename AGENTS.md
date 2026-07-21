@@ -66,8 +66,13 @@ ai-ppt/
 
 5. **项目配置 `ai-ppt.json`**
    - 每个 deck 目录必须包含 `ai-ppt.json`，供 Web UI 和生成脚本使用。
-   - 关键字段：`sourceType` (`url` | `article`)、`sourceUrl`、`articleText`、`params`（title, audience, style, slideCount, language）、`modelConfig`、`status`。
-   - `modelConfig` 结构：`presetId`（预设 ID）、`provider`、`baseUrl`、`model`、`apiKey`。默认使用 `kimi-code`，可在 Web UI 模型配置面板切换或自定义。
+   - 关键字段：`sourceType` (`url` | `article`)、`sourceUrl`、`articleText`、`params`（title, audience, style, slideCount, language）、`status`。
+   - 模型配置已提升为系统级别，不再保存在 `ai-ppt.json` 中，见下文第 17 条。
+
+17. **系统级别模型配置**
+    - 模型配置保存在项目根目录 `.ai-ppt-config.json`（已加入 `.gitignore`），通过 Web UI「模型配置」面板或 `POST /api/config` 修改，**对所有项目生效**。
+    - 优先级：环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` > `.ai-ppt-config.json` > 内置默认。
+    - 生成脚本 `generate-deck.mjs` 和对话修改脚本 `chat-modify.mjs` 通过 `readGlobalConfig()` 读取当前模型配置；Web UI 只需在生成/修改时传递临时 API Key（`AI_PPT_API_KEY`），不保存到任何文件。
 
 6. **Web 管理界面**
    - 启动：`npm run web`（默认端口 3456）。

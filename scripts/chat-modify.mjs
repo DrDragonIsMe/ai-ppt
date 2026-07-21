@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { load } from 'cheerio';
 import { readConfig, writeConfig, getProjectDir } from './config.mjs';
+import { readGlobalConfig } from './global-config.mjs';
 import { generateSlides } from './llm-adapter.mjs';
 import { createSnapshot } from './snapshot.mjs';
 import { injectThemeOverrides } from './theme-overrides.mjs';
@@ -168,14 +169,14 @@ async function main() {
     const prompt = buildModifyPrompt(cfg, slidesHtml, instruction);
     emit('llm', '正在调用模型修改内容');
 
-    const modelOptions = cfg.modelConfig
-      ? {
-          apiKey: process.env.AI_PPT_API_KEY || undefined,
-          baseUrl: cfg.modelConfig.baseUrl || undefined,
-          model: cfg.modelConfig.model || undefined,
-          provider: cfg.modelConfig.provider || undefined,
-        }
-      : {};
+    const globalCfg = readGlobalConfig();
+    const mcfg = globalCfg.modelConfig || {};
+    const modelOptions = {
+      apiKey: process.env.AI_PPT_API_KEY || undefined,
+      baseUrl: mcfg.baseUrl || undefined,
+      model: mcfg.model || undefined,
+      provider: mcfg.provider || undefined,
+    };
 
     const result = await generateSlides(prompt, modelOptions);
     if (!result) {

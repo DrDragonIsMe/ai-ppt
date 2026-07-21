@@ -401,6 +401,24 @@
   ];
 
   let models = [];
+  let globalConfig = null;
+
+  async function loadGlobalConfig() {
+    try {
+      globalConfig = await api('GET', '/api/config');
+    } catch {
+      globalConfig = { modelConfig: {} };
+    }
+  }
+
+  async function saveGlobalModelConfig(mcfg) {
+    try {
+      globalConfig = await api('POST', '/api/config', { modelConfig: mcfg });
+      showToast('模型配置已保存');
+    } catch (err) {
+      showToast('保存模型配置失败：' + err.message);
+    }
+  }
 
   async function api(method, path, body) {
     const opts = { method, headers: {} };
@@ -522,7 +540,7 @@
     els.inputSlideCount.value = cfg.params?.slideCount || 8;
     els.inputLanguage.value = cfg.params?.language || 'zh-CN';
 
-    const mcfg = cfg.modelConfig || {};
+    const mcfg = globalConfig?.modelConfig || {};
     const presetId = mcfg.presetId || 'kimi-code';
     if (models.some((m) => m.id === presetId)) {
       els.inputModelPreset.value = presetId;
@@ -532,7 +550,7 @@
     els.inputModelProvider.value = mcfg.provider || '';
     ensureModelOption(mcfg.model);
     els.inputModelBaseUrl.value = mcfg.baseUrl || '';
-    els.inputModelApiKey.value = mcfg.apiKey || '';
+    els.inputModelApiKey.value = '';
 
     updateModelPresetUI(presetId);
 
@@ -1056,11 +1074,20 @@
     els.createModal.classList.remove('hidden');
   }
 
+  function getModelConfigFromUI() {
+    const presetId = els.inputModelPreset.value;
+    const preset = models.find((m) => m.id === presetId);
+    return {
+      presetId,
+      provider: els.inputModelProvider.value.trim() || (preset?.provider || ''),
+      model: els.inputModelName.value.trim() || (preset?.model || ''),
+      baseUrl: els.inputModelBaseUrl.value.trim() || (preset?.baseUrl || '')
+    };
+  }
+
   function getConfigPayload() {
     const activeTab = document.querySelector('.tab.active');
     const sourceType = activeTab ? activeTab.dataset.source : 'article';
-    const presetId = els.inputModelPreset.value;
-    const preset = models.find((m) => m.id === presetId);
 
     const selectedTheme = themes.find((t, i) =>
       els.themeGrid.querySelectorAll('.theme-card')[i]?.classList.contains('active')
@@ -1080,12 +1107,6 @@
         slideCount: parseInt(els.inputSlideCount.value, 10) || 8,
         language: els.inputLanguage.value
       },
-      modelConfig: {
-        presetId,
-        provider: els.inputModelProvider.value.trim() || (preset?.provider || ''),
-        model: els.inputModelName.value.trim() || (preset?.model || ''),
-        baseUrl: els.inputModelBaseUrl.value.trim() || (preset?.baseUrl || '')
-      },
       theme: selectedTheme?.id || currentConfig?.theme || 'web-ui',
       animation: selectedAnim?.id || currentConfig?.animation || 'slide'
     };
@@ -1095,6 +1116,8 @@
     if (!currentProject) return;
     const payload = getConfigPayload();
     await api('POST', `/api/projects/${encodeURIComponent(currentProject)}/config`, payload);
+    // Model config is system-level: save it globally whenever the content form is saved.
+    await saveGlobalModelConfig(getModelConfigFromUI());
     showToast('配置已保存');
     currentConfig = await api('GET', `/api/projects/${encodeURIComponent(currentProject)}/config`);
     renderConfig(currentConfig);
@@ -1571,6 +1594,6 @@
     });
   }
 
-  loadModels().then(loadProjects);
+  loadModels().then(loadGlobalConfig).then(loadProjects);
   bindEvents();
 })();

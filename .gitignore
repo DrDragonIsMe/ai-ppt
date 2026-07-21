@@ -7,3 +7,4 @@ node_modules/
 projects/*
 !projects/.gitkeep
 .env*
+.ai-ppt-config.json
