@@ -190,6 +190,14 @@ export function deleteProject(name) {
 
 export const PRESET_MODELS = [
   {
+    id: 'volc-ark-doubao-seed-2.0-lite',
+    name: '火山方舟 · doubao-seed-2.0-lite',
+    provider: 'openai',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+    model: 'doubao-seed-2.0-lite',
+    note: 'OpenAI 兼容格式',
+  },
+  {
     id: 'kimi-code',
     name: 'Kimi Code',
     provider: 'kimi',
@@ -229,16 +237,19 @@ export const PRESET_MODELS = [
 
 export function defaultModelConfig() {
   return {
-    presetId: 'kimi-code',
-    provider: 'kimi',
-    baseUrl: 'https://api.kimi.com/coding/v1',
-    model: 'kimi-for-coding',
+    presetId: 'volc-ark-doubao-seed-2.0-lite',
+    provider: 'openai',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+    model: 'doubao-seed-2.0-lite',
   };
 }
 
 function defaultModel() {
   if (process.env.OPENAI_API_KEY?.startsWith('sk-kimi-')) {
     return process.env.OPENAI_MODEL || 'kimi-for-coding';
+  }
+  if (process.env.OPENAI_BASE_URL?.includes('volces.com')) {
+    return process.env.OPENAI_MODEL || 'doubao-seed-2.0-lite';
   }
   return 'qwen-max';
 }

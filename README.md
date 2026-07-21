@@ -66,17 +66,22 @@ npx ai-ppt-skills
 
 安装完成后重启 CLI 会话。
 
-### LLM 配置（可选，默认 Kimi Code）
+### LLM 配置（可选，默认火山方舟 doubao-seed-2.0-lite）
 
 每个项目可在 Web UI 的「模型配置」面板独立设置 Provider、Base URL、模型名称和 API Key；未填写时回退到以下环境变量。命令行生成同样遵循此优先级。
 
 ```bash
-# 方式 A：Kimi Code（推荐，默认）
+# 方式 A：火山方舟 doubao-seed-2.0-lite（默认）
+export OPENAI_API_KEY=ark-...
+export OPENAI_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
+export OPENAI_MODEL=doubao-seed-2.0-lite
+
+# 方式 B：Kimi Code
 export OPENAI_API_KEY=sk-kimi-...
 export OPENAI_BASE_URL=https://api.kimi.com/coding/v1
 export OPENAI_MODEL=kimi-for-coding
 
-# 方式 B：Bailian CLI
+# 方式 C：Bailian CLI
 bl login
 ```
 

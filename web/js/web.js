@@ -530,7 +530,7 @@
       els.inputModelPreset.value = 'custom';
     }
     els.inputModelProvider.value = mcfg.provider || '';
-    els.inputModelName.value = mcfg.model || '';
+    ensureModelOption(mcfg.model);
     els.inputModelBaseUrl.value = mcfg.baseUrl || '';
     els.inputModelApiKey.value = mcfg.apiKey || '';
 
@@ -576,7 +576,7 @@
       els.inputModelName.innerHTML = '<option value="">选择或输入模型...</option>' +
         remoteModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('');
       if (currentValue) {
-        els.inputModelName.value = currentValue;
+        ensureModelOption(currentValue);
       }
       showToast(`获取到 ${remoteModels.length} 个模型`);
     } catch (err) {
@@ -732,6 +732,21 @@
       const opt = document.createElement('option');
       opt.value = value;
       opt.textContent = '自定义 · ' + value;
+      opt.dataset.custom = 'true';
+      select.appendChild(opt);
+    }
+    select.value = value;
+  }
+
+  function ensureModelOption(value) {
+    if (!value) return;
+    const select = els.inputModelName;
+    select.querySelectorAll('option[data-custom]').forEach((opt) => opt.remove());
+    const found = Array.from(select.options).some((opt) => opt.value === value);
+    if (!found) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = value;
       opt.dataset.custom = 'true';
       select.appendChild(opt);
     }
@@ -1335,7 +1350,7 @@
         els.inputModelBaseUrl.value = '';
       } else {
         els.inputModelProvider.value = preset.provider || '';
-        els.inputModelName.value = preset.model || '';
+        ensureModelOption(preset.model);
         els.inputModelBaseUrl.value = preset.baseUrl || '';
       }
       updateModelPresetUI(preset.id);
