@@ -23,6 +23,7 @@ import { load as loadHtml } from 'cheerio';
 import { injectThemeOverrides } from './scripts/theme-overrides.mjs';
 import { exportPptx, exportPptxImage } from './scripts/export-pptx.mjs';
 import { exportPdf } from './scripts/export-pdf.mjs';
+import { saveEditedHtml } from './scripts/save-edits.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -350,6 +351,19 @@ const routes = [
         });
       });
       send(res, 200, { ok: true });
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
+  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/save-edits$/, handler: async (req, res, matches) => {
+    const name = matches[1];
+    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+    const body = await readBody(req);
+    const html = (body.html || '').trim();
+    if (!html) return send(res, 400, { error: '请提供编辑后的 HTML' });
+    try {
+      const record = saveEditedHtml(name, html);
+      send(res, 200, record);
     } catch (err) {
       send(res, 500, { error: err.message });
     }

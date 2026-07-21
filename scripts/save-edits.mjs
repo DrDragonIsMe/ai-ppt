@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { load } from 'cheerio';
-import { readConfig, writeConfig, getProjectDir, createSnapshot } from './config.mjs';
+import { readConfig, writeConfig, getProjectDir } from './config.mjs';
+import { createSnapshot } from './snapshot.mjs';
 import { injectThemeOverrides } from './theme-overrides.mjs';
 
 // Save user-edited deck HTML back to the project.

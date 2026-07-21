@@ -9,15 +9,38 @@
 <body>
   <div id="app">
     <header class="topbar">
-      <div class="brand">
-        <div class="logo">ai-ppt</div>
-        <div class="tagline">HTML 幻灯片生成与管理</div>
+      <div class="topbar-left">
+        <div class="brand">
+          <div class="logo">ai-ppt</div>
+        </div>
+        <div class="project-select-wrap">
+          <select id="project-select" class="project-select" title="切换项目">
+            <option value="">选择项目…</option>
+          </select>
+          <button id="btn-create-project" class="btn-icon" title="新建项目 (Ctrl+N)">+</button>
+        </div>
       </div>
-      <div class="topbar-search">
-        <input type="search" id="input-global-search" placeholder="搜索项目或内容... (Ctrl+K)">
-        <div id="search-results" class="search-results hidden"></div>
+      <div class="topbar-center">
+        <div class="project-title" id="project-title">未选择项目</div>
+        <div class="status" id="project-status">draft</div>
       </div>
-      <div class="actions">
+      <div class="topbar-right">
+        <div class="topbar-search">
+          <input type="search" id="input-global-search" placeholder="搜索项目或内容… (Ctrl+K)">
+          <div id="search-results" class="search-results hidden"></div>
+        </div>
+        <button id="btn-edit-mode" class="btn-secondary" disabled>编辑模式</button>
+        <button id="btn-generate" class="btn-primary" disabled>生成幻灯片</button>
+        <div class="dropdown" id="export-dropdown">
+          <button id="btn-export" class="btn-secondary" disabled>导出 ▾</button>
+          <div class="dropdown-menu hidden">
+            <button id="dropdown-export-pptx">PPTX（可编辑文字）</button>
+            <button id="dropdown-export-pptx-image">高清图片 PPTX</button>
+            <button id="dropdown-export-pdf">浏览器打印 / PDF</button>
+            <button id="dropdown-export-html">单文件 HTML</button>
+          </div>
+        </div>
+        <button id="btn-open-preview" class="btn-secondary" disabled>新窗口预览</button>
         <button id="btn-help" class="btn-secondary btn-icon" title="快捷键 (?)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
@@ -25,313 +48,311 @@
             <path d="M12 17h.01"></path>
           </svg>
         </button>
-        <button id="btn-create" class="btn-primary">+ 新建项目</button>
       </div>
     </header>
 
     <div class="layout">
-      <aside class="sidebar">
-        <div class="sidebar-title">项目列表</div>
+      <aside id="project-sidebar" class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title">项目列表</div>
+          <button id="btn-collapse-sidebar" class="btn-icon sidebar-collapse" title="折叠/展开">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 18l-6-6 6-6"></path>
+            </svg>
+          </button>
+        </div>
         <div id="project-list" class="project-list"></div>
       </aside>
 
       <main class="workspace">
-        <div id="empty-state" class="empty-state" style="padding: 60px 40px;">
+        <div id="empty-state" class="empty-state">
           <h2>选择一个项目或创建新项目</h2>
-          <p>在左侧选择项目，配置来源与参数后点击生成，即可自动创建 HTML 幻灯片。</p>
+          <p>在右侧属性面板配置来源与参数后点击生成，即可自动创建 HTML 幻灯片。</p>
+          <button id="btn-create-empty" class="btn-primary">+ 新建项目</button>
         </div>
 
         <div id="project-panel" class="project-panel hidden">
-          <div class="workspace-split">
-            <div class="workspace-config">
-              <div class="workspace-config-scroll">
-                <div class="panel-header">
-                  <h1 id="project-title"></h1>
-                  <div class="status" id="project-status"></div>
-                </div>
-
-                <div class="config-tabs">
-                  <button class="config-tab active" data-tab="content">内容</button>
-                  <button class="config-tab" data-tab="style">主题</button>
-                  <button class="config-tab" data-tab="animation">动画</button>
-                  <button class="config-tab" data-tab="publish">发布</button>
-                  <button class="config-tab" data-tab="versions">版本</button>
-                  <button class="config-tab" data-tab="components">组件</button>
-                </div>
-
-                <div class="config-panel active" data-panel="content">
-                  <section class="card">
-                    <div class="card-title">内容来源</div>
-                    <div class="tabs">
-                      <button class="tab active" data-source="article">文章内容</button>
-                      <button class="tab" data-source="url">网页 URL</button>
-                    </div>
-                    <div class="field" id="field-url">
-                      <label>网页 URL</label>
-                      <input type="url" id="input-url" placeholder="https://example.com/article">
-                    </div>
-                    <div class="field" id="field-article">
-                      <label style="display:flex;justify-content:space-between;align-items:center;">
-                        <span>文章内容</span>
-                        <button id="btn-import-md" class="btn-secondary" style="padding:4px 10px;font-size:12px;">从 Markdown 导入</button>
-                      </label>
-                      <textarea id="input-article" rows="6" placeholder="粘贴文章或内容，支持 Markdown 格式..."></textarea>
-                      <input type="file" id="input-md-file" accept=".md,.markdown,.txt" style="display:none;">
-                    </div>
-                  </section>
-
-                  <section class="card">
-                    <div class="card-title">生成参数</div>
-                    <div class="fields-grid">
-                      <div class="field">
-                        <label>演示标题</label>
-                        <input type="text" id="input-title">
-                      </div>
-                      <div class="field">
-                        <label>目标受众</label>
-                        <input type="text" id="input-audience">
-                      </div>
-                      <div class="field">
-                        <label>风格</label>
-                        <select id="input-style">
-                          <option>商业汇报</option>
-                          <option>学术演讲</option>
-                          <option>产品发布</option>
-                          <option>培训课件</option>
-                          <option>极简 keynote</option>
-                        </select>
-                      </div>
-                      <div class="field">
-                        <label>页数</label>
-                        <input type="number" id="input-slide-count" min="3" max="30">
-                      </div>
-                      <div class="field">
-                        <label>语言</label>
-                        <select id="input-language">
-                          <option value="zh-CN">中文</option>
-                          <option value="en">English</option>
-                        </select>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section class="card model-config-card">
-                    <div class="card-title">模型配置</div>
-                    <div class="fields-grid">
-                      <div class="field field-wide">
-                        <label>模型预设</label>
-                        <select id="input-model-preset">
-                          <option value="">加载中...</option>
-                        </select>
-                      </div>
-                      <div id="lmstudio-hint" class="field field-wide hidden">
-                        <div style="font-size: 13px; color: #0D9488; background: #F0FDFA; padding: 10px 12px; border-radius: 8px;">
-                          💡 需要先启动 LM Studio，然后在 LM Studio 中开启 "Local Server"
-                        </div>
-                      </div>
-                      <div class="field">
-                        <label>Provider</label>
-                        <input type="text" id="input-model-provider" placeholder="kimi / openai / lmstudio">
-                      </div>
-                      <div class="field field-wide" style="display: flex; gap: 8px;">
-                        <label style="flex: 1;">模型名称</label>
-                        <div style="flex: 1; display: flex; gap: 8px;">
-                          <select id="input-model-name" style="flex: 1;">
-                            <option value="">选择或输入模型...</option>
-                          </select>
-                          <button id="btn-refresh-models" class="btn-secondary" style="padding: 8px 12px; white-space: nowrap;">刷新列表</button>
-                        </div>
-                      </div>
-                      <div class="field field-wide">
-                        <label>Base URL</label>
-                        <input type="url" id="input-model-base-url" placeholder="https://api.kimi.com/coding/v1">
-                      </div>
-                      <div class="field field-wide">
-                        <label>API Key <span class="hint-inline">临时 · 仅本次生成, 不保存; 留空则用环境变量</span></label>
-                        <input type="password" id="input-model-api-key" placeholder="sk-...">
-                      </div>
-                    </div>
-                  </section>
-
-                  <div class="actions-bar">
-                    <button id="btn-save" class="btn-secondary">保存配置</button>
-                    <button id="btn-generate" class="btn-primary">生成幻灯片</button>
-                    <button id="btn-preview" class="btn-secondary" disabled>预览</button>
-                    <button id="btn-export-pptx" class="btn-secondary" disabled>导出 PPTX</button>
-                    <button id="btn-export-pptx-image" class="btn-secondary" disabled>导出高清 PPTX</button>
-                  </div>
-
-                  <section id="progress-card" class="card progress-card hidden">
-                    <div class="card-title">生成流程</div>
-                    <div id="progress-steps" class="progress-steps"></div>
-                    <div id="progress-log" class="progress-log"></div>
-                  </section>
-                </div>
-
-                <div class="config-panel" data-panel="style">
-                  <section class="card">
-                    <div class="card-title">选择主题</div>
-                    <div class="theme-grid" id="theme-grid">
-                    </div>
-                  </section>
-
-                  <section class="card">
-                    <div class="card-title">自定义变量</div>
-                    <div class="fields-grid">
-                      <div class="field">
-                        <label>主色（--teal）</label>
-                        <input type="color" id="input-var-teal" value="#0D9488">
-                      </div>
-                      <div class="field">
-                        <label>文字色（--ink）</label>
-                        <input type="color" id="input-var-ink" value="#1A2332">
-                      </div>
-                      <div class="field">
-                        <label>背景色（--cream）</label>
-                        <input type="color" id="input-var-cream" value="#F7F8FA">
-                      </div>
-                      <div class="field field-wide">
-                        <label>标题字体（--font-heading）</label>
-                        <select id="input-var-font-heading">
-                          <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
-                          <option value='"PingFang SC", "Microsoft YaHei", sans-serif'>无衬线 · PingFang SC / Microsoft YaHei</option>
-                          <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
-                        </select>
-                      </div>
-                      <div class="field field-wide">
-                        <label>正文字体（--font-body）</label>
-                        <select id="input-var-font-body">
-                          <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
-                          <option value='"PingFang SC", "Microsoft YaHei", sans-serif' selected>无衬线 · PingFang SC / Microsoft YaHei</option>
-                          <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div class="actions-bar" style="margin-bottom: 0;">
-                      <button id="btn-apply-theme-vars" class="btn-primary">应用变量</button>
-                      <button id="btn-clear-theme-vars" class="btn-secondary">清除变量</button>
-                    </div>
-                  </section>
-
-                  <section class="card">
-                    <div class="card-title">主题说明</div>
-                    <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7;">
-                      选择主题后，点击「保存配置」应用更改。主题会立即在右侧预览窗口中显示效果。
-                    </p>
-                  </section>
-
-                  <div class="actions-bar">
-                    <button id="btn-save-theme" class="btn-primary">保存配置</button>
-                  </div>
-                </div>
-
-                <div class="config-panel" data-panel="animation">
-                  <section class="card">
-                    <div class="card-title">动画类型</div>
-                    <div class="animation-options" id="animation-options">
-                    </div>
-                  </section>
-
-                  <section class="card">
-                    <div class="card-title">动画速度</div>
-                    <div class="field">
-                      <div class="speed-slider">
-                        <label>快速</label>
-                        <input type="range" id="animation-speed" min="1" max="3" value="2">
-                        <label>缓慢</label>
-                      </div>
-                    </div>
-                  </section>
-
-                  <div class="actions-bar">
-                    <button id="btn-save-animation" class="btn-primary">保存配置</button>
-                  </div>
-                </div>
-
-                <div class="config-panel" data-panel="publish">
-                  <section class="card">
-                    <div class="card-title">发布状态</div>
-                    <div class="publish-status">
-                      <div class="publish-status-icon">📝</div>
-                      <div class="publish-status-info">
-                        <div class="publish-status-title" id="publish-status-title">草稿状态</div>
-                        <div class="publish-status-desc" id="publish-status-desc">尚未发布过任何版本</div>
-                      </div>
-                    </div>
-
-                    <button id="btn-publish" class="btn-primary" style="width: 100%; margin-top: 12px;">发布当前版本</button>
-                  </section>
-
-                  <section class="card">
-                    <div class="card-title">访问链接</div>
-                    <div class="publish-history">
-                      <div class="publish-history-title">最新版本</div>
-                      <div id="publish-latest" style="padding: 12px; background: var(--tile); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; word-break: break-all; color: var(--ink); opacity: 0.6;">
-                        暂未发布
-                      </div>
-                    </div>
-                  </section>
-
-                  <section class="card">
-                    <div class="card-title">发布历史</div>
-                    <div class="publish-list" id="publish-list">
-                      <div style="padding: 40px 20px; text-align: center; opacity: 0.5; font-size: 13px;">
-                        暂无发布历史
-                      </div>
-                    </div>
-                  </section>
-                </div>
-
-                <div class="config-panel" data-panel="versions">
-                  <section class="card">
-                    <div class="card-title">创建快照</div>
-                    <div class="field">
-                      <label>快照说明（可选）</label>
-                      <input type="text" id="snapshot-description" placeholder="例如：修改封面标题之前">
-                    </div>
-                    <button id="btn-create-snapshot" class="btn-primary" style="width: 100%; margin-top: 4px;">保存当前版本为快照</button>
-                  </section>
-
-                  <section class="card">
-                    <div class="card-title">快照历史</div>
-                    <div id="snapshot-list" class="publish-list">
-                      <div style="padding: 40px 20px; text-align: center; opacity: 0.5; font-size: 13px;">
-                        暂无快照
-                      </div>
-                    </div>
-                  </section>
-                </div>
-
-                <div class="config-panel" data-panel="components">
-                  <section class="card">
-                    <div class="card-title">组件库</div>
-                    <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 16px;">
-                      点击「插入」将组件页添加到倒数第二页（结尾页之前），插入后可在预览中查看并用「AI 修改」调整内容。
-                    </p>
-                    <div class="component-grid" id="component-grid">
-                    </div>
-                  </section>
-                </div>
+          <div class="workspace-canvas">
+            <div class="workspace-preview-header">
+              <div class="workspace-preview-title">实时预览</div>
+              <div class="workspace-preview-status" id="edit-status"></div>
+              <div class="workspace-preview-actions">
+                <button id="btn-toggle-chat" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">AI 修改</button>
+                <button id="btn-open-preview-header" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">在新窗口打开</button>
               </div>
             </div>
+            <div class="workspace-preview-frame">
+              <iframe id="preview-frame"></iframe>
+            </div>
+            <div id="chat-dock" class="chat-dock hidden">
+              <div id="chat-messages" class="chat-messages"></div>
+              <div class="chat-input-row">
+                <input type="text" id="chat-input" placeholder="例如：把第二页标题改为… / 给第三页加一条要点…">
+                <button id="btn-chat-send" class="btn-primary" style="white-space:nowrap;">发送</button>
+              </div>
+            </div>
+          </div>
 
-            <div class="workspace-preview">
-              <div class="workspace-preview-header">
-                <div class="workspace-preview-title">实时预览</div>
-                <div style="display:flex;gap:8px;">
-                  <button id="btn-toggle-chat" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">AI 修改</button>
-                  <button id="btn-open-preview" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">在新窗口打开</button>
+          <div class="workspace-config">
+            <div class="workspace-config-scroll">
+              <div class="config-tabs">
+                <button class="config-tab active" data-tab="content">内容</button>
+                <button class="config-tab" data-tab="style">主题</button>
+                <button class="config-tab" data-tab="animation">动画</button>
+                <button class="config-tab" data-tab="publish">发布</button>
+                <button class="config-tab" data-tab="versions">版本</button>
+                <button class="config-tab" data-tab="components">组件</button>
+              </div>
+
+              <div class="config-panel active" data-panel="content">
+                <section class="card">
+                  <div class="card-title">内容来源</div>
+                  <div class="tabs">
+                    <button class="tab active" data-source="article">文章内容</button>
+                    <button class="tab" data-source="url">网页 URL</button>
+                  </div>
+                  <div class="field hidden" id="field-url">
+                    <label>网页 URL</label>
+                    <input type="url" id="input-url" placeholder="https://example.com/article">
+                  </div>
+                  <div class="field" id="field-article">
+                    <label style="display:flex;justify-content:space-between;align-items:center;">
+                      <span>文章内容</span>
+                      <button id="btn-import-md" class="btn-secondary" style="padding:4px 10px;font-size:12px;">从 Markdown 导入</button>
+                    </label>
+                    <textarea id="input-article" rows="6" placeholder="粘贴文章或内容，支持 Markdown 格式…"></textarea>
+                    <input type="file" id="input-md-file" accept=".md,.markdown,.txt" style="display:none;">
+                  </div>
+                </section>
+
+                <section class="card">
+                  <div class="card-title">生成参数</div>
+                  <div class="fields-grid">
+                    <div class="field">
+                      <label>演示标题</label>
+                      <input type="text" id="input-title">
+                    </div>
+                    <div class="field">
+                      <label>目标受众</label>
+                      <input type="text" id="input-audience">
+                    </div>
+                    <div class="field">
+                      <label>风格</label>
+                      <select id="input-style">
+                        <option>商业汇报</option>
+                        <option>学术演讲</option>
+                        <option>产品发布</option>
+                        <option>培训课件</option>
+                        <option>极简 keynote</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label>页数</label>
+                      <input type="number" id="input-slide-count" min="3" max="30">
+                    </div>
+                    <div class="field">
+                      <label>语言</label>
+                      <select id="input-language">
+                        <option value="zh-CN">中文</option>
+                        <option value="en">English</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="card model-config-card">
+                  <div class="card-title">模型配置</div>
+                  <div class="fields-grid">
+                    <div class="field field-wide">
+                      <label>模型预设</label>
+                      <select id="input-model-preset">
+                        <option value="">加载中…</option>
+                      </select>
+                    </div>
+                    <div id="lmstudio-hint" class="field field-wide hidden">
+                      <div style="font-size: 13px; color: #0D9488; background: #F0FDFA; padding: 10px 12px; border-radius: 8px;">
+                        💡 需要先启动 LM Studio，然后在 LM Studio 中开启 "Local Server"
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label>Provider</label>
+                      <input type="text" id="input-model-provider" placeholder="kimi / openai / lmstudio">
+                    </div>
+                    <div class="field field-wide" style="display: flex; gap: 8px;">
+                      <label style="flex: 1;">模型名称</label>
+                      <div style="flex: 1; display: flex; gap: 8px;">
+                        <select id="input-model-name" style="flex: 1;">
+                          <option value="">选择或输入模型…</option>
+                        </select>
+                        <button id="btn-refresh-models" class="btn-secondary" style="padding: 8px 12px; white-space: nowrap;">刷新列表</button>
+                      </div>
+                    </div>
+                    <div class="field field-wide">
+                      <label>Base URL</label>
+                      <input type="url" id="input-model-base-url" placeholder="https://api.kimi.com/coding/v1">
+                    </div>
+                    <div class="field field-wide">
+                      <label>API Key <span class="hint-inline">临时 · 仅本次生成, 不保存; 留空则用环境变量</span></label>
+                      <input type="password" id="input-model-api-key" placeholder="sk-...">
+                    </div>
+                  </div>
+                </section>
+
+                <div class="actions-bar">
+                  <button id="btn-save" class="btn-secondary">保存配置</button>
+                  <button id="btn-generate-content" class="btn-primary">生成幻灯片</button>
+                  <button id="btn-preview" class="btn-secondary" disabled>预览</button>
+                  <button id="btn-export-pptx" class="btn-secondary" disabled>导出 PPTX</button>
+                  <button id="btn-export-pptx-image" class="btn-secondary" disabled>导出高清 PPTX</button>
+                </div>
+
+                <section id="progress-card" class="card progress-card hidden">
+                  <div class="card-title">生成流程</div>
+                  <div id="progress-steps" class="progress-steps"></div>
+                  <div id="progress-log" class="progress-log"></div>
+                </section>
+              </div>
+
+              <div class="config-panel" data-panel="style">
+                <section class="card">
+                  <div class="card-title">选择主题</div>
+                  <div class="theme-grid" id="theme-grid"></div>
+                </section>
+
+                <section class="card">
+                  <div class="card-title">自定义变量</div>
+                  <div class="fields-grid">
+                    <div class="field">
+                      <label>主色（--teal）</label>
+                      <input type="color" id="input-var-teal" value="#0D9488">
+                    </div>
+                    <div class="field">
+                      <label>文字色（--ink）</label>
+                      <input type="color" id="input-var-ink" value="#1A2332">
+                    </div>
+                    <div class="field">
+                      <label>背景色（--cream）</label>
+                      <input type="color" id="input-var-cream" value="#F7F8FA">
+                    </div>
+                    <div class="field field-wide">
+                      <label>标题字体（--font-heading）</label>
+                      <select id="input-var-font-heading">
+                        <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
+                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif'>无衬线 · PingFang SC / Microsoft YaHei</option>
+                        <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
+                      </select>
+                    </div>
+                    <div class="field field-wide">
+                      <label>正文字体（--font-body）</label>
+                      <select id="input-var-font-body">
+                        <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
+                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif' selected>无衬线 · PingFang SC / Microsoft YaHei</option>
+                        <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="actions-bar" style="margin-bottom: 0;">
+                    <button id="btn-apply-theme-vars" class="btn-primary">应用变量</button>
+                    <button id="btn-clear-theme-vars" class="btn-secondary">清除变量</button>
+                  </div>
+                </section>
+
+                <section class="card">
+                  <div class="card-title">主题说明</div>
+                  <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7;">
+                    选择主题后，点击「保存配置」应用更改。主题会立即在右侧预览窗口中显示效果。
+                  </p>
+                </section>
+
+                <div class="actions-bar">
+                  <button id="btn-save-theme" class="btn-primary">保存配置</button>
                 </div>
               </div>
-              <div class="workspace-preview-frame">
-                <iframe id="preview-frame"></iframe>
-              </div>
-              <div id="chat-dock" class="chat-dock hidden">
-                <div id="chat-messages" class="chat-messages"></div>
-                <div class="chat-input-row">
-                  <input type="text" id="chat-input" placeholder="例如：把第二页标题改为… / 给第三页加一条要点…">
-                  <button id="btn-chat-send" class="btn-primary" style="white-space:nowrap;">发送</button>
+
+              <div class="config-panel" data-panel="animation">
+                <section class="card">
+                  <div class="card-title">动画类型</div>
+                  <div class="animation-options" id="animation-options"></div>
+                </section>
+
+                <section class="card">
+                  <div class="card-title">动画速度</div>
+                  <div class="field">
+                    <div class="speed-slider">
+                      <label>快速</label>
+                      <input type="range" id="animation-speed" min="1" max="3" value="2">
+                      <label>缓慢</label>
+                    </div>
+                  </div>
+                </section>
+
+                <div class="actions-bar">
+                  <button id="btn-save-animation" class="btn-primary">保存配置</button>
                 </div>
+              </div>
+
+              <div class="config-panel" data-panel="publish">
+                <section class="card">
+                  <div class="card-title">发布状态</div>
+                  <div class="publish-status">
+                    <div class="publish-status-icon">📝</div>
+                    <div class="publish-status-info">
+                      <div class="publish-status-title" id="publish-status-title">草稿状态</div>
+                      <div class="publish-status-desc" id="publish-status-desc">尚未发布过任何版本</div>
+                    </div>
+                  </div>
+
+                  <button id="btn-publish" class="btn-primary" style="width: 100%; margin-top: 12px;">发布当前版本</button>
+                </section>
+
+                <section class="card">
+                  <div class="card-title">访问链接</div>
+                  <div class="publish-history">
+                    <div class="publish-history-title">最新版本</div>
+                    <div id="publish-latest" style="padding: 12px; background: var(--tile); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; word-break: break-all; color: var(--ink); opacity: 0.6;">
+                      暂未发布
+                    </div>
+                  </div>
+                </section>
+
+                <section class="card">
+                  <div class="card-title">发布历史</div>
+                  <div class="publish-list" id="publish-list">
+                    <div style="padding: 40px 20px; text-align: center; opacity: 0.5; font-size: 13px;">
+                      暂无发布历史
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div class="config-panel" data-panel="versions">
+                <section class="card">
+                  <div class="card-title">创建快照</div>
+                  <div class="field">
+                    <label>快照说明（可选）</label>
+                    <input type="text" id="snapshot-description" placeholder="例如：修改封面标题之前">
+                  </div>
+                  <button id="btn-create-snapshot" class="btn-primary" style="width: 100%; margin-top: 4px;">保存当前版本为快照</button>
+                </section>
+
+                <section class="card">
+                  <div class="card-title">快照历史</div>
+                  <div id="snapshot-list" class="publish-list">
+                    <div style="padding: 40px 20px; text-align: center; opacity: 0.5; font-size: 13px;">
+                      暂无快照
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div class="config-panel" data-panel="components">
+                <section class="card">
+                  <div class="card-title">组件库</div>
+                  <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 16px;">
+                    点击「插入」将组件页添加到倒数第二页（结尾页之前），插入后可在预览中查看并用「AI 修改」调整内容。
+                  </p>
+                  <div class="component-grid" id="component-grid"></div>
+                </section>
               </div>
             </div>
           </div>

@@ -43,6 +43,7 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 | `scripts/export-pptx.mjs` | 使用 pptxgenjs 生成 PPTX。 |
 | `scripts/export-pdf.mjs` | 可选 Puppeteer 打印 PDF，否则回退浏览器打印。 |
 | `scripts/export-single-html.mjs` | 单文件 HTML 导出：内联本地 CSS/JS，输出 `export/deck-single.html`。 |
+| `scripts/save-edits.mjs` | 保存用户在 iframe 中编辑后的 HTML，自动快照并记录 `ai-ppt.json.userEdits`。
 | `scripts/backup.mjs` | 备份 projects/、skills/、web/、关键文档。 |
 | `scripts/upgrade-decks.mjs` | 将 ai-ppt-base 的 css/js 同步到所有项目。 |
 | `skills/` | CLI skill 定义：ppt-structure、ppt-preview、ppt-edit、ppt-export、ppt-list、ppt-delete。 |
@@ -74,7 +75,15 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
   },
   "status": "ready",
   "lastGeneratedAt": "2026-07-09T01:41:53.000Z",
-  "errorMessage": null
+  "errorMessage": null,
+  "themeOverrides": {},
+  "userEdits": {
+    "savedAt": "2026-07-20T12:00:00.000Z",
+    "slideCount": 8,
+    "htmlSnapshot": [
+      { "index": 0, "heading": "封面标题", "text": "副标题文字" }
+    ]
+  }
 }
 ```
 
@@ -109,6 +118,14 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 - 主题覆盖：`POST /api/projects/:name/theme-overrides` 注入 `<style id="theme-overrides">`（变量白名单见 server.mjs `ALLOWED_THEME_VARS`），持久化于 `ai-ppt.json.themeOverrides`；重新生成会覆盖 index.html，需重新应用。
 - 组件库：`POST /api/projects/:name/component` 把 slide HTML 插入倒数第二页；Web UI「组件」标签内置 8 种预制组件。
 - 新动画：`anim-zoom` / `anim-blur` / `anim-flip`，与 `anim-fade`/`anim-slide`/`anim-bounce` 同模式，均已加入 `prefers-reduced-motion` 兜底。
+
+## 可视化编辑与用户编辑保护
+
+- **编辑模式**：Web UI 采用「顶部工具栏 + 左侧可折叠项目列表 + 中间大画布预览 + 右侧属性面板」布局。点击预览区或顶部工具栏的「编辑模式」后，父页面通过 `postMessage` 向 iframe 发送 `ai-ppt:edit-start`；`ai-ppt-base/js/ppt.js` 接收后为 `.slide` 内文本元素开启 `contenteditable`，并显示底部浮动保存/取消工具条。
+- **保存编辑**：点击保存后，iframe 向父页面发送 `ai-ppt:edit-saved` 并携带 `document.documentElement.outerHTML`；Web UI 调用 `POST /api/projects/:name/save-edits`，由 `scripts/save-edits.mjs` 写回 `index.html`（保存前自动快照），重新注入 `themeOverrides`，并在 `ai-ppt.json` 中写入 `userEdits`。
+- **取消编辑**：点击取消时 iframe 发送 `ai-ppt:edit-cancelled`，并通过 `DOMParser` 恢复原始 DOM。
+- **AI 约束**：`generate-deck.mjs` 与 `chat-modify.mjs` 读取 `cfg.userEdits`，在 prompt 中列出用户编辑过的每页标题与文本摘要，要求 LLM 在重新生成或修改时保留这些幻灯片的文字、观点和数据。CLI 驱动（`npm run generate`、`npm run chat-modify`）同样受此约束。
+- **键盘处理**：编辑模式下 `ai-ppt-base/js/ppt.js` 禁用放映导航快捷键，避免方向键等干扰文本编辑。
 
 ## 导出策略
 

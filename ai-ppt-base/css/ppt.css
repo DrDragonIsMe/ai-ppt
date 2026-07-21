@@ -2225,3 +2225,65 @@ body {
     animation-duration: 0.01s;
   }
 }
+
+/* ===== Visual edit mode toolbar ===== */
+#ai-ppt-edit-toolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--navy, #0F172A);
+  color: var(--cream, #FAFAF7);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-family: var(--font-body);
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 4px;
+  opacity: 0.9;
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-save {
+  background: var(--teal, #0D9488);
+  color: white;
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-cancel {
+  background: var(--tile-strong, #E0E4EA);
+  color: var(--ink, #1A2332);
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.slide [contenteditable="true"] {
+  outline: 2px dashed var(--teal, #0D9488);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.slide [contenteditable="true"]:focus,
+.slide [contenteditable="true"]:hover {
+  outline-style: solid;
+  background: rgba(13, 148, 136, 0.06);
+}

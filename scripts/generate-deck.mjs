@@ -390,8 +390,20 @@ async function main() {
   }
 }
 
+function formatUserEdits(cfg) {
+  const edits = cfg.userEdits;
+  if (!edits || !edits.htmlSnapshot || edits.htmlSnapshot.length === 0) return '';
+  const lines = edits.htmlSnapshot.map((s) => {
+    const heading = s.heading ? `标题：${s.heading}` : '';
+    const text = s.text ? `内容：${s.text}` : '';
+    return `第 ${s.index + 1} 页\n${heading}\n${text}`;
+  });
+  return `\n【用户手动编辑过的幻灯片（必须保留）】\n以下幻灯片是用户曾在可视化编辑器中手动编辑并保存的。重新生成时，这些幻灯片的文字内容、核心观点、数据必须原样保留或仅做最小化润色，禁止整体重写、删除或替换为不同内容。未在此列表中的幻灯片可按来源内容正常生成。\n\n${lines.join('\n\n')}\n`;
+}
+
 function buildPrompt(cfg, content) {
   const p = cfg.params || {};
+  const userEditsSection = formatUserEdits(cfg);
   return `请根据以下内容为名为 "${p.title || cfg.name}" 的演示文稿生成 HTML 幻灯片片段。
 
 输出格式：
@@ -414,7 +426,7 @@ function buildPrompt(cfg, content) {
 - kicker / section-title 只允许出现在封面和收尾页；内容页一律不用。
 - 禁止使用 gradient-text 类；禁止在封面放置描述演示原则的标签（badge）；封面只放标题、副标题、署名/日期。
 - 标题不超过 20 个汉字，避免折行溢出。
-
+${userEditsSection}
 来源内容（已提取关键文本）：
 ${content.slice(0, 6000)}
 `;

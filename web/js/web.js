@@ -317,6 +317,7 @@
     inputModelApiKey: document.getElementById('input-model-api-key'),
     btnSave: document.getElementById('btn-save'),
     btnGenerate: document.getElementById('btn-generate'),
+    btnGenerateContent: document.getElementById('btn-generate-content'),
     btnPreview: document.getElementById('btn-preview'),
     btnExportPptx: document.getElementById('btn-export-pptx'),
     btnExportPptxImage: document.getElementById('btn-export-pptx-image'),
@@ -325,10 +326,19 @@
     progressLog: document.getElementById('progress-log'),
     createModal: document.getElementById('create-modal'),
     btnCreate: document.getElementById('btn-create'),
+    btnCreateProject: document.getElementById('btn-create-project'),
+    btnCreateEmpty: document.getElementById('btn-create-empty'),
     btnCancelCreate: document.getElementById('btn-cancel-create'),
     btnConfirmCreate: document.getElementById('btn-confirm-create'),
     newProjectName: document.getElementById('new-project-name'),
     newProjectTitle: document.getElementById('new-project-title'),
+    projectSelect: document.getElementById('project-select'),
+    btnEditMode: document.getElementById('btn-edit-mode'),
+    editStatus: document.getElementById('edit-status'),
+    projectSidebar: document.getElementById('project-sidebar'),
+    btnCollapseSidebar: document.getElementById('btn-collapse-sidebar'),
+    exportDropdown: document.getElementById('export-dropdown'),
+    btnExport: document.getElementById('btn-export'),
     exportModal: document.getElementById('export-modal'),
     btnCloseExport: document.getElementById('btn-close-export'),
     exportPdf: document.getElementById('export-pdf'),
@@ -376,7 +386,8 @@
     publishList: document.getElementById('publish-list'),
 
     previewFrame: document.getElementById('preview-frame'),
-    btnOpenPreview: document.getElementById('btn-open-preview')
+    btnOpenPreview: document.getElementById('btn-open-preview'),
+    btnOpenPreviewHeader: document.getElementById('btn-open-preview-header')
   };
 
   const steps = [
@@ -446,7 +457,9 @@
 
   function renderProjects() {
     els.projectList.innerHTML = '';
+    const selectOptions = ['<option value="">选择项目…</option>'];
     projects.forEach((p, idx) => {
+      selectOptions.push(`<option value="${escapeHtml(p.name)}" ${p.name === currentProject ? 'selected' : ''}>${escapeHtml(p.title || p.name)}</option>`);
       const item = document.createElement('div');
       item.className = 'project-item' + (p.name === currentProject ? ' active' : '');
       item.dataset.index = idx;
@@ -472,6 +485,9 @@
       });
       els.projectList.appendChild(item);
     });
+    if (els.projectSelect) {
+      els.projectSelect.innerHTML = selectOptions.join('');
+    }
   }
 
   async function selectProject(name) {
@@ -521,10 +537,18 @@
     updateModelPresetUI(presetId);
 
     const canExport = cfg.status === 'ready';
+    const topbarButtons = [els.btnGenerate, els.btnEditMode, els.btnOpenPreview];
+    topbarButtons.forEach((btn) => { if (btn) btn.disabled = !currentProject; });
+    if (els.btnExport) els.btnExport.disabled = !currentProject || !canExport;
+    if (els.btnGenerateContent) els.btnGenerateContent.disabled = false;
     els.btnPreview.disabled = !canExport;
     els.btnExportPptx.disabled = !canExport;
     els.btnExportPptxImage.disabled = !canExport;
+    if (els.btnOpenPreviewHeader) els.btnOpenPreviewHeader.disabled = !canExport;
     els.progressCard.classList.add('hidden');
+    // Reset edit mode state when switching projects
+    editModeActive = false;
+    updateEditModeUI();
 
     checkProjectFiles();
   }
@@ -654,6 +678,9 @@
         els.btnPreview.disabled = false;
         els.btnExportPptx.disabled = false;
         els.btnExportPptxImage.disabled = false;
+        if (els.btnExport) els.btnExport.disabled = false;
+        if (els.btnOpenPreview) els.btnOpenPreview.disabled = false;
+        if (els.btnOpenPreviewHeader) els.btnOpenPreviewHeader.disabled = false;
       }
     } catch {}
   }
@@ -948,6 +975,72 @@
     els.previewFrame.src = `/projects/${encodeURIComponent(currentProject)}/index.html?t=${Date.now()}`;
   }
 
+  // ===== Edit mode =====
+  let editModeActive = false;
+
+  function toggleEditMode() {
+    if (!currentProject) return;
+    if (editModeActive) {
+      // User clicked to exit edit mode; we send cancel to the iframe, which
+      // will prompt for confirmation and reload if confirmed.
+      els.previewFrame.contentWindow.postMessage({ type: 'ai-ppt:edit-cancel' }, '*');
+    } else {
+      editModeActive = true;
+      updateEditModeUI();
+      els.previewFrame.contentWindow.postMessage({ type: 'ai-ppt:edit-start' }, '*');
+    }
+  }
+
+  function updateEditModeUI() {
+    if (!els.btnEditMode) return;
+    els.btnEditMode.classList.toggle('active', editModeActive);
+    els.btnEditMode.textContent = editModeActive ? '退出编辑' : '编辑模式';
+    if (els.editStatus) {
+      els.editStatus.textContent = editModeActive ? '可直接点击文字编辑' : '';
+      els.editStatus.classList.toggle('visible', editModeActive);
+    }
+  }
+
+  async function handleEditSaved(html) {
+    if (!currentProject) return;
+    try {
+      await api('POST', `/api/projects/${encodeURIComponent(currentProject)}/save-edits`, { html });
+      showToast('编辑已保存');
+      editModeActive = false;
+      updateEditModeUI();
+      updatePreview();
+      loadSnapshots();
+    } catch (err) {
+      showToast('保存失败：' + err.message);
+      // Stay in edit mode so the user can retry.
+    }
+  }
+
+  function handleEditCancelled() {
+    editModeActive = false;
+    updateEditModeUI();
+    showToast('已取消编辑');
+    updatePreview();
+  }
+
+  function toggleSidebarCollapse() {
+    els.projectSidebar.classList.toggle('collapsed');
+  }
+
+  function toggleExportDropdown() {
+    const menu = els.exportDropdown.querySelector('.dropdown-menu');
+    menu.classList.toggle('hidden');
+  }
+
+  function closeExportDropdown() {
+    const menu = els.exportDropdown.querySelector('.dropdown-menu');
+    menu.classList.add('hidden');
+  }
+
+  function openCreateModal() {
+    els.createModal.classList.remove('hidden');
+  }
+
   function getConfigPayload() {
     const activeTab = document.querySelector('.tab.active');
     const sourceType = activeTab ? activeTab.dataset.source : 'article';
@@ -1021,6 +1114,7 @@
     await saveConfig();
     initProgress();
     els.btnGenerate.disabled = true;
+    if (els.btnGenerateContent) els.btnGenerateContent.disabled = true;
     updateProgress('start', 'active', '开始生成');
 
     try {
@@ -1028,6 +1122,7 @@
     } catch (err) {
       updateProgress('start', 'error', err.message);
       els.btnGenerate.disabled = false;
+      if (els.btnGenerateContent) els.btnGenerateContent.disabled = false;
       return;
     }
 
@@ -1051,11 +1146,13 @@
         updateProgress(event.step || 'ready', 'error', event.message);
         es.close();
         els.btnGenerate.disabled = false;
+        if (els.btnGenerateContent) els.btnGenerateContent.disabled = false;
         showToast('生成失败：' + event.message);
       } else if (event.type === 'done') {
         updateProgress('ready', 'done', '生成完成');
         es.close();
         els.btnGenerate.disabled = false;
+        if (els.btnGenerateContent) els.btnGenerateContent.disabled = false;
         loadProjects(currentProject).then(() => {
           updatePreview();
         });
@@ -1064,6 +1161,7 @@
     es.onerror = () => {
       es.close();
       els.btnGenerate.disabled = false;
+      if (els.btnGenerateContent) els.btnGenerateContent.disabled = false;
       updateProgress('ready', 'error', '生成连接中断');
       showToast('生成连接中断，请重试');
     };
@@ -1195,6 +1293,36 @@
   }
 
   function bindEvents() {
+    window.addEventListener('message', (e) => {
+      const data = e.data || {};
+      if (data.type === 'ai-ppt:edit-saved') {
+        handleEditSaved(data.html);
+      } else if (data.type === 'ai-ppt:edit-cancelled') {
+        handleEditCancelled();
+      }
+    });
+
+    if (els.projectSelect) {
+      els.projectSelect.addEventListener('change', () => {
+        const name = els.projectSelect.value;
+        if (name) selectProject(name);
+      });
+    }
+
+    if (els.btnEditMode) els.btnEditMode.addEventListener('click', toggleEditMode);
+    if (els.btnCollapseSidebar) els.btnCollapseSidebar.addEventListener('click', toggleSidebarCollapse);
+    if (els.btnCreateProject) els.btnCreateProject.addEventListener('click', openCreateModal);
+    if (els.btnCreateEmpty) els.btnCreateEmpty.addEventListener('click', openCreateModal);
+
+    if (els.exportDropdown) {
+      const exportBtn = els.exportDropdown.querySelector('#btn-export');
+      if (exportBtn) exportBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleExportDropdown();
+      });
+      document.addEventListener('click', () => closeExportDropdown());
+    }
+
     els.tabs.forEach((t) => {
       t.addEventListener('click', () => setSourceTab(t.dataset.source));
     });
@@ -1276,10 +1404,13 @@
     els.btnExportPptxImage.addEventListener('click', exportPptxImage);
     els.btnPublish.addEventListener('click', publish);
 
-    els.btnCreate.addEventListener('click', () => els.createModal.classList.remove('hidden'));
+    if (els.btnCreate) els.btnCreate.addEventListener('click', openCreateModal);
     els.btnCancelCreate.addEventListener('click', () => els.createModal.classList.add('hidden'));
     els.btnConfirmCreate.addEventListener('click', createProject);
     els.btnCloseExport.addEventListener('click', closeExportModal);
+
+    if (els.btnGenerateContent) els.btnGenerateContent.addEventListener('click', generate);
+    if (els.btnOpenPreviewHeader) els.btnOpenPreviewHeader.addEventListener('click', openPreview);
 
     els.exportPdf.addEventListener('click', () => {
       closeExportModal();
@@ -1297,6 +1428,18 @@
       closeExportModal();
       exportHtml();
     });
+
+    // Topbar export dropdown items
+    const dropdownExportPptx = els.exportDropdown?.querySelector('#dropdown-export-pptx');
+    const dropdownExportPptxImage = els.exportDropdown?.querySelector('#dropdown-export-pptx-image');
+    const dropdownExportPdf = els.exportDropdown?.querySelector('#dropdown-export-pdf');
+    const dropdownExportHtml = els.exportDropdown?.querySelector('#dropdown-export-html');
+    if (dropdownExportPptx) dropdownExportPptx.addEventListener('click', exportPptx);
+    if (dropdownExportPptxImage) dropdownExportPptxImage.addEventListener('click', exportPptxImage);
+    if (dropdownExportPdf) dropdownExportPdf.addEventListener('click', () => {
+      if (currentProject) window.open(`/projects/${encodeURIComponent(currentProject)}/`, '_blank');
+    });
+    if (dropdownExportHtml) dropdownExportHtml.addEventListener('click', exportHtml);
 
     els.btnHelp.addEventListener('click', openHelpPanel);
     els.btnCloseHelp.addEventListener('click', closeHelpPanel);

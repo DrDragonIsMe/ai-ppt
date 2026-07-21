@@ -107,13 +107,25 @@ ${slidesHtml}    </main>
 </html>`;
 }
 
+function formatUserEdits(cfg) {
+  const edits = cfg.userEdits;
+  if (!edits || !edits.htmlSnapshot || edits.htmlSnapshot.length === 0) return '';
+  const lines = edits.htmlSnapshot.map((s) => {
+    const heading = s.heading ? `标题：${s.heading}` : '';
+    const text = s.text ? `内容：${s.text}` : '';
+    return `第 ${s.index + 1} 页\n${heading}\n${text}`;
+  });
+  return `\n【用户手动编辑过的幻灯片（必须保留）】\n以下幻灯片是用户曾在可视化编辑器中手动编辑并保存的。除非用户指令明确要求修改这些页面，否则必须原样保留其文字、观点和数据，禁止重写、删除或替换。\n\n${lines.join('\n\n')}\n`;
+}
+
 function buildModifyPrompt(cfg, slidesHtml, instruction) {
   const title = cfg.params?.title || cfg.name;
+  const userEditsSection = formatUserEdits(cfg);
   return `你是一位专业的演示文稿设计师。下面是一个 HTML 幻灯片项目「${title}」当前的全部幻灯片代码。
 
 【用户修改指令】
 ${instruction}
-
+${userEditsSection}
 【当前幻灯片 HTML】
 ${slidesHtml}
 
@@ -121,7 +133,8 @@ ${slidesHtml}
 1. 严格按指令修改幻灯片内容，不要改变整体设计风格和组件类名（如 kicker、tile、lead、ppt-table、hero-stat 等）。
 2. 保持 <section class="slide"> 结构，幻灯片数量不变，除非指令明确要求增删。
 3. 只输出修改后的幻灯片 HTML 片段（若干 <section class="slide">...</section>），不要输出 <html>/<head>/<body>/<main> 标签，不要输出任何解释文字。
-4. 第一页 slide 保留 class="slide active"，其余只保留 class="slide"。`;
+4. 第一页 slide 保留 class="slide active"，其余只保留 class="slide"。
+5. 若存在「用户手动编辑过的幻灯片」，仅当用户指令明确涉及这些页面时才修改它们；否则保持原文字不变。`;
 }
 
 async function main() {

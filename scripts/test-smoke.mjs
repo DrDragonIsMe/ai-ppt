@@ -109,6 +109,18 @@ async function run(name, fn) {
     if (!html.includes('theme-overrides')) throw new Error('theme overrides not injected');
   });
 
+  await run('save user edits', async () => {
+    const htmlPath = path.join(ROOT, 'projects', testProject, 'index.html');
+    const html = fs.readFileSync(htmlPath, 'utf8');
+    const edited = html.replace(/<h1>/, '<h1>Edited by User ');
+    const r = await request('POST', `/api/projects/${testProject}/save-edits`, { html: edited });
+    if (r.status !== 200) throw new Error(`status ${r.status}`);
+    const saved = fs.readFileSync(htmlPath, 'utf8');
+    if (!saved.includes('Edited by User')) throw new Error('user edit not persisted');
+    const cfg = await request('GET', `/api/projects/${testProject}/config`);
+    if (!cfg.body?.userEdits?.htmlSnapshot) throw new Error('userEdits not recorded');
+  });
+
   await run('chat modify fails gracefully without LLM', async () => {
     const r = await request('POST', `/api/projects/${testProject}/chat`, { instruction: 'test' });
     if (r.status === 200) throw new Error('unexpected success');

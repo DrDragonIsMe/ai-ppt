@@ -106,12 +106,18 @@ ai-ppt/
 13. **Markdown 导入**
     - Web UI 内容面板提供「从 Markdown 导入」按钮，客户端读取 `.md/.txt` 文件填入文章内容；生成管线会自动清理 Markdown 标记。
 
-14. **关键数字 / 数据页排版原则**
+14. **可视化编辑与用户编辑保护**
+    - Web UI 预览区提供「编辑模式」按钮；点击后通过 `postMessage` 通知 iframe 开启 `contenteditable`，用户可直接修改幻灯片文字。
+    - 保存时调用 `POST /api/projects/:name/save-edits`，由 `scripts/save-edits.mjs` 把编辑后的 HTML 写回 `index.html`，保存前自动快照，并在 `ai-ppt.json` 中记录 `userEdits`（含每页标题与文本摘要）。
+    - `generate-deck.mjs` 与 `chat-modify.mjs` 在构建 prompt 时读取 `cfg.userEdits`，明确要求 LLM 保留用户手动编辑过的幻灯片的文字、观点和数据；除非用户指令明确涉及这些页面，否则禁止重写、删除或替换。
+    - 该机制同时保留 CLI 驱动能力：外部 AI 仍可通过 `npm run generate -- <name>` 和 `npm run chat-modify -- <name> "<instruction>"` 操作项目，但同样受 `userEdits` 约束。
+
+15. **关键数字 / 数据页排版原则**
     - 同一行展示，元素不超过 4 个；超过 4 个时应拆页或改用表格/卡片。
     - 使用 `.split-visual` + `.hero-stat` + `.big-number` 布局，数字字号由 `.big-number` 统一控制（当前 `clamp(44px, 5.5vw, 80px)`），并禁止换行。
     - 数字项等宽分布，随视口自动缩放，最大宽度 240px。
 
-15. **主题使用约定**
+16. **主题使用约定**
     - deck 只能使用默认主题（`web-ui`）或 `ai-ppt-base/css/themes/` 中已预设的主题之一。
     - 没有用户明确指令时，一律使用默认主题，不要自行更换预设主题，更不要新创主题或配色。
 
@@ -152,3 +158,4 @@ node install-skills.js
 - v1.7.6 修复 ↑ 预览（overview）缩略图全空白的 bug：克隆的 `.slide` 继承了基座规则的 `opacity: 0` 和视口相对 padding，旧的 `.slide-content scale(0.22)` 缩放方案因此失效。改为在 `buildOverview()` 中把克隆节点按固定 1280×800 设计尺寸布局后整体 `scale()` 进卡片，缩略图与真实页面一致；同时让 `progress-ring` 与 `waterfall` 组件在缩略图中渲染终态（动画只在 `.slide.active` 上播放）。
 - v1.8.0 大规模功能升级：① 帮助面板分组重设计（导航/视图/导出），Web UI 增加完整快捷键系统（`?`/`Ctrl+N`/`Ctrl+S`/`Ctrl+P`/`Ctrl+G`/`Ctrl+O`/`Ctrl+K`/`1-9`/`Tab`/`Esc`）与帮助面板；② LLM 多后端：`llm-adapter.mjs` 支持 LM Studio 本地模型（`http://localhost:1234/v1`，自动列出已加载模型）与任意 OpenAI 兼容远程端点，Web UI 模型预设新增 `lmstudio` 并可「刷新列表」拉取远程模型；③ 全局搜索：`scripts/search.mjs` + `GET /api/search` + 顶栏搜索框；④ 快照/版本管理：`scripts/snapshot.mjs`（`.snapshots/<name>/<id>/`）+ 快照 API + Web UI「版本」标签；⑤ Markdown 导入：内容面板一键导入 `.md/.txt`；⑥ 对话式修改：`scripts/chat-modify.mjs` + `POST /api/projects/:name/chat` + 预览区「AI 修改」聊天面板，修改前自动快照；⑦ 放映页新增可收起的缩略图导航侧边栏；⑧ `generate-deck.mjs` / `config.mjs` 的模板 HTML 同步新版帮助面板。
 - v1.8.1 演讲者模式与创作工具：① 演讲者模式 `Shift+S`（`s` 已被缩略图侧边栏占用）打开演讲者窗口——`.speaker-note` 备注提取、下一页预览、计时器，窗口随翻页同步；② 新动画 `anim-zoom`/`anim-blur`/`anim-flip`，Web UI 动画面板同步可选；③ 可视化主题编辑器：`POST /api/projects/:name/theme-overrides` 注入 `<style id="theme-overrides">` 并持久化 `ai-ppt.json.themeOverrides`（白名单变量见 server.mjs `ALLOWED_THEME_VARS`）；④ 组件库：`POST /api/projects/:name/component` 将预制 slide 插入倒数第二页，Web UI「组件」标签提供 8 种组件；⑤ 单文件 HTML 导出 `scripts/export-single-html.mjs`（内联本地 CSS/JS）+ `POST /export/html` + 导出面板按钮。
+- v1.8.2 可视化编辑、AI 约束与 Web UI 重设计：① Web UI 预览区新增「编辑模式」，iframe 内 `contenteditable` 直接改字，`POST /api/projects/:name/save-edits` 持久化；② `ai-ppt.json.userEdits` 记录用户编辑，`generate-deck.mjs`/`chat-modify.mjs` prompt 要求 LLM 保留；③ Web UI 改为「顶部工具栏 + 左侧可折叠项目列表 + 中间大画布 + 右侧属性面板」布局；④ 顶部工具栏新增导出下拉菜单；⑤ `scripts/test-smoke.mjs` 覆盖 save-edits。

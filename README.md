@@ -155,6 +155,8 @@ npm run web
 - 配置标题、受众、风格、页数、模型等参数
 - 点击“生成幻灯片”，实时查看流程进度
 - 生成完成后自动打开预览
+- **可视化编辑**：点击预览区「编辑模式」，直接在幻灯片上修改文字，保存后写回 `index.html`
+- **AI 不覆盖手动编辑**：`ai-ppt.json` 记录 `userEdits`，后续 AI 生成/修改会把用户编辑作为约束保留
 - 按 `Ctrl+P` / `Cmd+P` 打开导出面板（PDF / PPTX）
 
 ### 7. 命令行生成与导出
@@ -270,6 +272,14 @@ npx ai-ppt-skills
 | `projects/xinrenxinshi-huaxia-bank/` | 薪人薪事 × 华夏银行 |
 
 ## 更新日志
+
+### v1.8.2 — 可视化编辑、AI 约束与 Web UI 重设计（2026-07）
+
+- **可视化编辑模式**：Web UI 预览区新增「编辑模式」，通过 `postMessage` 在 iframe 内开启 `contenteditable`；用户可直接点击修改幻灯片文字，保存时调用 `POST /api/projects/:name/save-edits` 持久化到 `index.html`，取消时放弃改动。
+- **用户编辑保护**：`scripts/save-edits.mjs` 在保存时记录 `ai-ppt.json.userEdits`（含每页标题与文本摘要）；`generate-deck.mjs` 与 `chat-modify.mjs` 的 prompt 中读取该记录并明确要求 AI 保留用户手动编辑过的幻灯片文字、观点与数据。
+- **Web UI 布局重设计**：采用「顶部工具栏 + 左侧可折叠项目列表 + 中间大画布预览 + 右侧属性面板」的类 Canva / Google Slides 布局，预览区更宽敞；属性面板分为内容/主题/动画/组件/版本/AI 修改标签页；顶部工具栏集成项目下拉、编辑模式、生成、导出、预览与全局搜索。
+- **导出下拉菜单**：顶部工具栏新增导出下拉（PPTX / 高清图片 PPTX / PDF / 单文件 HTML），同时保留 `Ctrl+P` 导出面板。
+- **测试覆盖**：`scripts/test-smoke.mjs` 新增 `save user edits` 用例。
 
 ### v1.8.1 — 演讲者模式、主题编辑器与组件库（2026-07）
 

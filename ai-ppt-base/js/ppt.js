@@ -10,6 +10,8 @@
     currentTheme: 'web-ui',
     sidebarOpen: true,
     presenter: false,
+    editMode: false,
+    editOriginalHtml: '',
   };
 
   // Theme definitions
@@ -55,6 +57,7 @@
     buildSidebar();
     buildOverview();
     buildFullscreenBtn();
+    initEditMode();
     updateSlide();
     bindEvents();
 
@@ -363,6 +366,8 @@
 
   function onKeyDown(e) {
     if (state.overview || state.transitioning) return;
+    if (state.editMode) return;
+    if (e.target && (e.target.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))) return;
 
     if (e.key === 'ArrowRight') {
       e.preventDefault();
@@ -892,6 +897,88 @@ ${links}
     showToast._timer = setTimeout(() => {
       toastEl.classList.remove('show');
     }, 2500);
+  }
+
+  // ===== Visual edit mode =====
+  // The parent Web UI can send postMessage to enter/exit edit mode. Inside the
+  // iframe we enable contenteditable on textual slide elements and provide a
+  // floating save/cancel toolbar. Saving sends the full document HTML back to
+  // the parent so it can persist via /api/projects/:name/save-edits.
+
+  function editableSelector() {
+    return '.slide h1, .slide h2, .slide h3, .slide p, .slide li, .slide td, .slide th, .slide .lead, .slide .kicker, .slide .section-title, .slide .big-number-label, .slide .visual-card p, .slide .timeline-horizontal-title, .slide .timeline-horizontal-desc, .slide .chart-step-title, .slide .chart-step-desc, .slide .speaker-note';
+  }
+
+  function initEditMode() {
+    window.addEventListener('message', onEditMessage);
+  }
+
+  function onEditMessage(e) {
+    const data = e.data || {};
+    if (data.type === 'ai-ppt:edit-start') {
+      enableEditMode();
+    } else if (data.type === 'ai-ppt:edit-cancel') {
+      cancelEditMode();
+    }
+  }
+
+  function enableEditMode() {
+    if (state.editMode) return;
+    state.editMode = true;
+    state.editOriginalHtml = document.documentElement.outerHTML;
+
+    const editable = document.querySelectorAll(editableSelector());
+    editable.forEach((el) => {
+      el.setAttribute('contenteditable', 'true');
+      el.dataset.wasEditable = 'true';
+    });
+
+    createEditToolbar();
+    showToast('已进入编辑模式：点击文字即可修改');
+  }
+
+  function cancelEditMode() {
+    if (!state.editMode) return;
+    if (confirm('确定放弃本次编辑？未保存的修改将丢失。')) {
+      window.parent.postMessage({ type: 'ai-ppt:edit-cancelled' }, '*');
+      state.editMode = false;
+      state.editOriginalHtml = '';
+      removeEditToolbar();
+      // The parent will reload the iframe src to restore the original content.
+    }
+  }
+
+  function saveEditMode() {
+    if (!state.editMode) return;
+    // Disable contenteditable before serializing so attributes are clean.
+    document.querySelectorAll('[contenteditable="true"]').forEach((el) => {
+      el.removeAttribute('contenteditable');
+    });
+    const html = document.documentElement.outerHTML;
+    window.parent.postMessage({ type: 'ai-ppt:edit-saved', html }, '*');
+    state.editMode = false;
+    state.editOriginalHtml = '';
+    removeEditToolbar();
+    showToast('编辑内容已发送，正在保存…');
+  }
+
+  function createEditToolbar() {
+    removeEditToolbar();
+    const toolbar = document.createElement('div');
+    toolbar.id = 'ai-ppt-edit-toolbar';
+    toolbar.innerHTML = `
+      <span class="edit-toolbar-label">编辑模式</span>
+      <button class="edit-toolbar-btn edit-toolbar-save" type="button">保存</button>
+      <button class="edit-toolbar-btn edit-toolbar-cancel" type="button">取消</button>
+    `;
+    document.body.appendChild(toolbar);
+    toolbar.querySelector('.edit-toolbar-save').addEventListener('click', saveEditMode);
+    toolbar.querySelector('.edit-toolbar-cancel').addEventListener('click', cancelEditMode);
+  }
+
+  function removeEditToolbar() {
+    const toolbar = document.getElementById('ai-ppt-edit-toolbar');
+    if (toolbar) toolbar.remove();
   }
 
   function onResize() {
