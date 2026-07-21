@@ -70,6 +70,11 @@
     helpOverlay: document.querySelector('.help-panel-overlay'),
     btnRefreshModels: document.getElementById('btn-refresh-models'),
     lmstudioHint: document.getElementById('lmstudio-hint'),
+    inputGlobalSearch: document.getElementById('input-global-search'),
+    searchResults: document.getElementById('search-results'),
+    btnCreateSnapshot: document.getElementById('btn-create-snapshot'),
+    snapshotDescription: document.getElementById('snapshot-description'),
+    snapshotList: document.getElementById('snapshot-list'),
 
     configTabs: document.querySelectorAll('.config-tab'),
     themeGrid: document.getElementById('theme-grid'),
@@ -193,6 +198,7 @@
     renderThemeOptions();
     renderAnimationOptions();
     loadPublishHistory();
+    loadSnapshots();
     updatePreview();
   }
 
@@ -262,6 +268,48 @@
     } catch (err) {
       showToast('获取模型列表失败: ' + err.message);
     }
+  }
+
+  let searchTimer = null;
+
+  async function performSearch(query) {
+    if (!query.trim()) {
+      els.searchResults.classList.add('hidden');
+      return;
+    }
+    try {
+      const results = await api('GET', `/api/search?q=${encodeURIComponent(query)}`);
+      renderSearchResults(results);
+    } catch {
+      els.searchResults.classList.add('hidden');
+    }
+  }
+
+  function renderSearchResults(results) {
+    if (!results || results.length === 0) {
+      els.searchResults.innerHTML = '<div class="search-result-empty">无匹配结果</div>';
+      els.searchResults.classList.remove('hidden');
+      return;
+    }
+    els.searchResults.innerHTML = results.map((r) => `
+      <div class="search-result-item" data-name="${escapeHtml(r.name)}">
+        <div class="search-result-title">${escapeHtml(r.title || r.name)}</div>
+        <div class="search-result-meta">${escapeHtml(r.name)} · ${statusLabel(r.status)}</div>
+      </div>
+    `).join('');
+    els.searchResults.classList.remove('hidden');
+
+    els.searchResults.querySelectorAll('.search-result-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        els.searchResults.classList.add('hidden');
+        els.inputGlobalSearch.value = '';
+        selectProject(item.dataset.name);
+      });
+    });
+  }
+
+  function closeSearchResults() {
+    els.searchResults.classList.add('hidden');
   }
 
   async function checkProjectFiles() {
@@ -364,6 +412,86 @@
       renderPublishHistory(history);
     } catch {
       renderPublishHistory([]);
+    }
+  }
+
+  async function loadSnapshots() {
+    if (!currentProject) return;
+    try {
+      const snapshots = await api('GET', `/api/projects/${encodeURIComponent(currentProject)}/snapshots`);
+      renderSnapshots(snapshots);
+    } catch {
+      renderSnapshots([]);
+    }
+  }
+
+  function renderSnapshots(snapshots) {
+    if (!snapshots || snapshots.length === 0) {
+      els.snapshotList.innerHTML = `
+        <div style="padding: 40px 20px; text-align: center; opacity: 0.5; font-size: 13px;">
+          暂无快照
+        </div>
+      `;
+      return;
+    }
+    els.snapshotList.innerHTML = snapshots.map((s) => `
+      <div class="publish-item">
+        <div class="publish-version">${escapeHtml(new Date(s.createdAt).toLocaleString())}</div>
+        <div class="publish-info">
+          <div class="publish-time">${escapeHtml(s.description || '（无说明）')}</div>
+          <div class="publish-meta">${escapeHtml(s.title || s.name)} · ${statusLabel(s.status)}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-secondary snapshot-restore" data-id="${escapeHtml(s.id)}" style="padding:6px 10px;font-size:12px;">恢复</button>
+          <button class="btn-secondary snapshot-delete" data-id="${escapeHtml(s.id)}" style="padding:6px 10px;font-size:12px;">删除</button>
+        </div>
+      </div>
+    `).join('');
+
+    els.snapshotList.querySelectorAll('.snapshot-restore').forEach((btn) => {
+      btn.addEventListener('click', () => restoreSnapshotById(btn.dataset.id));
+    });
+    els.snapshotList.querySelectorAll('.snapshot-delete').forEach((btn) => {
+      btn.addEventListener('click', () => deleteSnapshotById(btn.dataset.id));
+    });
+  }
+
+  async function createSnapshotNow() {
+    if (!currentProject) return;
+    try {
+      await api('POST', `/api/projects/${encodeURIComponent(currentProject)}/snapshots`, {
+        description: els.snapshotDescription.value.trim(),
+      });
+      els.snapshotDescription.value = '';
+      showToast('快照已保存');
+      loadSnapshots();
+    } catch (err) {
+      showToast('保存快照失败：' + err.message);
+    }
+  }
+
+  async function restoreSnapshotById(id) {
+    if (!confirm('恢复此快照将覆盖当前项目内容，确定吗？')) return;
+    try {
+      await api('POST', `/api/projects/${encodeURIComponent(currentProject)}/snapshots/${encodeURIComponent(id)}/restore`);
+      showToast('已恢复快照');
+      const cfg = await api('GET', `/api/projects/${encodeURIComponent(currentProject)}/config`);
+      currentConfig = cfg;
+      renderConfig(cfg);
+      updatePreview();
+    } catch (err) {
+      showToast('恢复失败：' + err.message);
+    }
+  }
+
+  async function deleteSnapshotById(id) {
+    if (!confirm('确定删除此快照吗？')) return;
+    try {
+      await api('DELETE', `/api/projects/${encodeURIComponent(currentProject)}/snapshots/${encodeURIComponent(id)}`);
+      showToast('快照已删除');
+      loadSnapshots();
+    } catch (err) {
+      showToast('删除失败：' + err.message);
     }
   }
 
@@ -650,6 +778,21 @@
     });
 
     els.btnRefreshModels.addEventListener('click', refreshModelList);
+    els.btnCreateSnapshot.addEventListener('click', createSnapshotNow);
+
+    els.inputGlobalSearch.addEventListener('input', (e) => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => performSearch(e.target.value), 300);
+    });
+    els.inputGlobalSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeSearchResults();
+        els.inputGlobalSearch.blur();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.topbar-search')) closeSearchResults();
+    });
 
     els.configTabs.forEach((tab) => {
       tab.addEventListener('click', () => {
@@ -740,6 +883,13 @@
       if (isMod && key === 'n') {
         e.preventDefault();
         els.createModal.classList.remove('hidden');
+        return;
+      }
+
+      // 聚焦搜索框
+      if (isMod && key === 'k') {
+        e.preventDefault();
+        els.inputGlobalSearch.focus();
         return;
       }
 

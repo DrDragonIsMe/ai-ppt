@@ -16,6 +16,8 @@ import {
   applyThemeAndAnimation,
 } from './scripts/config.mjs';
 import { listModels } from './scripts/llm-adapter.mjs';
+import { search } from './scripts/search.mjs';
+import { createSnapshot, listSnapshots, restoreSnapshot, deleteSnapshot } from './scripts/snapshot.mjs';
 import { exportPptx, exportPptxImage } from './scripts/export-pptx.mjs';
 import { exportPdf } from './scripts/export-pdf.mjs';
 
@@ -229,6 +231,15 @@ const routes = [
   { method: 'GET', pattern: /^\/api\/projects$/, handler: async (_req, res) => {
     send(res, 200, listProjects());
   }},
+  { method: 'GET', pattern: /^\/api\/search$/, handler: async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const query = url.searchParams.get('q') || '';
+    try {
+      send(res, 200, search(query));
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
   { method: 'POST', pattern: /^\/api\/projects$/, handler: async (req, res) => {
     const body = await readBody(req);
     try {
@@ -271,6 +282,37 @@ const routes = [
       console.error('Failed to apply theme/animation:', err);
     }
     send(res, 200, readConfig(name));
+  }},
+  { method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/snapshots$/, handler: async (_req, res, matches) => {
+    if (!projectExists(matches[1])) return send(res, 404, { error: '项目不存在' });
+    send(res, 200, listSnapshots(matches[1]));
+  }},
+  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/snapshots$/, handler: async (req, res, matches) => {
+    if (!projectExists(matches[1])) return send(res, 404, { error: '项目不存在' });
+    const body = await readBody(req);
+    try {
+      send(res, 201, createSnapshot(matches[1], body.description || ''));
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
+  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/snapshots\/([^/]+)\/restore$/, handler: async (_req, res, matches) => {
+    if (!projectExists(matches[1])) return send(res, 404, { error: '项目不存在' });
+    try {
+      restoreSnapshot(matches[1], matches[2]);
+      send(res, 200, { restored: matches[2] });
+    } catch (err) {
+      send(res, 400, { error: err.message });
+    }
+  }},
+  { method: 'DELETE', pattern: /^\/api\/projects\/([^/]+)\/snapshots\/([^/]+)$/, handler: async (_req, res, matches) => {
+    if (!projectExists(matches[1])) return send(res, 404, { error: '项目不存在' });
+    try {
+      deleteSnapshot(matches[1], matches[2]);
+      send(res, 204, {});
+    } catch (err) {
+      send(res, 400, { error: err.message });
+    }
   }},
   { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/generate$/, handler: async (req, res, matches) => {
     const name = matches[1];

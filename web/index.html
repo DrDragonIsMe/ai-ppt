@@ -13,6 +13,10 @@
         <div class="logo">ai-ppt</div>
         <div class="tagline">HTML 幻灯片生成与管理</div>
       </div>
+      <div class="topbar-search">
+        <input type="search" id="input-global-search" placeholder="搜索项目或内容... (Ctrl+K)">
+        <div id="search-results" class="search-results hidden"></div>
+      </div>
       <div class="actions">
         <button id="btn-help" class="btn-secondary btn-icon" title="快捷键 (?)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -51,6 +55,7 @@
                   <button class="config-tab" data-tab="style">主题</button>
                   <button class="config-tab" data-tab="animation">动画</button>
                   <button class="config-tab" data-tab="publish">发布</button>
+                  <button class="config-tab" data-tab="versions">版本</button>
                 </div>
 
                 <div class="config-panel active" data-panel="content">
@@ -233,6 +238,26 @@
                     </div>
                   </section>
                 </div>
+
+                <div class="config-panel" data-panel="versions">
+                  <section class="card">
+                    <div class="card-title">创建快照</div>
+                    <div class="field">
+                      <label>快照说明（可选）</label>
+                      <input type="text" id="snapshot-description" placeholder="例如：修改封面标题之前">
+                    </div>
+                    <button id="btn-create-snapshot" class="btn-primary" style="width: 100%; margin-top: 4px;">保存当前版本为快照</button>
+                  </section>
+
+                  <section class="card">
+                    <div class="card-title">快照历史</div>
+                    <div id="snapshot-list" class="publish-list">
+                      <div style="padding: 40px 20px; text-align: center; opacity: 0.5; font-size: 13px;">
+                        暂无快照
+                      </div>
+                    </div>
+                  </section>
+                </div>
               </div>
             </div>
 
@@ -308,6 +333,7 @@
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>N</kbd><span>新建项目</span></div>
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>S</kbd><span>保存配置</span></div>
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>导出面板</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>全局搜索</span></div>
           </div>
         </div>
         <div class="help-section">
