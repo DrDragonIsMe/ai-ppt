@@ -89,12 +89,29 @@ ai-ppt/
    - 在批量修改项目、生成、升级 skills 前，运行 `npm run backup`。
    - 备份保存到 `.backup/<timestamp>/`，包含 `projects/`、`skills/`、`web/`、`server.mjs`、关键文档。
 
-10. **关键数字 / 数据页排版原则**
+10. **快照约定（项目版本管理）**
+    - `scripts/snapshot.mjs` 提供项目级快照：`create <name> [desc]`、`list <name>`、`restore <name> <id>`、`delete <name> <id>`。
+    - 快照保存到 `.snapshots/<name>/<timestamp-id>/`，包含项目完整目录与 `snapshot.json` 元信息。
+    - Web UI 项目页「版本」标签可创建/恢复/删除快照；对话式修改（chat-modify）在应用修改前会自动保存快照。
+
+11. **全局搜索**
+    - `scripts/search.mjs` 索引所有项目的标题、来源与幻灯片文本；CLI：`npm run search -- <关键词>`。
+    - Web UI 顶栏搜索框（`Ctrl+K` 聚焦）实时查询 `/api/search?q=`，点击结果直接打开项目。
+
+12. **对话式内容修改**
+    - Web UI 预览区「AI 修改」打开聊天面板，输入自然语言指令即可调用当前项目配置的模型修改幻灯片（修改前自动快照）。
+    - 服务端路由 `POST /api/projects/:name/chat` 运行 `scripts/chat-modify.mjs <name> <instruction>`。
+    - CLI：`npm run chat-modify -- <name> "<instruction>"`，方便外部 AI（如 Claude/Kimi CLI）驱动项目内容修改。
+
+13. **Markdown 导入**
+    - Web UI 内容面板提供「从 Markdown 导入」按钮，客户端读取 `.md/.txt` 文件填入文章内容；生成管线会自动清理 Markdown 标记。
+
+14. **关键数字 / 数据页排版原则**
     - 同一行展示，元素不超过 4 个；超过 4 个时应拆页或改用表格/卡片。
     - 使用 `.split-visual` + `.hero-stat` + `.big-number` 布局，数字字号由 `.big-number` 统一控制（当前 `clamp(44px, 5.5vw, 80px)`），并禁止换行。
     - 数字项等宽分布，随视口自动缩放，最大宽度 240px。
 
-11. **主题使用约定**
+15. **主题使用约定**
     - deck 只能使用默认主题（`web-ui`）或 `ai-ppt-base/css/themes/` 中已预设的主题之一。
     - 没有用户明确指令时，一律使用默认主题，不要自行更换预设主题，更不要新创主题或配色。
 
@@ -133,3 +150,4 @@ node install-skills.js
 - v1.7.4 引入 GitHub 设计 skill（impeccable + taste-skill）的蒸馏版 `/ppt-design`；`generate-deck.mjs` prompt 内置反模板化设计规则，兜底模板去除硬编码文案与编造数据；基座标题增加 `text-wrap: balance`、新增 `prefers-reduced-motion` 兜底；`progress-ring` 支持直观的 `--progress-pct` 百分比（旧 `--progress` dashoffset 写法保持兼容）；`.gradient-text` 标记弃用（保留兼容）；演示 deck 数字页改用标准 `split-visual` + `hero-stat`；修复 `ppt.js` 初始化时用 localStorage/默认主题覆盖 `<body>` 上硬编码 `theme-*` 类的问题——现在 `ai-ppt.json` 的 `theme` 字段在页面加载后真正生效。
 - v1.7.5 修复全屏时左上角帮助面板（`#help`）等悬浮 UI 常驻遮挡内容的问题：原实现用 `:fullscreen:hover` 控制显隐，鼠标只要停留在页面上 UI 就一直可见。改为 JS 无活动检测——全屏下默认隐藏帮助面板/主题切换/HUD/全屏按钮，`mousemove`/`touchstart` 时通过 `<html>.fs-ui-visible` 短暂显示，2 秒无活动后自动淡出；进入和退出全屏时重置该状态。
 - v1.7.6 修复 ↑ 预览（overview）缩略图全空白的 bug：克隆的 `.slide` 继承了基座规则的 `opacity: 0` 和视口相对 padding，旧的 `.slide-content scale(0.22)` 缩放方案因此失效。改为在 `buildOverview()` 中把克隆节点按固定 1280×800 设计尺寸布局后整体 `scale()` 进卡片，缩略图与真实页面一致；同时让 `progress-ring` 与 `waterfall` 组件在缩略图中渲染终态（动画只在 `.slide.active` 上播放）。
+- v1.8.0 大规模功能升级：① 帮助面板分组重设计（导航/视图/导出），Web UI 增加完整快捷键系统（`?`/`Ctrl+N`/`Ctrl+S`/`Ctrl+P`/`Ctrl+G`/`Ctrl+O`/`Ctrl+K`/`1-9`/`Tab`/`Esc`）与帮助面板；② LLM 多后端：`llm-adapter.mjs` 支持 LM Studio 本地模型（`http://localhost:1234/v1`，自动列出已加载模型）与任意 OpenAI 兼容远程端点，Web UI 模型预设新增 `lmstudio` 并可「刷新列表」拉取远程模型；③ 全局搜索：`scripts/search.mjs` + `GET /api/search` + 顶栏搜索框；④ 快照/版本管理：`scripts/snapshot.mjs`（`.snapshots/<name>/<id>/`）+ 快照 API + Web UI「版本」标签；⑤ Markdown 导入：内容面板一键导入 `.md/.txt`；⑥ 对话式修改：`scripts/chat-modify.mjs` + `POST /api/projects/:name/chat` + 预览区「AI 修改」聊天面板，修改前自动快照；⑦ 放映页新增可收起的缩略图导航侧边栏；⑧ `generate-deck.mjs` / `config.mjs` 的模板 HTML 同步新版帮助面板。

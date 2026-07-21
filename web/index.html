@@ -70,8 +70,12 @@
                       <input type="url" id="input-url" placeholder="https://example.com/article">
                     </div>
                     <div class="field" id="field-article">
-                      <label>文章内容</label>
-                      <textarea id="input-article" rows="6" placeholder="粘贴文章或内容..."></textarea>
+                      <label style="display:flex;justify-content:space-between;align-items:center;">
+                        <span>文章内容</span>
+                        <button id="btn-import-md" class="btn-secondary" style="padding:4px 10px;font-size:12px;">从 Markdown 导入</button>
+                      </label>
+                      <textarea id="input-article" rows="6" placeholder="粘贴文章或内容，支持 Markdown 格式..."></textarea>
+                      <input type="file" id="input-md-file" accept=".md,.markdown,.txt" style="display:none;">
                     </div>
                   </section>
 
@@ -264,10 +268,20 @@
             <div class="workspace-preview">
               <div class="workspace-preview-header">
                 <div class="workspace-preview-title">实时预览</div>
-                <button id="btn-open-preview" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">在新窗口打开</button>
+                <div style="display:flex;gap:8px;">
+                  <button id="btn-toggle-chat" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">AI 修改</button>
+                  <button id="btn-open-preview" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">在新窗口打开</button>
+                </div>
               </div>
               <div class="workspace-preview-frame">
                 <iframe id="preview-frame"></iframe>
+              </div>
+              <div id="chat-dock" class="chat-dock hidden">
+                <div id="chat-messages" class="chat-messages"></div>
+                <div class="chat-input-row">
+                  <input type="text" id="chat-input" placeholder="例如：把第二页标题改为… / 给第三页加一条要点…">
+                  <button id="btn-chat-send" class="btn-primary" style="white-space:nowrap;">发送</button>
+                </div>
               </div>
             </div>
           </div>

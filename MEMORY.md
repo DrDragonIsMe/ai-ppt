@@ -36,7 +36,10 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 | `scripts/config.mjs` | 项目配置读写、创建、删除。 |
 | `scripts/generate-deck.mjs` | 从 URL/文章生成 deck，输出 NDJSON 进度事件。 |
 | `scripts/content-extractor.mjs` | URL 抓取与正文提取。 |
-| `scripts/llm-adapter.mjs` | LLM 调用适配：Bailian CLI → OpenAI 兼容 API → 模板兜底。 |
+| `scripts/llm-adapter.mjs` | LLM 调用适配：LM Studio / OpenAI 兼容 / Bailian CLI，多后端自动路由与回退。 |
+| `scripts/search.mjs` | 全局搜索：索引所有项目标题、来源与幻灯片文本，`npm run search -- <关键词>`。 |
+| `scripts/snapshot.mjs` | 项目快照：`create/list/restore/delete`，存储于 `.snapshots/<name>/<id>/`。 |
+| `scripts/chat-modify.mjs` | 对话式修改：按自然语言指令调用项目配置的 LLM 改写幻灯片，修改前自动快照。 |
 | `scripts/export-pptx.mjs` | 使用 pptxgenjs 生成 PPTX。 |
 | `scripts/export-pdf.mjs` | 可选 Puppeteer 打印 PDF，否则回退浏览器打印。 |
 | `scripts/backup.mjs` | 备份 projects/、skills/、web/、关键文档。 |
@@ -81,11 +84,23 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 1. Web UI 调用 `POST /api/projects/:name/generate`。
 2. `server.mjs` spawn `scripts/generate-deck.mjs <name>`。
 3. `generate-deck.mjs` 读取 `ai-ppt.json`，提取 URL 或使用文章内容。
-4. 调用 `llm-adapter.mjs` 生成幻灯片 HTML；优先使用项目 `modelConfig` 中的 OpenAI 兼容 API 配置，其次回退到环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL`；若 `OPENAI_API_KEY` 以 `sk-kimi-` 开头且未指定 Base URL，则自动路由到 Kimi Code。
+4. 调用 `llm-adapter.mjs` 生成幻灯片 HTML；按 `modelConfig.provider` 路由：LM Studio（`localhost:1234`，无 API Key、自动取已加载模型）→ OpenAI 兼容 API（Kimi Code 自动检测）→ Bailian CLI → 确定性模板兜底。
 5. 如果 LLM 不可用，使用 `buildFallbackSlides` 确定性模板。
 6. 确保仅第一张 slide 带 `active` 类，写入 `index.html`。
 7. 通过 stdout NDJSON 发送进度事件，server 通过 SSE 转发给前端。
 8. 生成完成后 Web UI 自动打开 `/projects/:name/` 预览。
+
+## 对话式修改管线
+
+1. Web UI「AI 修改」面板调用 `POST /api/projects/:name/chat`（携带自然语言指令与可选 session API Key）。
+2. `server.mjs` spawn `scripts/chat-modify.mjs <name> <instruction>` 并等待完成。
+3. 脚本提取当前幻灯片 HTML → 自动保存快照 → 构建修改 prompt → 调用 `llm-adapter.mjs`（按项目 `modelConfig`）→ 清洗输出并重写 `index.html`。
+4. 失败时不改动文件（快照可用于回滚）；CLI 同样可用：`npm run chat-modify -- <name> "<instruction>"`，供外部 AI 驱动。
+
+## 快照与搜索
+
+- 快照：`scripts/snapshot.mjs`，`.snapshots/<name>/<timestamp-id>/` 全量复制项目目录 + `snapshot.json` 元信息；Web UI「版本」标签管理。
+- 搜索：`scripts/search.mjs` 每次请求时实时建索引（项目量小，无需缓存）；`GET /api/search?q=` 供 Web UI 顶栏搜索框使用。
 
 ## 导出策略
 

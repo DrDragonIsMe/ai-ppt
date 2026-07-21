@@ -1,6 +1,6 @@
 {
   "name": "ai-ppt-skills",
-  "version": "1.7.6",
+  "version": "1.8.0",
   "description": "HTML PPT skills for Claude CLI / Kimi CLI: preview, scaffold, edit, and generate decks from URL/article.",
   "bin": {
     "ai-ppt-skills": "./install-skills.js"
@@ -14,7 +14,10 @@
     "export-pptx": "node scripts/export-pptx.mjs",
     "export-pptx-image": "node scripts/export-pptx.mjs --image",
     "export-pdf": "node scripts/export-pdf.mjs",
-    "backup": "node scripts/backup.mjs"
+    "backup": "node scripts/backup.mjs",
+    "search": "node scripts/search.mjs",
+    "snapshot": "node scripts/snapshot.mjs",
+    "chat-modify": "node scripts/chat-modify.mjs"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

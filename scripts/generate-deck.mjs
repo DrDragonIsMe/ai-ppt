@@ -239,11 +239,33 @@ ${slidesHtml}    </main>
     </div>
 
     <div id="help" class="help">
-      <div><kbd>←</kbd> 上一页 · <kbd>→</kbd> 下一页</div>
-      <div><kbd>Cmd</kbd>+<kbd>←</kbd> 首页 · <kbd>Cmd</kbd>+<kbd>→</kbd> 尾页</div>
-      <div><kbd>↑</kbd> 预览 · <kbd>↓</kbd> 导出 PDF</div>
-      <div><kbd>Ctrl</kbd>+<kbd>P</kbd> 打印 / 导出</div>
-      <div><kbd>F</kbd> 全屏 · <kbd>T</kbd> 切换主题 · <kbd>?</kbd> 帮助</div>
+      <div class="help-header">
+        <div class="help-title">快捷键</div>
+        <div class="help-hint">按 <kbd>?</kbd> 隐藏/显示</div>
+      </div>
+      <div class="help-content">
+        <div class="help-group">
+          <div class="help-group-title">导航</div>
+          <div class="help-row"><kbd>←</kbd><span>上一页</span></div>
+          <div class="help-row"><kbd>→</kbd><span>下一页</span></div>
+          <div class="help-row"><kbd>Cmd</kbd>+<kbd>←</kbd><span>首页</span></div>
+          <div class="help-row"><kbd>Cmd</kbd>+<kbd>→</kbd><span>尾页</span></div>
+        </div>
+        <div class="help-group">
+          <div class="help-group-title">视图</div>
+          <div class="help-row"><kbd>↑</kbd><span>幻灯片预览</span></div>
+          <div class="help-row"><kbd>F</kbd><span>全屏模式</span></div>
+          <div class="help-row"><kbd>T</kbd><span>切换主题</span></div>
+        </div>
+        <div class="help-group">
+          <div class="help-group-title">导出</div>
+          <div class="help-row"><kbd>↓</kbd><span>导出 PDF</span></div>
+          <div class="help-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>打印/导出面板</span></div>
+        </div>
+      </div>
+      <div class="help-footer">
+        <span>全屏时：点击左侧/右侧翻页</span>
+      </div>
     </div>
 
     <div id="toast" class="toast"></div>

@@ -3,6 +3,7 @@
 /tmp/
 node_modules/
 .backup/
+.snapshots/
 projects/*
 !projects/.gitkeep
 .env*

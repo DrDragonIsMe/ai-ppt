@@ -314,6 +314,44 @@ const routes = [
       send(res, 400, { error: err.message });
     }
   }},
+  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/chat$/, handler: async (req, res, matches) => {
+    const name = matches[1];
+    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+    const body = await readBody(req);
+    const instruction = (body.instruction || '').trim();
+    if (!instruction) return send(res, 400, { error: '请提供修改指令' });
+
+    const env = { ...process.env };
+    if (body.apiKey) env.AI_PPT_API_KEY = body.apiKey;
+
+    try {
+      const result = await new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, [
+          path.join(ROOT, 'scripts', 'chat-modify.mjs'),
+          name,
+          instruction,
+        ], { cwd: ROOT, env });
+        let lastError = '';
+        child.stdout.on('data', (d) => {
+          for (const line of d.toString().split('\n').filter(Boolean)) {
+            try {
+              const event = JSON.parse(line);
+              if (event.type === 'error') lastError = event.message;
+            } catch { /* ignore */ }
+          }
+        });
+        child.stderr.on('data', () => { /* ignore */ });
+        child.on('error', reject);
+        child.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(lastError || `修改进程退出码 ${code}`));
+        });
+      });
+      send(res, 200, { ok: true });
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
   { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/generate$/, handler: async (req, res, matches) => {
     const name = matches[1];
     if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });

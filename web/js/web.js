@@ -75,6 +75,13 @@
     btnCreateSnapshot: document.getElementById('btn-create-snapshot'),
     snapshotDescription: document.getElementById('snapshot-description'),
     snapshotList: document.getElementById('snapshot-list'),
+    btnImportMd: document.getElementById('btn-import-md'),
+    inputMdFile: document.getElementById('input-md-file'),
+    btnToggleChat: document.getElementById('btn-toggle-chat'),
+    chatDock: document.getElementById('chat-dock'),
+    chatMessages: document.getElementById('chat-messages'),
+    chatInput: document.getElementById('chat-input'),
+    btnChatSend: document.getElementById('btn-chat-send'),
 
     configTabs: document.querySelectorAll('.config-tab'),
     themeGrid: document.getElementById('theme-grid'),
@@ -192,6 +199,7 @@
     renderProjects();
     els.emptyState.classList.add('hidden');
     els.projectPanel.classList.remove('hidden');
+    els.chatMessages.innerHTML = '';
     const cfg = await api('GET', `/api/projects/${encodeURIComponent(name)}/config`);
     currentConfig = cfg;
     renderConfig(cfg);
@@ -310,6 +318,50 @@
 
   function closeSearchResults() {
     els.searchResults.classList.add('hidden');
+  }
+
+  function toggleChatDock() {
+    els.chatDock.classList.toggle('hidden');
+  }
+
+  function appendChatMessage(text, role) {
+    const div = document.createElement('div');
+    div.className = 'chat-message ' + role;
+    div.textContent = text;
+    els.chatMessages.appendChild(div);
+    els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    return div;
+  }
+
+  let chatBusy = false;
+
+  async function sendChatMessage() {
+    const instruction = els.chatInput.value.trim();
+    if (!instruction || !currentProject || chatBusy) return;
+
+    appendChatMessage(instruction, 'user');
+    els.chatInput.value = '';
+    chatBusy = true;
+    els.btnChatSend.disabled = true;
+    const pendingMsg = appendChatMessage('正在修改，请稍候…', 'system');
+
+    try {
+      const sessionApiKey = els.inputModelApiKey.value.trim();
+      await api('POST', `/api/projects/${encodeURIComponent(currentProject)}/chat`, {
+        instruction,
+        ...(sessionApiKey ? { apiKey: sessionApiKey } : {}),
+      });
+      pendingMsg.remove();
+      appendChatMessage('修改已完成，预览已刷新。', 'assistant');
+      updatePreview();
+      loadSnapshots();
+    } catch (err) {
+      pendingMsg.remove();
+      appendChatMessage('修改失败：' + err.message, 'assistant');
+    } finally {
+      chatBusy = false;
+      els.btnChatSend.disabled = false;
+    }
   }
 
   async function checkProjectFiles() {
@@ -779,6 +831,28 @@
 
     els.btnRefreshModels.addEventListener('click', refreshModelList);
     els.btnCreateSnapshot.addEventListener('click', createSnapshotNow);
+
+    els.btnToggleChat.addEventListener('click', toggleChatDock);
+    els.btnChatSend.addEventListener('click', sendChatMessage);
+    els.chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) {
+        sendChatMessage();
+      }
+    });
+
+    els.btnImportMd.addEventListener('click', () => els.inputMdFile.click());
+    els.inputMdFile.addEventListener('change', () => {
+      const file = els.inputMdFile.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        els.inputArticle.value = reader.result || '';
+        showToast(`已导入 ${file.name}`);
+        els.inputMdFile.value = '';
+      };
+      reader.onerror = () => showToast('文件读取失败');
+      reader.readAsText(file);
+    });
 
     els.inputGlobalSearch.addEventListener('input', (e) => {
       clearTimeout(searchTimer);
