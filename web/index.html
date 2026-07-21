@@ -56,6 +56,7 @@
                   <button class="config-tab" data-tab="animation">动画</button>
                   <button class="config-tab" data-tab="publish">发布</button>
                   <button class="config-tab" data-tab="versions">版本</button>
+                  <button class="config-tab" data-tab="components">组件</button>
                 </div>
 
                 <div class="config-panel active" data-panel="content">
@@ -175,6 +176,44 @@
                   </section>
 
                   <section class="card">
+                    <div class="card-title">自定义变量</div>
+                    <div class="fields-grid">
+                      <div class="field">
+                        <label>主色（--teal）</label>
+                        <input type="color" id="input-var-teal" value="#0D9488">
+                      </div>
+                      <div class="field">
+                        <label>文字色（--ink）</label>
+                        <input type="color" id="input-var-ink" value="#1A2332">
+                      </div>
+                      <div class="field">
+                        <label>背景色（--cream）</label>
+                        <input type="color" id="input-var-cream" value="#F7F8FA">
+                      </div>
+                      <div class="field field-wide">
+                        <label>标题字体（--font-heading）</label>
+                        <select id="input-var-font-heading">
+                          <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
+                          <option value='"PingFang SC", "Microsoft YaHei", sans-serif'>无衬线 · PingFang SC / Microsoft YaHei</option>
+                          <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
+                        </select>
+                      </div>
+                      <div class="field field-wide">
+                        <label>正文字体（--font-body）</label>
+                        <select id="input-var-font-body">
+                          <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
+                          <option value='"PingFang SC", "Microsoft YaHei", sans-serif' selected>无衬线 · PingFang SC / Microsoft YaHei</option>
+                          <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="actions-bar" style="margin-bottom: 0;">
+                      <button id="btn-apply-theme-vars" class="btn-primary">应用变量</button>
+                      <button id="btn-clear-theme-vars" class="btn-secondary">清除变量</button>
+                    </div>
+                  </section>
+
+                  <section class="card">
                     <div class="card-title">主题说明</div>
                     <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7;">
                       选择主题后，点击「保存配置」应用更改。主题会立即在右侧预览窗口中显示效果。
@@ -262,6 +301,17 @@
                     </div>
                   </section>
                 </div>
+
+                <div class="config-panel" data-panel="components">
+                  <section class="card">
+                    <div class="card-title">组件库</div>
+                    <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 16px;">
+                      点击「插入」将组件页添加到倒数第二页（结尾页之前），插入后可在预览中查看并用「AI 修改」调整内容。
+                    </p>
+                    <div class="component-grid" id="component-grid">
+                    </div>
+                  </section>
+                </div>
               </div>
             </div>
 
@@ -318,6 +368,7 @@
         <button id="export-pdf" class="btn-secondary">浏览器打印 / PDF</button>
         <button id="export-pptx" class="btn-secondary">下载 PPTX（可编辑文字）</button>
         <button id="export-pptx-image" class="btn-secondary">下载 PPTX（高清图片 · 还原度更高）</button>
+        <button id="export-html" class="btn-secondary">下载单文件 HTML</button>
       </div>
       <div class="modal-actions">
         <button id="btn-close-export" class="btn-secondary">关闭</button>

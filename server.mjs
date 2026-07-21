@@ -18,6 +18,8 @@ import {
 import { listModels } from './scripts/llm-adapter.mjs';
 import { search } from './scripts/search.mjs';
 import { createSnapshot, listSnapshots, restoreSnapshot, deleteSnapshot } from './scripts/snapshot.mjs';
+import { exportSingleHtml } from './scripts/export-single-html.mjs';
+import { load as loadHtml } from 'cheerio';
 import { exportPptx, exportPptxImage } from './scripts/export-pptx.mjs';
 import { exportPdf } from './scripts/export-pdf.mjs';
 
@@ -402,6 +404,41 @@ const routes = [
       send(res, 500, { error: err.message });
     }
   }},
+  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/html$/, handler: async (_req, res, matches) => {
+    const name = matches[1];
+    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+    try {
+      const file = await exportSingleHtml(name);
+      const rel = path.relative(ROOT, file);
+      send(res, 200, { file: rel, downloadUrl: '/' + rel.replace(/\\/g, '/') });
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
+  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/component$/, handler: async (req, res, matches) => {
+    const name = matches[1];
+    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+    const body = await readBody(req);
+    const componentHtml = (body.html || '').trim();
+    if (!componentHtml) return send(res, 400, { error: '请提供组件 HTML' });
+    try {
+      insertComponent(name, componentHtml);
+      send(res, 200, { ok: true });
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
+  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/theme-overrides$/, handler: async (req, res, matches) => {
+    const name = matches[1];
+    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+    const body = await readBody(req);
+    try {
+      applyThemeOverrides(name, body.overrides || {});
+      send(res, 200, { ok: true });
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
   // Publish endpoints
   { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/publish$/, handler: async (req, res, matches) => {
     const name = matches[1];
@@ -427,6 +464,68 @@ const routes = [
 
 function projectExists(name) {
   return fs.existsSync(getProjectDir(name));
+}
+
+// Insert a component slide before the last slide (usually the thank-you page).
+function insertComponent(name, componentHtml) {
+  const htmlPath = path.join(getProjectDir(name), 'index.html');
+  if (!fs.existsSync(htmlPath)) {
+    throw new Error('项目尚未生成幻灯片');
+  }
+  const $ = loadHtml(fs.readFileSync(htmlPath, 'utf8'));
+  const slides = $('main.stage section.slide');
+  if (slides.length === 0) {
+    throw new Error('未找到幻灯片结构');
+  }
+
+  let section = componentHtml;
+  if (!/class="[^"]*slide/.test(section)) {
+    section = `<section class="slide">${section}</section>`;
+  }
+
+  if (slides.length > 1) {
+    $(slides[slides.length - 1]).before('\n' + section + '\n');
+  } else {
+    $('main.stage').append('\n' + section + '\n');
+  }
+
+  // Keep exactly the first slide active
+  $('main.stage section.slide').removeClass('active');
+  $('main.stage section.slide').first().addClass('active');
+
+  fs.writeFileSync(htmlPath, $.html(), 'utf8');
+}
+
+// Inject/replace a <style id="theme-overrides"> block that overrides CSS variables.
+const ALLOWED_THEME_VARS = new Set([
+  '--teal', '--teal-light', '--accent', '--accent-light', '--accent-dark',
+  '--ink', '--navy', '--slate', '--muted', '--cream', '--surface',
+  '--surface-subtle', '--tile', '--tile-strong', '--border',
+  '--font-heading', '--font-body',
+]);
+
+function applyThemeOverrides(name, overrides) {
+  const htmlPath = path.join(getProjectDir(name), 'index.html');
+  if (!fs.existsSync(htmlPath)) {
+    throw new Error('项目尚未生成幻灯片');
+  }
+  const $ = loadHtml(fs.readFileSync(htmlPath, 'utf8'));
+
+  const rules = Object.entries(overrides)
+    .filter(([k, v]) => ALLOWED_THEME_VARS.has(k) && typeof v === 'string' && v.trim())
+    .map(([k, v]) => `  ${k}: ${v.trim().replace(/[;<>]/g, '')};`);
+
+  $('#theme-overrides').remove();
+  if (rules.length > 0) {
+    $('head').append(`<style id="theme-overrides">\n:root {\n${rules.join('\n')}\n}\n</style>`);
+  }
+
+  fs.writeFileSync(htmlPath, $.html(), 'utf8');
+
+  // Persist overrides in config so they survive regeneration flows
+  const cfg = readConfig(name);
+  cfg.themeOverrides = overrides;
+  writeConfig(name, cfg);
 }
 
 function serveStatic(req, res, root, urlPath) {

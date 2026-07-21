@@ -20,7 +20,278 @@
     { id: 'none', name: '无动画', desc: '元素直接显示', icon: '➡️' },
     { id: 'fade', name: '渐入', desc: '柔和优雅的淡入', icon: '✨' },
     { id: 'slide', name: '滑入', desc: '从下方滑入的层次感', icon: '⬆️' },
-    { id: 'bounce', name: '弹性弹出', desc: '活泼有活力的弹出', icon: '🚀' }
+    { id: 'bounce', name: '弹性弹出', desc: '活泼有活力的弹出', icon: '🚀' },
+    { id: 'zoom', name: '缩放', desc: '放大淡入', icon: '🔍' },
+    { id: 'blur', name: '模糊淡入', desc: '从模糊到清晰', icon: '💨' },
+    { id: 'flip', name: '翻转', desc: '3D 翻转切换', icon: '🔄' }
+  ];
+
+  const THEME_VAR_DEFAULTS = {
+    '--teal': '#0D9488',
+    '--ink': '#1A2332',
+    '--cream': '#F7F8FA'
+  };
+
+  const components = [
+    {
+      id: 'cover',
+      name: '封面页',
+      desc: 'kicker + 大标题 + 副标题',
+      html: `<section class="slide">
+  <div class="slide-content" style="text-align: center;">
+    <div class="kicker">Section</div>
+    <h1>封面标题</h1>
+    <p class="lead">一句话副标题说明</p>
+    <div class="divider" style="margin: 32px auto; max-width: 120px;"></div>
+    <p style="font-size: 16px; opacity: 0.55;">补充说明文字</p>
+  </div>
+</section>`
+    },
+    {
+      id: 'hero-stats',
+      name: '大数字统计',
+      desc: 'split-visual + 4 个 hero-stat',
+      html: `<section class="slide">
+  <div class="slide-content">
+    <div class="section-title">Data</div>
+    <h2>关键数据</h2>
+    <div class="split-visual" style="margin-top: 32px;">
+      <div class="hero-stat">
+        <div class="big-number">0%</div>
+        <div class="big-number-label">指标一</div>
+      </div>
+      <div class="hero-stat">
+        <div class="big-number">0%</div>
+        <div class="big-number-label">指标二</div>
+      </div>
+      <div class="hero-stat">
+        <div class="big-number">0</div>
+        <div class="big-number-label">指标三</div>
+      </div>
+      <div class="hero-stat">
+        <div class="big-number">0</div>
+        <div class="big-number-label">指标四</div>
+      </div>
+    </div>
+  </div>
+</section>`
+    },
+    {
+      id: 'table',
+      name: '表格页',
+      desc: '三列 ppt-table 数据表',
+      html: `<section class="slide">
+  <div class="slide-content">
+    <div class="section-title">Table</div>
+    <h2>数据表格</h2>
+    <table class="ppt-table small">
+      <thead>
+        <tr>
+          <th style="width: 30%;">项目</th>
+          <th style="width: 40%;">说明</th>
+          <th style="width: 30%;">备注</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>项目一</strong></td>
+          <td>说明文字</td>
+          <td>备注</td>
+        </tr>
+        <tr>
+          <td><strong>项目二</strong></td>
+          <td>说明文字</td>
+          <td>备注</td>
+        </tr>
+        <tr>
+          <td><strong>项目三</strong></td>
+          <td>说明文字</td>
+          <td>备注</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>`
+    },
+    {
+      id: 'progress-ring',
+      name: '进度环',
+      desc: '3 个 progress-ring 百分比环',
+      html: `<section class="slide">
+  <div class="slide-content">
+    <div class="section-title">Progress</div>
+    <h2>完成度概览</h2>
+    <div class="progress-ring">
+      <div class="progress-ring-item">
+        <svg class="progress-ring-svg" viewBox="0 0 120 120">
+          <circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle>
+          <circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct: 75;"></circle>
+        </svg>
+        <div class="progress-ring-value">75%</div>
+        <div class="progress-ring-label">维度一</div>
+      </div>
+      <div class="progress-ring-item">
+        <svg class="progress-ring-svg" viewBox="0 0 120 120">
+          <circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle>
+          <circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct: 60;"></circle>
+        </svg>
+        <div class="progress-ring-value">60%</div>
+        <div class="progress-ring-label">维度二</div>
+      </div>
+      <div class="progress-ring-item">
+        <svg class="progress-ring-svg" viewBox="0 0 120 120">
+          <circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle>
+          <circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct: 45;"></circle>
+        </svg>
+        <div class="progress-ring-value">45%</div>
+        <div class="progress-ring-label">维度三</div>
+      </div>
+    </div>
+  </div>
+</section>`
+    },
+    {
+      id: 'timeline',
+      name: '时间线',
+      desc: 'timeline-horizontal 横向里程碑',
+      html: `<section class="slide">
+  <div class="slide-content">
+    <div class="section-title">Roadmap</div>
+    <h2>发展里程碑</h2>
+    <div class="timeline-horizontal">
+      <div class="timeline-horizontal-item">
+        <div class="timeline-horizontal-dot"></div>
+        <div class="timeline-horizontal-content">
+          <div class="timeline-horizontal-title">阶段一</div>
+          <div class="timeline-horizontal-desc">里程碑事件</div>
+        </div>
+      </div>
+      <div class="timeline-horizontal-item">
+        <div class="timeline-horizontal-dot"></div>
+        <div class="timeline-horizontal-content">
+          <div class="timeline-horizontal-title">阶段二</div>
+          <div class="timeline-horizontal-desc">里程碑事件</div>
+        </div>
+      </div>
+      <div class="timeline-horizontal-item">
+        <div class="timeline-horizontal-dot"></div>
+        <div class="timeline-horizontal-content">
+          <div class="timeline-horizontal-title">阶段三</div>
+          <div class="timeline-horizontal-desc">里程碑事件</div>
+        </div>
+      </div>
+      <div class="timeline-horizontal-item">
+        <div class="timeline-horizontal-dot"></div>
+        <div class="timeline-horizontal-content">
+          <div class="timeline-horizontal-title">阶段四</div>
+          <div class="timeline-horizontal-desc">里程碑事件</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>`
+    },
+    {
+      id: 'waterfall',
+      name: '瀑布图',
+      desc: 'waterfall 增减构成分析',
+      html: `<section class="slide">
+  <div class="slide-content">
+    <div class="section-title">Analysis</div>
+    <h2>构成分析</h2>
+    <div class="waterfall">
+      <div class="waterfall-item">
+        <div class="waterfall-label">初始值</div>
+        <div class="waterfall-bar">
+          <div class="waterfall-fill neutral" style="--width: 40%; width: 40%;"></div>
+        </div>
+        <div class="waterfall-value">100</div>
+      </div>
+      <div class="waterfall-item">
+        <div class="waterfall-label">因素一</div>
+        <div class="waterfall-bar">
+          <div class="waterfall-fill negative" style="--width: 25%; width: 25%;"></div>
+        </div>
+        <div class="waterfall-value">-40</div>
+      </div>
+      <div class="waterfall-item">
+        <div class="waterfall-label">因素二</div>
+        <div class="waterfall-bar">
+          <div class="waterfall-fill negative" style="--width: 18%; width: 18%;"></div>
+        </div>
+        <div class="waterfall-value">-30</div>
+      </div>
+      <div class="waterfall-item">
+        <div class="waterfall-label">因素三</div>
+        <div class="waterfall-bar">
+          <div class="waterfall-fill negative" style="--width: 12%; width: 12%;"></div>
+        </div>
+        <div class="waterfall-value">-20</div>
+      </div>
+      <div class="waterfall-item">
+        <div class="waterfall-label">最终值</div>
+        <div class="waterfall-bar">
+          <div class="waterfall-fill positive" style="--width: 10%; width: 10%;"></div>
+        </div>
+        <div class="waterfall-value">10</div>
+      </div>
+    </div>
+  </div>
+</section>`
+    },
+    {
+      id: 'steps',
+      name: '步骤流程',
+      desc: 'chart-steps 四步流程',
+      html: `<section class="slide">
+  <div class="slide-content">
+    <div class="section-title">Workflow</div>
+    <h2>实施流程</h2>
+    <div class="chart-steps">
+      <div class="chart-step">
+        <div class="chart-step-number">1</div>
+        <div class="chart-step-content">
+          <div class="chart-step-title">步骤一</div>
+          <div class="chart-step-desc">步骤说明文字</div>
+        </div>
+      </div>
+      <div class="chart-step">
+        <div class="chart-step-number">2</div>
+        <div class="chart-step-content">
+          <div class="chart-step-title">步骤二</div>
+          <div class="chart-step-desc">步骤说明文字</div>
+        </div>
+      </div>
+      <div class="chart-step">
+        <div class="chart-step-number">3</div>
+        <div class="chart-step-content">
+          <div class="chart-step-title">步骤三</div>
+          <div class="chart-step-desc">步骤说明文字</div>
+        </div>
+      </div>
+      <div class="chart-step">
+        <div class="chart-step-number">4</div>
+        <div class="chart-step-content">
+          <div class="chart-step-title">步骤四</div>
+          <div class="chart-step-desc">步骤说明文字</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>`
+    },
+    {
+      id: 'thanks',
+      name: '结尾页',
+      desc: 'Thank You 致谢页',
+      html: `<section class="slide">
+  <div class="slide-content" style="text-align: center;">
+    <div class="kicker">Thank You</div>
+    <h1>谢谢</h1>
+    <p class="lead">感谢聆听，欢迎交流探讨。</p>
+  </div>
+</section>`
+    }
   ];
 
   const els = {
@@ -86,6 +357,15 @@
     configTabs: document.querySelectorAll('.config-tab'),
     themeGrid: document.getElementById('theme-grid'),
     btnSaveTheme: document.getElementById('btn-save-theme'),
+    inputVarTeal: document.getElementById('input-var-teal'),
+    inputVarInk: document.getElementById('input-var-ink'),
+    inputVarCream: document.getElementById('input-var-cream'),
+    inputVarFontHeading: document.getElementById('input-var-font-heading'),
+    inputVarFontBody: document.getElementById('input-var-font-body'),
+    btnApplyThemeVars: document.getElementById('btn-apply-theme-vars'),
+    btnClearThemeVars: document.getElementById('btn-clear-theme-vars'),
+    componentGrid: document.getElementById('component-grid'),
+    exportHtmlModal: document.getElementById('export-html'),
     animationOptions: document.getElementById('animation-options'),
     animationSpeed: document.getElementById('animation-speed'),
     btnSaveAnimation: document.getElementById('btn-save-animation'),
@@ -204,7 +484,9 @@
     currentConfig = cfg;
     renderConfig(cfg);
     renderThemeOptions();
+    renderThemeOverrides(cfg);
     renderAnimationOptions();
+    renderComponents();
     loadPublishHistory();
     loadSnapshots();
     updatePreview();
@@ -413,6 +695,87 @@
     });
     // Save and update preview
     saveAndRefreshPreview();
+  }
+
+  function setFontSelect(select, value) {
+    if (!value) return;
+    const found = Array.from(select.options).some((opt) => opt.value === value);
+    if (!found) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = '自定义 · ' + value;
+      select.appendChild(opt);
+    }
+    select.value = value;
+  }
+
+  function renderThemeOverrides(cfg) {
+    const overrides = cfg.themeOverrides || {};
+    els.inputVarTeal.value = overrides['--teal'] || THEME_VAR_DEFAULTS['--teal'];
+    els.inputVarInk.value = overrides['--ink'] || THEME_VAR_DEFAULTS['--ink'];
+    els.inputVarCream.value = overrides['--cream'] || THEME_VAR_DEFAULTS['--cream'];
+    setFontSelect(els.inputVarFontHeading, overrides['--font-heading']);
+    setFontSelect(els.inputVarFontBody, overrides['--font-body']);
+  }
+
+  async function applyThemeOverrides() {
+    if (!currentProject) return;
+    const overrides = {
+      '--teal': els.inputVarTeal.value,
+      '--ink': els.inputVarInk.value,
+      '--cream': els.inputVarCream.value,
+      '--font-heading': els.inputVarFontHeading.value,
+      '--font-body': els.inputVarFontBody.value
+    };
+    try {
+      await api('POST', `/api/projects/${encodeURIComponent(currentProject)}/theme-overrides`, { overrides });
+      showToast('变量已应用');
+      updatePreview();
+    } catch (err) {
+      showToast('应用变量失败：' + err.message);
+    }
+  }
+
+  async function clearThemeOverrides() {
+    if (!currentProject) return;
+    try {
+      await api('POST', `/api/projects/${encodeURIComponent(currentProject)}/theme-overrides`, { overrides: {} });
+      els.inputVarTeal.value = THEME_VAR_DEFAULTS['--teal'];
+      els.inputVarInk.value = THEME_VAR_DEFAULTS['--ink'];
+      els.inputVarCream.value = THEME_VAR_DEFAULTS['--cream'];
+      els.inputVarFontHeading.selectedIndex = 0;
+      els.inputVarFontBody.selectedIndex = 1;
+      showToast('变量已清除');
+      updatePreview();
+    } catch (err) {
+      showToast('清除变量失败：' + err.message);
+    }
+  }
+
+  function renderComponents() {
+    els.componentGrid.innerHTML = '';
+    components.forEach((comp) => {
+      const card = document.createElement('div');
+      card.className = 'component-card';
+      card.innerHTML = `
+        <div class="component-preview">${escapeHtml(comp.desc)}</div>
+        <div class="component-name">${escapeHtml(comp.name)}</div>
+        <button class="btn-secondary component-insert">插入</button>
+      `;
+      card.querySelector('.component-insert').addEventListener('click', () => insertComponent(comp));
+      els.componentGrid.appendChild(card);
+    });
+  }
+
+  async function insertComponent(comp) {
+    if (!currentProject) return;
+    try {
+      await api('POST', `/api/projects/${encodeURIComponent(currentProject)}/component`, { html: comp.html });
+      showToast(`已插入「${comp.name}」`);
+      updatePreview();
+    } catch (err) {
+      showToast('插入组件失败：' + err.message);
+    }
   }
 
   function renderAnimationOptions() {
@@ -746,6 +1109,25 @@
     }
   }
 
+  async function exportHtml() {
+    if (!currentProject) return;
+    showToast('正在生成单文件 HTML...');
+    try {
+      const res = await api('POST', `/api/projects/${encodeURIComponent(currentProject)}/export/html`);
+      if (res.downloadUrl) {
+        const a = document.createElement('a');
+        a.href = res.downloadUrl;
+        a.download = `${currentProject}.html`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast('单文件 HTML 已下载');
+      }
+    } catch (err) {
+      showToast('单文件 HTML 导出失败：' + err.message);
+    }
+  }
+
   async function publish() {
     if (!currentProject) return;
     showToast('正在发布...');
@@ -883,6 +1265,8 @@
     els.btnSave.addEventListener('click', saveConfig);
     els.btnSaveTheme.addEventListener('click', saveConfig);
     els.btnSaveAnimation.addEventListener('click', saveConfig);
+    els.btnApplyThemeVars.addEventListener('click', applyThemeOverrides);
+    els.btnClearThemeVars.addEventListener('click', clearThemeOverrides);
     els.btnGenerate.addEventListener('click', generate);
     els.btnPreview.addEventListener('click', openPreview);
     els.btnOpenPreview.addEventListener('click', openPreview);
@@ -906,6 +1290,10 @@
     els.exportPptxImageModal.addEventListener('click', () => {
       closeExportModal();
       exportPptxImage();
+    });
+    els.exportHtmlModal.addEventListener('click', () => {
+      closeExportModal();
+      exportHtml();
     });
 
     els.btnHelp.addEventListener('click', openHelpPanel);

@@ -9,6 +9,7 @@
     transitioning: false,
     currentTheme: 'web-ui',
     sidebarOpen: true,
+    presenter: false,
   };
 
   // Theme definitions
@@ -40,6 +41,11 @@
   let themePanelEl = null;
   let fullscreenBtn = null;
   let fullscreenTimeout = null;
+
+  // Presenter (speaker) mode
+  let presenterWin = null;
+  let presenterTimer = null;
+  let presenterStart = 0;
 
   function init() {
     state.slides = Array.from(document.querySelectorAll('.slide'));
@@ -338,6 +344,8 @@
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
     document.addEventListener('mousemove', onFullscreenActivity);
     document.addEventListener('touchstart', onFullscreenActivity, { passive: true });
+
+    window.addEventListener('beforeunload', closePresenter);
   }
 
   // In fullscreen the overlay UI (help panel, theme switcher, hud,
@@ -412,9 +420,15 @@
       return;
     }
 
-    if (e.key === 's' || e.key === 'S') {
+    if (e.key === 's') {
       e.preventDefault();
       toggleSidebar();
+      return;
+    }
+
+    if (e.key === 'S') {
+      e.preventDefault();
+      togglePresenter();
       return;
     }
 
@@ -511,6 +525,7 @@
 
     updateOverviewActive();
     updateSidebarActive();
+    syncPresenter();
   }
 
   function updateSidebarActive() {
@@ -524,6 +539,228 @@
     if (activeCard) {
       activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+  }
+
+  // ===== Presenter (speaker) mode =====
+  // Shift+S opens a presenter window with the current slide's speaker notes
+  // (<div class="speaker-note">), a scaled preview of the next slide, and an
+  // elapsed-time timer. Shift+S again or closing the window exits.
+
+  function togglePresenter() {
+    if (state.presenter) {
+      closePresenter();
+    } else {
+      openPresenter();
+    }
+  }
+
+  function openPresenter() {
+    const win = window.open('about:blank', 'ai-ppt-presenter', 'width=980,height=680');
+    if (!win) {
+      showToast('演讲者窗口被浏览器拦截，请允许弹出窗口后重试');
+      return;
+    }
+
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map((link) => `<link rel="stylesheet" href="${new URL(link.getAttribute('href'), location.href).href}">`)
+      .join('\n');
+
+    win.document.open();
+    win.document.write(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>演讲者模式</title>
+${links}
+<style>
+  html, body { margin: 0; height: 100%; }
+  body.pv-body {
+    overflow: auto;
+    background: #0B1413;
+    color: #FAFAF7;
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  .pv-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(250, 250, 247, 0.12);
+  }
+  .pv-title { font-weight: 600; letter-spacing: 0.05em; }
+  .pv-counter { color: rgba(250, 250, 247, 0.6); font-size: 14px; }
+  .pv-timer {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    font-size: 20px;
+    color: var(--teal, #0D9488);
+  }
+  .pv-main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    padding: 20px;
+    min-height: 0;
+  }
+  .pv-main h2 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(250, 250, 247, 0.5);
+  }
+  .pv-notes, .pv-next { min-width: 0; }
+  .pv-notes-content {
+    font-size: 18px;
+    line-height: 1.7;
+  }
+  .pv-notes-content p { margin: 0 0 0.8em; }
+  .pv-notes-empty { color: rgba(250, 250, 247, 0.4); font-size: 15px; }
+  .pv-next-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1280 / 800;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--cream, #FAFAF7);
+  }
+  .pv-next-frame .slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 1;
+    pointer-events: none;
+  }
+  .pv-next-end { color: rgba(250, 250, 247, 0.4); font-size: 15px; }
+  .pv-footer {
+    padding: 10px 20px;
+    border-top: 1px solid rgba(250, 250, 247, 0.12);
+    color: rgba(250, 250, 247, 0.5);
+    font-size: 13px;
+  }
+  .pv-footer kbd {
+    padding: 1px 6px;
+    border: 1px solid rgba(250, 250, 247, 0.3);
+    border-radius: 4px;
+    font-family: inherit;
+  }
+</style>
+</head>
+<body class="pv-body ${document.body.className}">
+<header class="pv-header">
+  <span class="pv-title">演讲者模式</span>
+  <span class="pv-counter" id="pv-counter"></span>
+  <span class="pv-timer" id="pv-timer">00:00</span>
+</header>
+<main class="pv-main">
+  <section class="pv-notes">
+    <h2>演讲备注</h2>
+    <div class="pv-notes-content" id="pv-notes-content"></div>
+  </section>
+  <section class="pv-next">
+    <h2>下一页预览</h2>
+    <div class="pv-next-frame" id="pv-next-frame"></div>
+    <div class="pv-next-end" id="pv-next-end" hidden>已是最后一页</div>
+  </section>
+</main>
+<footer class="pv-footer">按 <kbd>Shift</kbd>+<kbd>S</kbd>（主窗口或本窗口）或关闭本窗口退出演讲者模式</footer>
+</body>
+</html>`);
+    win.document.close();
+
+    presenterWin = win;
+    state.presenter = true;
+    presenterStart = Date.now();
+
+    win.document.addEventListener('keydown', (e) => {
+      if (e.key === 'S') {
+        e.preventDefault();
+        closePresenter();
+      }
+    });
+
+    presenterTimer = setInterval(tickPresenter, 1000);
+    syncPresenter();
+    showToast('演讲者模式已开启（Shift+S 退出）');
+  }
+
+  function closePresenter() {
+    state.presenter = false;
+    clearInterval(presenterTimer);
+    presenterTimer = null;
+    if (presenterWin && !presenterWin.closed) {
+      presenterWin.close();
+    }
+    presenterWin = null;
+  }
+
+  function tickPresenter() {
+    if (!presenterWin || presenterWin.closed) {
+      closePresenter();
+      return;
+    }
+    const elapsed = Math.floor((Date.now() - presenterStart) / 1000);
+    const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const ss = String(elapsed % 60).padStart(2, '0');
+    const timerEl = presenterWin.document.getElementById('pv-timer');
+    if (timerEl) {
+      timerEl.textContent = `${mm}:${ss}`;
+    }
+  }
+
+  // Keep the presenter window in sync with the deck; called from updateSlide().
+  function syncPresenter() {
+    if (!state.presenter || !presenterWin || presenterWin.closed) return;
+
+    const doc = presenterWin.document;
+    const counterEl = doc.getElementById('pv-counter');
+    const notesEl = doc.getElementById('pv-notes-content');
+    const frameEl = doc.getElementById('pv-next-frame');
+    const endEl = doc.getElementById('pv-next-end');
+    if (!counterEl || !notesEl || !frameEl || !endEl) return;
+
+    counterEl.textContent = `${state.current + 1} / ${state.slides.length}`;
+
+    const notes = state.slides[state.current].querySelectorAll('.speaker-note');
+    notesEl.innerHTML = notes.length
+      ? Array.from(notes).map((note) => `<p>${note.innerHTML}</p>`).join('')
+      : '<p class="pv-notes-empty">（本页无演讲备注）</p>';
+
+    // Next-slide preview: clone at a fixed design size, then scale into the
+    // frame — same approach as buildSidebarThumbnails().
+    frameEl.innerHTML = '';
+    const nextSlide = state.slides[state.current + 1];
+    endEl.hidden = !!nextSlide;
+    if (!nextSlide) return;
+
+    const BASE_W = 1280;
+    const BASE_H = 800;
+    const clone = nextSlide.cloneNode(true);
+    clone.classList.remove('active');
+    clone.removeAttribute('id');
+    clone.style.width = `${BASE_W}px`;
+    clone.style.height = `${BASE_H}px`;
+
+    // Render animated components at their final state in the preview.
+    clone.querySelectorAll('.progress-ring-circle').forEach((c) => {
+      const legacy = parseFloat(c.style.getPropertyValue('--progress'));
+      const pct = parseFloat(c.style.getPropertyValue('--progress-pct'));
+      c.style.strokeDashoffset = Number.isFinite(legacy)
+        ? legacy
+        : 314 - (314 * (Number.isFinite(pct) ? pct : 0)) / 100;
+    });
+    clone.querySelectorAll('.waterfall-fill').forEach((f) => {
+      f.style.width = f.style.getPropertyValue('--width') || '0%';
+    });
+
+    frameEl.appendChild(clone);
+    const scale = frameEl.clientWidth / BASE_W;
+    clone.style.transform = `scale(${scale})`;
+    clone.style.transformOrigin = 'top left';
   }
 
   function toggleOverview(show) {
