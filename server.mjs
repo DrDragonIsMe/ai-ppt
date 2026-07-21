@@ -15,6 +15,7 @@ import {
   PRESET_MODELS,
   applyThemeAndAnimation,
 } from './scripts/config.mjs';
+import { listModels } from './scripts/llm-adapter.mjs';
 import { exportPptx, exportPptxImage } from './scripts/export-pptx.mjs';
 import { exportPdf } from './scripts/export-pdf.mjs';
 
@@ -212,6 +213,18 @@ const PROJECT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const routes = [
   { method: 'GET', pattern: /^\/api\/models$/, handler: async (_req, res) => {
     send(res, 200, PRESET_MODELS);
+  }},
+  { method: 'POST', pattern: /^\/api\/models\/list-remote$/, handler: async (req, res) => {
+    const body = await readBody(req);
+    try {
+      const models = await listModels({
+        baseUrl: body.baseUrl,
+        apiKey: body.apiKey,
+      });
+      send(res, 200, models);
+    } catch (err) {
+      send(res, 200, []); // silently fail - just return empty list
+    }
   }},
   { method: 'GET', pattern: /^\/api\/projects$/, handler: async (_req, res) => {
     send(res, 200, listProjects());

@@ -68,6 +68,8 @@
     helpPanel: document.getElementById('help-panel'),
     btnCloseHelp: document.getElementById('btn-close-help'),
     helpOverlay: document.querySelector('.help-panel-overlay'),
+    btnRefreshModels: document.getElementById('btn-refresh-models'),
+    lmstudioHint: document.getElementById('lmstudio-hint'),
 
     configTabs: document.querySelectorAll('.config-tab'),
     themeGrid: document.getElementById('theme-grid'),
@@ -220,6 +222,8 @@
     els.inputModelBaseUrl.value = mcfg.baseUrl || '';
     els.inputModelApiKey.value = mcfg.apiKey || '';
 
+    updateModelPresetUI(presetId);
+
     const canExport = cfg.status === 'ready';
     els.btnPreview.disabled = !canExport;
     els.btnExportPptx.disabled = !canExport;
@@ -227,6 +231,37 @@
     els.progressCard.classList.add('hidden');
 
     checkProjectFiles();
+  }
+
+  function updateModelPresetUI(presetId) {
+    const preset = models.find((m) => m.id === presetId);
+    if (presetId === 'lmstudio') {
+      els.lmstudioHint.classList.remove('hidden');
+    } else {
+      els.lmstudioHint.classList.add('hidden');
+    }
+  }
+
+  async function refreshModelList() {
+    const baseUrl = els.inputModelBaseUrl.value;
+    const apiKey = els.inputModelApiKey.value;
+    if (!baseUrl) {
+      showToast('请先填写 Base URL');
+      return;
+    }
+    try {
+      showToast('正在获取模型列表...');
+      const remoteModels = await api('POST', '/api/models/list-remote', { baseUrl, apiKey });
+      const currentValue = els.inputModelName.value;
+      els.inputModelName.innerHTML = '<option value="">选择或输入模型...</option>' +
+        remoteModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('');
+      if (currentValue) {
+        els.inputModelName.value = currentValue;
+      }
+      showToast(`获取到 ${remoteModels.length} 个模型`);
+    } catch (err) {
+      showToast('获取模型列表失败: ' + err.message);
+    }
   }
 
   async function checkProjectFiles() {
@@ -611,7 +646,10 @@
         els.inputModelName.value = preset.model || '';
         els.inputModelBaseUrl.value = preset.baseUrl || '';
       }
+      updateModelPresetUI(preset.id);
     });
+
+    els.btnRefreshModels.addEventListener('click', refreshModelList);
 
     els.configTabs.forEach((tab) => {
       tab.addEventListener('click', () => {

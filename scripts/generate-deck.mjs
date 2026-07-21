@@ -317,6 +317,7 @@ async function main() {
           apiKey: process.env.AI_PPT_API_KEY || undefined,
           baseUrl: cfg.modelConfig.baseUrl || undefined,
           model: cfg.modelConfig.model || cfg.params?.model || undefined,
+          provider: cfg.modelConfig.provider || undefined,
         }
       : { model: cfg.params?.model || undefined };
     let slidesHtml = '';

@@ -188,8 +188,16 @@ export const PRESET_MODELS = [
     model: 'gpt-4o',
   },
   {
+    id: 'lmstudio',
+    name: 'LM Studio (本地)',
+    provider: 'lmstudio',
+    baseUrl: 'http://localhost:1234/v1',
+    model: '',
+    note: '需要先启动 LM Studio Local Server',
+  },
+  {
     id: 'custom',
-    name: '自定义',
+    name: '自定义 (远程云端)',
     provider: 'openai',
     baseUrl: '',
     model: '',

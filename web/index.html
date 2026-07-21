@@ -114,13 +114,23 @@
                           <option value="">加载中...</option>
                         </select>
                       </div>
-                      <div class="field">
-                        <label>Provider</label>
-                        <input type="text" id="input-model-provider" placeholder="kimi / openai">
+                      <div id="lmstudio-hint" class="field field-wide hidden">
+                        <div style="font-size: 13px; color: #0D9488; background: #F0FDFA; padding: 10px 12px; border-radius: 8px;">
+                          💡 需要先启动 LM Studio，然后在 LM Studio 中开启 "Local Server"
+                        </div>
                       </div>
                       <div class="field">
-                        <label>模型名称</label>
-                        <input type="text" id="input-model-name" placeholder="kimi-for-coding">
+                        <label>Provider</label>
+                        <input type="text" id="input-model-provider" placeholder="kimi / openai / lmstudio">
+                      </div>
+                      <div class="field field-wide" style="display: flex; gap: 8px;">
+                        <label style="flex: 1;">模型名称</label>
+                        <div style="flex: 1; display: flex; gap: 8px;">
+                          <select id="input-model-name" style="flex: 1;">
+                            <option value="">选择或输入模型...</option>
+                          </select>
+                          <button id="btn-refresh-models" class="btn-secondary" style="padding: 8px 12px; white-space: nowrap;">刷新列表</button>
+                        </div>
                       </div>
                       <div class="field field-wide">
                         <label>Base URL</label>
