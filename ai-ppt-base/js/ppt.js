@@ -561,8 +561,13 @@
       return;
     }
 
-    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-      .map((link) => `<link rel="stylesheet" href="${new URL(link.getAttribute('href'), location.href).href}">`)
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"], style[id="theme-overrides"]'))
+      .map((node) => {
+        if (node.tagName === 'LINK') {
+          return `<link rel="stylesheet" href="${new URL(node.getAttribute('href'), location.href).href}">`;
+        }
+        return `<style id="theme-overrides">${node.innerHTML}</style>`;
+      })
       .join('\n');
 
     win.document.open();

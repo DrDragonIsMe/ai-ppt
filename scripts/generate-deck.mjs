@@ -6,6 +6,7 @@ import { load } from 'cheerio';
 import { readConfig, writeConfig, getProjectDir, ensureBaseEngine } from './config.mjs';
 import { extractFromUrl } from './content-extractor.mjs';
 import { generateSlides } from './llm-adapter.mjs';
+import { injectThemeOverrides } from './theme-overrides.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -373,7 +374,10 @@ async function main() {
 
     emit('build', '正在写入 index.html');
     ensureBaseEngine(name);
-    const html = wrapSlides(slidesHtml, cfg.params?.title || cfg.name, cfg);
+    let html = wrapSlides(slidesHtml, cfg.params?.title || cfg.name, cfg);
+    if (cfg.themeOverrides && Object.keys(cfg.themeOverrides).length > 0) {
+      html = injectThemeOverrides(html, cfg.themeOverrides);
+    }
     fs.writeFileSync(path.join(projectDir, 'index.html'), html, 'utf8');
 
     setStatus(name, 'ready');

@@ -699,11 +699,13 @@
 
   function setFontSelect(select, value) {
     if (!value) return;
+    select.querySelectorAll('option[data-custom]').forEach((opt) => opt.remove());
     const found = Array.from(select.options).some((opt) => opt.value === value);
     if (!found) {
       const opt = document.createElement('option');
       opt.value = value;
       opt.textContent = '自定义 · ' + value;
+      opt.dataset.custom = 'true';
       select.appendChild(opt);
     }
     select.value = value;

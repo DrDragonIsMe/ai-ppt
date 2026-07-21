@@ -5,6 +5,7 @@ import { load } from 'cheerio';
 import { readConfig, writeConfig, getProjectDir } from './config.mjs';
 import { generateSlides } from './llm-adapter.mjs';
 import { createSnapshot } from './snapshot.mjs';
+import { injectThemeOverrides } from './theme-overrides.mjs';
 
 function emit(step, message, detail = null) {
   const event = { type: 'progress', step, message, detail, time: new Date().toISOString() };
@@ -182,7 +183,10 @@ async function main() {
     $('section.slide').removeClass('active');
     $('section.slide').first().addClass('active');
 
-    const finalHtml = wrapSlides($('main').html(), cfg.params?.title || name, cfg);
+    let finalHtml = wrapSlides($('main').html(), cfg.params?.title || name, cfg);
+    if (cfg.themeOverrides && Object.keys(cfg.themeOverrides).length > 0) {
+      finalHtml = injectThemeOverrides(finalHtml, cfg.themeOverrides);
+    }
     fs.writeFileSync(htmlPath, finalHtml, 'utf8');
 
     cfg.status = 'ready';

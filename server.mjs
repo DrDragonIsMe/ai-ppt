@@ -20,6 +20,7 @@ import { search } from './scripts/search.mjs';
 import { createSnapshot, listSnapshots, restoreSnapshot, deleteSnapshot } from './scripts/snapshot.mjs';
 import { exportSingleHtml } from './scripts/export-single-html.mjs';
 import { load as loadHtml } from 'cheerio';
+import { injectThemeOverrides } from './scripts/theme-overrides.mjs';
 import { exportPptx, exportPptxImage } from './scripts/export-pptx.mjs';
 import { exportPdf } from './scripts/export-pdf.mjs';
 
@@ -180,11 +181,10 @@ function serveSse(res, state) {
     Connection: 'keep-alive',
   });
 
+  // Avoid double-ending the response: send all buffered events, then end
+  // only once at the end when the generator has already finished.
   const sendEvent = (event) => {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
-    if (event.type === 'done' || event.type === 'error') {
-      res.end();
-    }
   };
 
   state.buffer.forEach(sendEvent);
@@ -497,30 +497,14 @@ function insertComponent(name, componentHtml) {
 }
 
 // Inject/replace a <style id="theme-overrides"> block that overrides CSS variables.
-const ALLOWED_THEME_VARS = new Set([
-  '--teal', '--teal-light', '--accent', '--accent-light', '--accent-dark',
-  '--ink', '--navy', '--slate', '--muted', '--cream', '--surface',
-  '--surface-subtle', '--tile', '--tile-strong', '--border',
-  '--font-heading', '--font-body',
-]);
-
 function applyThemeOverrides(name, overrides) {
   const htmlPath = path.join(getProjectDir(name), 'index.html');
   if (!fs.existsSync(htmlPath)) {
     throw new Error('项目尚未生成幻灯片');
   }
-  const $ = loadHtml(fs.readFileSync(htmlPath, 'utf8'));
-
-  const rules = Object.entries(overrides)
-    .filter(([k, v]) => ALLOWED_THEME_VARS.has(k) && typeof v === 'string' && v.trim())
-    .map(([k, v]) => `  ${k}: ${v.trim().replace(/[;<>]/g, '')};`);
-
-  $('#theme-overrides').remove();
-  if (rules.length > 0) {
-    $('head').append(`<style id="theme-overrides">\n:root {\n${rules.join('\n')}\n}\n</style>`);
-  }
-
-  fs.writeFileSync(htmlPath, $.html(), 'utf8');
+  let html = fs.readFileSync(htmlPath, 'utf8');
+  html = injectThemeOverrides(html, overrides);
+  fs.writeFileSync(htmlPath, html, 'utf8');
 
   // Persist overrides in config so they survive regeneration flows
   const cfg = readConfig(name);
