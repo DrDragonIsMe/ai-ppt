@@ -42,6 +42,7 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 | `scripts/chat-modify.mjs` | 对话式修改：按自然语言指令调用项目配置的 LLM 改写幻灯片，修改前自动快照。 |
 | `scripts/export-pptx.mjs` | 使用 pptxgenjs 生成 PPTX。 |
 | `scripts/export-pdf.mjs` | 可选 Puppeteer 打印 PDF，否则回退浏览器打印。 |
+| `scripts/export-single-html.mjs` | 单文件 HTML 导出：内联本地 CSS/JS，输出 `export/deck-single.html`。 |
 | `scripts/backup.mjs` | 备份 projects/、skills/、web/、关键文档。 |
 | `scripts/upgrade-decks.mjs` | 将 ai-ppt-base 的 css/js 同步到所有项目。 |
 | `skills/` | CLI skill 定义：ppt-structure、ppt-preview、ppt-edit、ppt-export、ppt-list、ppt-delete。 |
@@ -101,6 +102,13 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 
 - 快照：`scripts/snapshot.mjs`，`.snapshots/<name>/<timestamp-id>/` 全量复制项目目录 + `snapshot.json` 元信息；Web UI「版本」标签管理。
 - 搜索：`scripts/search.mjs` 每次请求时实时建索引（项目量小，无需缓存）；`GET /api/search?q=` 供 Web UI 顶栏搜索框使用。
+
+## 演讲者模式与创作工具
+
+- 演讲者模式：放映页 `Shift+S`（小写 `s` 是缩略图侧边栏）打开演讲者窗口；`.speaker-note` 元素在放映中隐藏、被提取为备注；窗口含下一页预览与计时器，随翻页同步。
+- 主题覆盖：`POST /api/projects/:name/theme-overrides` 注入 `<style id="theme-overrides">`（变量白名单见 server.mjs `ALLOWED_THEME_VARS`），持久化于 `ai-ppt.json.themeOverrides`；重新生成会覆盖 index.html，需重新应用。
+- 组件库：`POST /api/projects/:name/component` 把 slide HTML 插入倒数第二页；Web UI「组件」标签内置 8 种预制组件。
+- 新动画：`anim-zoom` / `anim-blur` / `anim-flip`，与 `anim-fade`/`anim-slide`/`anim-bounce` 同模式，均已加入 `prefers-reduced-motion` 兜底。
 
 ## 导出策略
 
