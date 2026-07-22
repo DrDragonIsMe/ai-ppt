@@ -2287,3 +2287,108 @@ body {
   outline-style: solid;
   background: rgba(13, 148, 136, 0.06);
 }
+
+/* ===== Marker pen ===== */
+.marker-toolbar {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+}
+
+.marker-toolbar .marker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: rgba(250, 250, 247, 0.85);
+  background: transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.marker-toolbar .marker-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.marker-toolbar .marker-btn.active {
+  background: var(--teal, #0D9488);
+  color: white;
+}
+
+.marker-toolbar .marker-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.marker-colors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.marker-color-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.marker-color-btn.active {
+  border-color: white;
+  transform: scale(1.15);
+}
+
+.marker-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 60;
+}
+
+html.marker-mode .marker-overlay {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+/* Fullscreen: hide help panel, slide sidebar, and prevent them from appearing */
+html:fullscreen .help,
+html:fullscreen .sidebar {
+  display: none !important;
+}
+
+html:fullscreen .marker-toolbar {
+  opacity: 0.85;
+}
+
+@media (max-width: 768px) {
+  .marker-toolbar {
+    bottom: 16px;
+    right: 16px;
+    padding: 6px 10px;
+    gap: 8px;
+  }
+  .marker-toolbar .marker-btn span {
+    display: none;
+  }
+}

@@ -12,6 +12,10 @@
     presenter: false,
     editMode: false,
     editOriginalHtml: '',
+    markerMode: false,
+    markerDrawing: false,
+    markerColor: '#EF4444',
+    markerStrokes: new Map(),
   };
 
   // Theme definitions
@@ -49,6 +53,10 @@
   let presenterTimer = null;
   let presenterStart = 0;
 
+  // Marker (laser pen / annotation) mode
+  let markerToolbarEl = null;
+  let markerCurrentPath = null;
+
   function init() {
     state.slides = Array.from(document.querySelectorAll('.slide'));
     if (state.slides.length === 0) return;
@@ -57,6 +65,7 @@
     buildSidebar();
     buildOverview();
     buildFullscreenBtn();
+    buildMarkerToolbar();
     initEditMode();
     updateSlide();
     bindEvents();
@@ -328,6 +337,160 @@
     document.body.appendChild(fullscreenBtn);
   }
 
+  // ===== Marker pen (per-slide annotations) =====
+
+  function buildMarkerToolbar() {
+    markerToolbarEl = document.createElement('div');
+    markerToolbarEl.className = 'marker-toolbar';
+    markerToolbarEl.innerHTML = `
+      <button class="marker-btn marker-toggle" type="button" title="标识笔 (M)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+        </svg>
+        <span>标识笔</span>
+      </button>
+      <div class="marker-colors">
+        <button class="marker-color-btn active" data-color="#EF4444" style="background: #EF4444;" title="红色"></button>
+        <button class="marker-color-btn" data-color="#2563EB" style="background: #2563EB;" title="蓝色"></button>
+        <button class="marker-color-btn" data-color="#22C55E" style="background: #22C55E;" title="绿色"></button>
+        <button class="marker-color-btn" data-color="#111827" style="background: #111827;" title="黑色"></button>
+      </div>
+      <button class="marker-btn marker-clear" type="button" title="清除本页标记">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"></path>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+        <span>清除</span>
+      </button>
+    `;
+
+    markerToolbarEl.querySelector('.marker-toggle').addEventListener('click', toggleMarkerMode);
+    markerToolbarEl.querySelector('.marker-clear').addEventListener('click', clearCurrentSlideMarkers);
+    markerToolbarEl.querySelectorAll('.marker-color-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setMarkerColor(btn.dataset.color));
+    });
+
+    document.body.appendChild(markerToolbarEl);
+    updateMarkerUI();
+  }
+
+  function toggleMarkerMode() {
+    state.markerMode = !state.markerMode;
+    document.documentElement.classList.toggle('marker-mode', state.markerMode);
+    updateMarkerUI();
+    showToast(state.markerMode ? '标识笔已开启，在本页圈点即可' : '标识笔已关闭');
+  }
+
+  function setMarkerColor(color) {
+    state.markerColor = color;
+    markerToolbarEl.querySelectorAll('.marker-color-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.color === color);
+    });
+  }
+
+  function updateMarkerUI() {
+    if (!markerToolbarEl) return;
+    markerToolbarEl.classList.toggle('active', state.markerMode);
+    const toggleBtn = markerToolbarEl.querySelector('.marker-toggle');
+    if (toggleBtn) {
+      toggleBtn.classList.toggle('active', state.markerMode);
+    }
+  }
+
+  function ensureMarkerOverlay(slide) {
+    let overlay = slide.querySelector(':scope > .marker-overlay');
+    if (!overlay) {
+      overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      overlay.classList.add('marker-overlay');
+      overlay.setAttribute('viewBox', '0 0 1280 800');
+      overlay.setAttribute('preserveAspectRatio', 'none');
+      slide.appendChild(overlay);
+
+      overlay.addEventListener('pointerdown', onMarkerPointerDown);
+      overlay.addEventListener('pointermove', onMarkerPointerMove);
+      overlay.addEventListener('pointerup', onMarkerPointerUp);
+      overlay.addEventListener('pointerleave', onMarkerPointerUp);
+    }
+    return overlay;
+  }
+
+  function getSlideMarkers() {
+    return state.markerStrokes.get(state.current) || [];
+  }
+
+  function setSlideMarkers(strokes) {
+    state.markerStrokes.set(state.current, strokes);
+  }
+
+  function onMarkerPointerDown(e) {
+    if (!state.markerMode) return;
+    const overlay = e.currentTarget;
+    const slide = overlay.closest('.slide');
+    if (!slide || !slide.classList.contains('active')) return;
+
+    e.preventDefault();
+    state.markerDrawing = true;
+    const pt = getSvgPoint(overlay, e);
+    markerCurrentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    markerCurrentPath.setAttribute('d', `M ${pt.x} ${pt.y}`);
+    markerCurrentPath.setAttribute('stroke', state.markerColor);
+    markerCurrentPath.setAttribute('stroke-width', '3');
+    markerCurrentPath.setAttribute('stroke-linecap', 'round');
+    markerCurrentPath.setAttribute('stroke-linejoin', 'round');
+    markerCurrentPath.setAttribute('fill', 'none');
+    overlay.appendChild(markerCurrentPath);
+  }
+
+  function onMarkerPointerMove(e) {
+    if (!state.markerDrawing || !markerCurrentPath) return;
+    const overlay = e.currentTarget;
+    const pt = getSvgPoint(overlay, e);
+    const d = markerCurrentPath.getAttribute('d');
+    markerCurrentPath.setAttribute('d', `${d} L ${pt.x} ${pt.y}`);
+  }
+
+  function onMarkerPointerUp() {
+    if (!state.markerDrawing || !markerCurrentPath) return;
+    state.markerDrawing = false;
+    const strokes = getSlideMarkers();
+    strokes.push(markerCurrentPath.getAttribute('d'));
+    setSlideMarkers(strokes);
+    markerCurrentPath = null;
+  }
+
+  function getSvgPoint(svg, e) {
+    const rect = svg.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 1280;
+    const y = ((e.clientY - rect.top) / rect.height) * 800;
+    return { x: x.toFixed(1), y: y.toFixed(1) };
+  }
+
+  function renderSlideMarkers(slideIndex) {
+    const slide = state.slides[slideIndex];
+    if (!slide) return;
+    const overlay = ensureMarkerOverlay(slide);
+    const strokes = state.markerStrokes.get(slideIndex) || [];
+    overlay.innerHTML = '';
+    strokes.forEach((d) => {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('stroke', state.markerColor);
+      path.setAttribute('stroke-width', '3');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      path.setAttribute('fill', 'none');
+      overlay.appendChild(path);
+    });
+  }
+
+  function clearCurrentSlideMarkers() {
+    const overlay = state.slides[state.current]?.querySelector(':scope > .marker-overlay');
+    if (overlay) overlay.innerHTML = '';
+    state.markerStrokes.delete(state.current);
+    showToast('已清除本页标记');
+  }
+
   function cycleTheme() {
     const currentIndex = themes.findIndex((t) => t.id === state.currentTheme);
     const nextIndex = (currentIndex + 1) % themes.length;
@@ -427,7 +590,9 @@
 
     if (e.key === 's') {
       e.preventDefault();
-      toggleSidebar();
+      if (!(document.fullscreenElement || document.webkitFullscreenElement)) {
+        toggleSidebar();
+      }
       return;
     }
 
@@ -437,9 +602,17 @@
       return;
     }
 
+    if (e.key === 'm' || e.key === 'M') {
+      e.preventDefault();
+      toggleMarkerMode();
+      return;
+    }
+
     if (e.key === '?') {
       e.preventDefault();
-      toggleHelp();
+      if (!(document.fullscreenElement || document.webkitFullscreenElement)) {
+        toggleHelp();
+      }
       return;
     }
 
@@ -457,7 +630,7 @@
     if (!isFullscreen) return;
 
     const target = e.target;
-    if (target.closest('a') || target.closest('button') || target.closest('.help') || target.closest('.theme-switcher') || target.closest('.fullscreen-btn')) return;
+    if (target.closest('a') || target.closest('button') || target.closest('.help') || target.closest('.theme-switcher') || target.closest('.fullscreen-btn') || target.closest('.marker-toolbar') || target.closest('.marker-overlay')) return;
 
     if (e.button === 0) {
       const x = e.clientX;
@@ -530,6 +703,7 @@
 
     updateOverviewActive();
     updateSidebarActive();
+    renderSlideMarkers(state.current);
     syncPresenter();
   }
 
@@ -874,7 +1048,12 @@ ${links}
     clearTimeout(fullscreenTimeout);
     document.documentElement.classList.remove('fs-ui-visible');
     if (isFullscreen) {
-      showToast('全屏模式：点击右侧翻下页，左侧翻上页，ESC 退出');
+      // Hide help panel and slide thumbnail sidebar completely in fullscreen.
+      state.help = false;
+      helpEl.classList.add('hidden');
+      if (sidebarEl) sidebarEl.classList.add('collapsed');
+      stage.classList.remove('sidebar-open');
+      showToast('全屏模式：点击右侧翻下页，左侧翻上页，M 标识笔，ESC 退出');
       if (fullscreenBtn) {
         fullscreenBtn.querySelector('span').textContent = '退出';
       }

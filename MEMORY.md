@@ -140,6 +140,11 @@ ai-ppt 是一个基于 HTML/CSS/JS 的轻量级幻灯片系统，面向 Claude C
 - **AI 约束**：`generate-deck.mjs` 与 `chat-modify.mjs` 读取 `cfg.userEdits`，在 prompt 中列出用户编辑过的每页标题与文本摘要，要求 LLM 在重新生成或修改时保留这些幻灯片的文字、观点和数据。CLI 驱动（`npm run generate`、`npm run chat-modify`）同样受此约束。
 - **键盘处理**：编辑模式下 `ai-ppt-base/js/ppt.js` 禁用放映导航快捷键，避免方向键等干扰文本编辑。
 
+## 放映页标识笔与全屏行为
+
+- **标识笔**：按 `M` 开启/关闭；开启后鼠标按住拖动可在当前 slide 的 SVG overlay 上圈点。标记保存在 `state.markerStrokes`（按 slide 索引存储），翻页时渲染当前页的标记，「清除」按钮只清除当前页。
+- **全屏隐藏 UI**：进入全屏后帮助面板（`#help`）与缩略图侧边栏（`.sidebar`）通过 CSS `display: none !important` 完全隐藏，且不再响应鼠标活动显示；快捷键 `?` 和 `s` 在全屏下被禁用。主题切换、HUD、全屏按钮仍保留鼠标活动显隐逻辑。
+
 ## 导出策略
 
 - **PDF**：服务端 `scripts/export-pdf.mjs` 使用 `puppeteer-core` 自动查找系统 Chrome，逐页截取最终状态后通过 `pdf-lib` 合并为 `projects/<name>/export/deck.pdf`；未找到 Chrome 时回退到浏览器打印（`window.print()` / `@media print`）。
