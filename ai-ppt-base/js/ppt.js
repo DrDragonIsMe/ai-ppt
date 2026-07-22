@@ -14,6 +14,7 @@
     editOriginalHtml: '',
     markerMode: false,
     markerDrawing: false,
+    markerTool: 'pen',
     markerColor: '#EF4444',
     markerStrokes: new Map(),
   };
@@ -338,37 +339,75 @@
   }
 
   // ===== Marker pen (per-slide annotations) =====
+  // Tools: pen (freehand), arrow, rect, circle, ellipse. Strokes are stored
+  // per slide index as SVG element strings and re-rendered on slide change.
+  // The floating toolbar is hidden by default; in marker mode it appears on
+  // mouse activity and auto-hides after ~2s of inactivity.
+
+  let markerUiTimeout = null;
+  let markerStartPoint = null;
 
   function buildMarkerToolbar() {
     markerToolbarEl = document.createElement('div');
     markerToolbarEl.className = 'marker-toolbar';
     markerToolbarEl.innerHTML = `
-      <button class="marker-btn marker-toggle" type="button" title="标识笔 (M)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-        </svg>
-        <span>标识笔</span>
-      </button>
+      <div class="marker-tools">
+        <button class="marker-tool-btn active" data-tool="pen" title="画笔 (1/P)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+          </svg>
+        </button>
+        <button class="marker-tool-btn" data-tool="arrow" title="箭头 (2/A)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="19" x2="19" y2="5"></line>
+            <polyline points="12 5 19 5 19 12"></polyline>
+          </svg>
+        </button>
+        <button class="marker-tool-btn" data-tool="rect" title="矩形 (3/R)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="6" width="16" height="12" rx="1"></rect>
+          </svg>
+        </button>
+        <button class="marker-tool-btn" data-tool="circle" title="圆形 (4/O)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="8"></circle>
+          </svg>
+        </button>
+        <button class="marker-tool-btn" data-tool="ellipse" title="椭圆 (5/E)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="12" rx="9" ry="6"></ellipse>
+          </svg>
+        </button>
+      </div>
       <div class="marker-colors">
         <button class="marker-color-btn active" data-color="#EF4444" style="background: #EF4444;" title="红色"></button>
         <button class="marker-color-btn" data-color="#2563EB" style="background: #2563EB;" title="蓝色"></button>
         <button class="marker-color-btn" data-color="#22C55E" style="background: #22C55E;" title="绿色"></button>
         <button class="marker-color-btn" data-color="#111827" style="background: #111827;" title="黑色"></button>
       </div>
-      <button class="marker-btn marker-clear" type="button" title="清除本页标记">
+      <button class="marker-btn marker-clear" type="button" title="清除本页标记 (C)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 6h18"></path>
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
           <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
         </svg>
-        <span>清除</span>
       </button>
+      <button class="marker-btn marker-exit" type="button" title="退出标识笔 (M / Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <div class="marker-hint">1画笔 2箭头 3矩形 4圆 5椭圆 · C清除 · M/Esc 退出</div>
     `;
 
-    markerToolbarEl.querySelector('.marker-toggle').addEventListener('click', toggleMarkerMode);
     markerToolbarEl.querySelector('.marker-clear').addEventListener('click', clearCurrentSlideMarkers);
+    markerToolbarEl.querySelector('.marker-exit').addEventListener('click', toggleMarkerMode);
     markerToolbarEl.querySelectorAll('.marker-color-btn').forEach((btn) => {
       btn.addEventListener('click', () => setMarkerColor(btn.dataset.color));
+    });
+    markerToolbarEl.querySelectorAll('.marker-tool-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setMarkerTool(btn.dataset.tool));
     });
 
     document.body.appendChild(markerToolbarEl);
@@ -378,8 +417,14 @@
   function toggleMarkerMode() {
     state.markerMode = !state.markerMode;
     document.documentElement.classList.toggle('marker-mode', state.markerMode);
+    clearTimeout(markerUiTimeout);
     updateMarkerUI();
-    showToast(state.markerMode ? '标识笔已开启，在本页圈点即可' : '标识笔已关闭');
+    if (state.markerMode) {
+      showMarkerUi();
+      showToast('标识笔已开启：1画笔 2箭头 3矩形 4圆 5椭圆，C 清除本页，M/Esc 退出');
+    } else {
+      showToast('标识笔已关闭');
+    }
   }
 
   function setMarkerColor(color) {
@@ -389,13 +434,30 @@
     });
   }
 
+  function setMarkerTool(tool) {
+    state.markerTool = tool;
+    markerToolbarEl.querySelectorAll('.marker-tool-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.tool === tool);
+    });
+    const names = { pen: '画笔', arrow: '箭头', rect: '矩形', circle: '圆形', ellipse: '椭圆' };
+    showToast(`已切换到「${names[tool] || tool}」`);
+    showMarkerUi();
+  }
+
   function updateMarkerUI() {
     if (!markerToolbarEl) return;
     markerToolbarEl.classList.toggle('active', state.markerMode);
-    const toggleBtn = markerToolbarEl.querySelector('.marker-toggle');
-    if (toggleBtn) {
-      toggleBtn.classList.toggle('active', state.markerMode);
-    }
+    markerToolbarEl.classList.remove('visible');
+    if (state.markerMode) showMarkerUi();
+  }
+
+  function showMarkerUi() {
+    if (!state.markerMode || !markerToolbarEl) return;
+    markerToolbarEl.classList.add('visible');
+    clearTimeout(markerUiTimeout);
+    markerUiTimeout = setTimeout(() => {
+      markerToolbarEl.classList.remove('visible');
+    }, 2000);
   }
 
   function ensureMarkerOverlay(slide) {
@@ -423,6 +485,46 @@
     state.markerStrokes.set(state.current, strokes);
   }
 
+  function shapeSvg(tool, start, end) {
+    const color = state.markerColor;
+    const attrs = `stroke="${color}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+    const x1 = parseFloat(start.x), y1 = parseFloat(start.y);
+    const x2 = parseFloat(end.x), y2 = parseFloat(end.y);
+
+    if (tool === 'arrow') {
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+      const headLen = 18;
+      const a1 = angle + Math.PI / 6;
+      const a2 = angle - Math.PI / 6;
+      const hx1 = x2 - headLen * Math.cos(a1);
+      const hy1 = y2 - headLen * Math.sin(a1);
+      const hx2 = x2 - headLen * Math.cos(a2);
+      const hy2 = y2 - headLen * Math.sin(a2);
+      return `<path d="M ${x1} ${y1} L ${x2} ${y2} M ${hx1.toFixed(1)} ${hy1.toFixed(1)} L ${x2} ${y2} L ${hx2.toFixed(1)} ${hy2.toFixed(1)}" ${attrs}/>`;
+    }
+    if (tool === 'rect') {
+      const x = Math.min(x1, x2), y = Math.min(y1, y2);
+      const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+      return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" ${attrs}/>`;
+    }
+    if (tool === 'circle') {
+      const r = Math.hypot(x2 - x1, y2 - y1);
+      return `<circle cx="${x1}" cy="${y1}" r="${r}" ${attrs}/>`;
+    }
+    if (tool === 'ellipse') {
+      const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+      const rx = Math.abs(x2 - x1) / 2 || 1, ry = Math.abs(y2 - y1) / 2 || 1;
+      return `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" ${attrs}/>`;
+    }
+    return '';
+  }
+
+  function svgFromString(str) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg">${str}</svg>`;
+    return tpl.content.firstChild.firstChild;
+  }
+
   function onMarkerPointerDown(e) {
     if (!state.markerMode) return;
     const overlay = e.currentTarget;
@@ -432,31 +534,50 @@
     e.preventDefault();
     state.markerDrawing = true;
     const pt = getSvgPoint(overlay, e);
-    markerCurrentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    markerCurrentPath.setAttribute('d', `M ${pt.x} ${pt.y}`);
-    markerCurrentPath.setAttribute('stroke', state.markerColor);
-    markerCurrentPath.setAttribute('stroke-width', '3');
-    markerCurrentPath.setAttribute('stroke-linecap', 'round');
-    markerCurrentPath.setAttribute('stroke-linejoin', 'round');
-    markerCurrentPath.setAttribute('fill', 'none');
-    overlay.appendChild(markerCurrentPath);
+    markerStartPoint = pt;
+
+    if (state.markerTool === 'pen') {
+      markerCurrentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      markerCurrentPath.setAttribute('d', `M ${pt.x} ${pt.y}`);
+      markerCurrentPath.setAttribute('stroke', state.markerColor);
+      markerCurrentPath.setAttribute('stroke-width', '3');
+      markerCurrentPath.setAttribute('stroke-linecap', 'round');
+      markerCurrentPath.setAttribute('stroke-linejoin', 'round');
+      markerCurrentPath.setAttribute('fill', 'none');
+      overlay.appendChild(markerCurrentPath);
+    } else {
+      markerCurrentPath = svgFromString(shapeSvg(state.markerTool, pt, pt));
+      if (markerCurrentPath) overlay.appendChild(markerCurrentPath);
+    }
   }
 
   function onMarkerPointerMove(e) {
+    showMarkerUi();
     if (!state.markerDrawing || !markerCurrentPath) return;
     const overlay = e.currentTarget;
     const pt = getSvgPoint(overlay, e);
-    const d = markerCurrentPath.getAttribute('d');
-    markerCurrentPath.setAttribute('d', `${d} L ${pt.x} ${pt.y}`);
+
+    if (state.markerTool === 'pen') {
+      const d = markerCurrentPath.getAttribute('d');
+      markerCurrentPath.setAttribute('d', `${d} L ${pt.x} ${pt.y}`);
+    } else {
+      const fresh = svgFromString(shapeSvg(state.markerTool, markerStartPoint, pt));
+      if (fresh && markerCurrentPath.parentNode === overlay) {
+        overlay.replaceChild(fresh, markerCurrentPath);
+        markerCurrentPath = fresh;
+      }
+    }
   }
 
   function onMarkerPointerUp() {
     if (!state.markerDrawing || !markerCurrentPath) return;
     state.markerDrawing = false;
+    // The temp element already holds the final shape; serialize it.
     const strokes = getSlideMarkers();
-    strokes.push(markerCurrentPath.getAttribute('d'));
+    strokes.push(markerCurrentPath.outerHTML);
     setSlideMarkers(strokes);
     markerCurrentPath = null;
+    markerStartPoint = null;
   }
 
   function getSvgPoint(svg, e) {
@@ -472,15 +593,9 @@
     const overlay = ensureMarkerOverlay(slide);
     const strokes = state.markerStrokes.get(slideIndex) || [];
     overlay.innerHTML = '';
-    strokes.forEach((d) => {
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', d);
-      path.setAttribute('stroke', state.markerColor);
-      path.setAttribute('stroke-width', '3');
-      path.setAttribute('stroke-linecap', 'round');
-      path.setAttribute('stroke-linejoin', 'round');
-      path.setAttribute('fill', 'none');
-      overlay.appendChild(path);
+    strokes.forEach((str) => {
+      const el = svgFromString(str);
+      if (el) overlay.appendChild(el);
     });
   }
 
@@ -489,6 +604,7 @@
     if (overlay) overlay.innerHTML = '';
     state.markerStrokes.delete(state.current);
     showToast('已清除本页标记');
+    showMarkerUi();
   }
 
   function cycleTheme() {
@@ -511,6 +627,10 @@
     document.addEventListener('mousemove', onFullscreenActivity);
     document.addEventListener('touchstart', onFullscreenActivity, { passive: true });
 
+    // Reveal the marker toolbar on any pointer activity while marker mode is on.
+    document.addEventListener('mousemove', () => { if (state.markerMode) showMarkerUi(); });
+    document.addEventListener('touchstart', () => { if (state.markerMode) showMarkerUi(); }, { passive: true });
+
     window.addEventListener('beforeunload', closePresenter);
   }
 
@@ -531,6 +651,51 @@
     if (state.overview || state.transitioning) return;
     if (state.editMode) return;
     if (e.target && (e.target.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))) return;
+
+    // Marker mode shortcuts take priority over navigation.
+    if (state.markerMode) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        toggleMarkerMode();
+        return;
+      }
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleMarkerMode();
+        return;
+      }
+      if (e.key === '1' || e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        setMarkerTool('pen');
+        return;
+      }
+      if (e.key === '2' || e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        setMarkerTool('arrow');
+        return;
+      }
+      if (e.key === '3' || e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        setMarkerTool('rect');
+        return;
+      }
+      if (e.key === '4' || e.key === 'o' || e.key === 'O') {
+        e.preventDefault();
+        setMarkerTool('circle');
+        return;
+      }
+      if (e.key === '5' || e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        setMarkerTool('ellipse');
+        return;
+      }
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        clearCurrentSlideMarkers();
+        return;
+      }
+      // In marker mode, still allow slide navigation with arrows.
+    }
 
     if (e.key === 'ArrowRight') {
       e.preventDefault();

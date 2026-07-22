@@ -2289,46 +2289,70 @@ body {
 }
 
 /* ===== Marker pen ===== */
+/* The toolbar is hidden by default; in marker mode it appears on pointer
+   activity (.visible) and auto-hides after ~2s. */
 .marker-toolbar {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 999;
-  display: flex;
+  display: none;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 12px;
-  background: rgba(15, 23, 42, 0.9);
+  background: rgba(15, 23, 42, 0.92);
   border-radius: 10px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
 }
 
-.marker-toolbar .marker-btn {
+.marker-toolbar.active {
+  display: flex;
+}
+
+.marker-toolbar.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.marker-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.marker-tool-btn,
+.marker-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
   border: none;
   border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
   color: rgba(250, 250, 247, 0.85);
   background: transparent;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.marker-toolbar .marker-btn:hover {
+.marker-tool-btn:hover,
+.marker-btn:hover {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.marker-toolbar .marker-btn.active {
+.marker-tool-btn.active {
   background: var(--teal, #0D9488);
   color: white;
 }
 
-.marker-toolbar .marker-btn svg {
+.marker-tool-btn svg,
+.marker-btn svg {
   width: 16px;
   height: 16px;
 }
@@ -2337,14 +2361,14 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 6px;
+  padding: 0 8px;
   border-left: 1px solid rgba(255, 255, 255, 0.2);
   border-right: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .marker-color-btn {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;
@@ -2354,6 +2378,14 @@ body {
 .marker-color-btn.active {
   border-color: white;
   transform: scale(1.15);
+}
+
+.marker-hint {
+  font-size: 11px;
+  color: rgba(250, 250, 247, 0.55);
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  white-space: nowrap;
 }
 
 .marker-overlay {
@@ -2377,18 +2409,13 @@ html:fullscreen .sidebar {
   display: none !important;
 }
 
-html:fullscreen .marker-toolbar {
-  opacity: 0.85;
-}
-
 @media (max-width: 768px) {
   .marker-toolbar {
     bottom: 16px;
-    right: 16px;
     padding: 6px 10px;
-    gap: 8px;
+    gap: 6px;
   }
-  .marker-toolbar .marker-btn span {
+  .marker-hint {
     display: none;
   }
 }

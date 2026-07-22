@@ -264,6 +264,12 @@ ${slidesHtml}    </main>
           <div class="help-row"><kbd>↓</kbd><span>导出 PDF</span></div>
           <div class="help-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>打印/导出面板</span></div>
         </div>
+        <div class="help-group">
+          <div class="help-group-title">标识笔</div>
+          <div class="help-row"><kbd>M</kbd><span>开启/退出标识笔</span></div>
+          <div class="help-row"><kbd>1</kbd>-<kbd>5</kbd><span>画笔/箭头/矩形/圆/椭圆</span></div>
+          <div class="help-row"><kbd>C</kbd><span>清除本页标记</span></div>
+        </div>
       </div>
       <div class="help-footer">
         <span>全屏时：点击左侧/右侧翻页</span>
