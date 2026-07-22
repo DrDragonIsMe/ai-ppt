@@ -52,16 +52,48 @@
     </header>
 
     <div class="layout">
-      <aside id="project-sidebar" class="sidebar">
-        <div class="sidebar-header">
-          <div class="sidebar-title">项目列表</div>
-          <button id="btn-collapse-sidebar" class="btn-icon sidebar-collapse" title="折叠/展开">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M15 18l-6-6 6-6"></path>
-            </svg>
-          </button>
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-tabs">
+          <button class="sidebar-tab active" data-tab="projects">项目列表</button>
+          <button class="sidebar-tab" data-tab="vault">知识库</button>
         </div>
-        <div id="project-list" class="project-list"></div>
+        
+        <div id="project-sidebar-content" class="sidebar-content">
+          <div class="sidebar-header">
+            <div class="sidebar-title">项目列表</div>
+            <button id="btn-collapse-sidebar" class="btn-icon sidebar-collapse" title="折叠/展开">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18l-6-6 6-6"></path>
+              </svg>
+            </button>
+          </div>
+          <div id="project-list" class="project-list"></div>
+        </div>
+        
+        <div id="vault-sidebar-content" class="sidebar-content hidden">
+          <div class="sidebar-header">
+            <div class="sidebar-title">知识库笔记</div>
+            <div style="display:flex;gap:6px;">
+              <button id="btn-vault-refresh" class="btn-icon" title="刷新列表">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21.5 2v6h-6"></path>
+                  <path d="M2.5 22v-6h6"></path>
+                  <path d="M22 12a10 10 0 0 0-20 0"></path>
+                </svg>
+              </button>
+              <button id="btn-vault-new" class="btn-icon" title="新建笔记">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="vault-search">
+            <input type="search" id="vault-search-input" placeholder="搜索笔记…">
+          </div>
+          <div id="vault-note-list" class="vault-note-list"></div>
+        </div>
       </aside>
 
       <main class="workspace">
@@ -97,6 +129,7 @@
             <div class="workspace-config-scroll">
               <div class="config-tabs">
                 <button class="config-tab active" data-tab="content">内容</button>
+                <button class="config-tab" data-tab="vault">知识库</button>
                 <button class="config-tab" data-tab="style">主题</button>
                 <button class="config-tab" data-tab="animation">动画</button>
                 <button class="config-tab" data-tab="publish">发布</button>
@@ -211,6 +244,47 @@
                   <div id="progress-steps" class="progress-steps"></div>
                   <div id="progress-log" class="progress-log"></div>
                 </section>
+              </div>
+
+              <div class="config-panel" data-panel="vault">
+                <div id="vault-no-note-selected" class="empty-state" style="padding:40px 20px;">
+                  <h3 style="font-size:16px;">选择一篇笔记</h3>
+                  <p style="opacity:0.65;">从左侧知识库列表选择一篇笔记，或点击「新建笔记」创建</p>
+                </div>
+
+                <div id="vault-note-panel" class="hidden">
+                  <section class="card">
+                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                      <span id="vault-note-title">笔记标题</span>
+                      <div style="display:flex;gap:8px;">
+                        <button id="btn-vault-note-save" class="btn-secondary" style="padding:6px 12px;font-size:12px;">保存</button>
+                        <button id="btn-vault-note-generate" class="btn-primary" style="padding:6px 12px;font-size:12px;">生成 PPT</button>
+                      </div>
+                    </div>
+                    <div class="field" style="margin-bottom:8px;">
+                      <label>Front Matter (可选)</label>
+                      <textarea id="vault-note-frontmatter" rows="6" style="font-family:var(--font-mono);font-size:12px;"></textarea>
+                    </div>
+                    <div class="field">
+                      <label>笔记内容 (支持 Markdown 与 [[Wiki链接]])</label>
+                      <textarea id="vault-note-content" rows="16" placeholder="在此编写笔记内容..."></textarea>
+                    </div>
+                  </section>
+
+                  <section class="card" id="vault-links-card" style="margin-top:12px;">
+                    <div class="card-title">链接信息</div>
+                    <div class="vault-links">
+                      <div>
+                        <div class="vault-links-title">出链 (该笔记链接到)</div>
+                        <div id="vault-outlinks" class="vault-links-list">暂无</div>
+                      </div>
+                      <div>
+                        <div class="vault-links-title">入链 (链接到该笔记)</div>
+                        <div id="vault-backlinks" class="vault-links-list">暂无</div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
               </div>
 
               <div class="config-panel" data-panel="style">

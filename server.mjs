@@ -217,7 +217,175 @@ function isWithinRoot(rootPath, relPath) {
 
 const PROJECT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
+// Vault helpers (dynamic import to keep server.mjs light)
+let vaultApi = null;
+async function ensureVaultApi() {
+  if (vaultApi) return vaultApi;
+  const vaultMod = await import(path.join(ROOT, 'scripts', 'vault.mjs'));
+  const linkResolverMod = await import(path.join(ROOT, 'scripts', 'link-resolver.mjs'));
+  const generateFromNoteMod = await import(path.join(ROOT, 'scripts', 'generate-from-note.mjs'));
+  vaultApi = {
+    listNotes: vaultMod.listNotes,
+    readNote: vaultMod.readNote,
+    writeNote: vaultMod.writeNote,
+    createNote: vaultMod.createNote,
+    deleteNote: vaultMod.deleteNote,
+    parseFrontMatter: vaultMod.parseFrontMatter,
+    stringifyFrontMatter: vaultMod.stringifyFrontMatter,
+    normalizeNoteName: vaultMod.normalizeNoteName,
+    getNotePath: vaultMod.getNotePath,
+    ensureVaultDirs: vaultMod.ensureVaultDirs,
+    rebuildIndex: linkResolverMod.rebuildIndex,
+    getNoteInfo: linkResolverMod.getNoteInfo,
+    searchNotes: linkResolverMod.searchNotes,
+    generateFromNote: generateFromNoteMod.generateFromNote,
+  };
+  return vaultApi;
+}
+
 const routes = [
+  // Vault endpoints
+  { method: 'GET', pattern: /^\/api\/vault\/notes$/, handler: async (_req, res) => {
+    const api = await ensureVaultApi();
+    api.ensureVaultDirs();
+    send(res, 200, api.listNotes());
+  }},
+  { method: 'GET', pattern: /^\/api\/vault\/notes\/([^/]+)$/, handler: async (req, res, matches) => {
+    const api = await ensureVaultApi();
+    const name = decodeURIComponent(matches[1]);
+    const content = api.readNote(name);
+    if (content === null) return send(res, 404, { error: '笔记不存在' });
+    const { frontMatter } = api.parseFrontMatter(content);
+    send(res, 200, { name, content, frontMatter });
+  }},
+  { method: 'GET', pattern: /^\/api\/vault\/notes\/([^/]+)\/info$/, handler: async (req, res, matches) => {
+    const api = await ensureVaultApi();
+    const name = decodeURIComponent(matches[1]);
+    try {
+      // Rebuild index to get fresh backlinks
+      api.rebuildIndex();
+      const info = api.getNoteInfo(name);
+      send(res, 200, info);
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
+  { method: 'POST', pattern: /^\/api\/vault\/notes$/, handler: async (req, res) => {
+    const api = await ensureVaultApi();
+    const body = await readBody(req);
+    try {
+      const notePath = api.createNote(body.name, body.content || '');
+      // Rebuild index after creating
+      api.rebuildIndex();
+      send(res, 201, { name: body.name, path: notePath });
+    } catch (err) {
+      send(res, 400, { error: err.message });
+    }
+  }},
+  { method: 'PUT', pattern: /^\/api\/vault\/notes\/([^/]+)$/, handler: async (req, res, matches) => {
+    const api = await ensureVaultApi();
+    const name = decodeURIComponent(matches[1]);
+    const body = await readBody(req);
+    try {
+      const notePath = api.writeNote(name, body.content);
+      // Rebuild index after modifying
+      api.rebuildIndex();
+      send(res, 200, { name, path: notePath });
+    } catch (err) {
+      send(res, 400, { error: err.message });
+    }
+  }},
+  { method: 'DELETE', pattern: /^\/api\/vault\/notes\/([^/]+)$/, handler: async (req, res, matches) => {
+    const api = await ensureVaultApi();
+    const name = decodeURIComponent(matches[1]);
+    try {
+      api.deleteNote(name);
+      api.rebuildIndex();
+      send(res, 204, {});
+    } catch (err) {
+      send(res, 400, { error: err.message });
+    }
+  }},
+  { method: 'POST', pattern: /^\/api\/vault\/notes\/([^/]+)\/generate-ppt$/, handler: async (req, res, matches) => {
+    const api = await ensureVaultApi();
+    const name = decodeURIComponent(matches[1]);
+    const body = await readBody(req);
+    const projectName = body.projectName || name.replace(/[^\w\u4e00-\u9fa5-]/g, '-');
+    const includeLinked = body.includeLinked || false;
+    
+    // Spawn generator in background, similar to existing spawnGenerator
+    const env = { ...process.env };
+    if (body.apiKey) env.AI_PPT_API_KEY = body.apiKey;
+    
+    const child = spawn(process.execPath, [
+      path.join(ROOT, 'scripts', 'generate-from-note.mjs'),
+      name,
+      projectName,
+      ...(includeLinked ? ['--include-linked'] : []),
+    ], { cwd: ROOT, env });
+    
+    const state = {
+      name: projectName,
+      process: child,
+      buffer: [],
+      listeners: new Set(),
+      done: false,
+      error: null,
+    };
+    
+    const rl = createInterface({ input: child.stdout });
+    rl.on('line', (line) => {
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        event = { type: 'log', message: line };
+      }
+      state.buffer.push(event);
+      state.listeners.forEach((fn) => fn(event));
+    });
+    child.stderr.on('data', (d) => {
+      const event = { type: 'stderr', message: d.toString() };
+      state.buffer.push(event);
+      state.listeners.forEach((fn) => fn(event));
+    });
+    child.on('error', (err) => {
+      state.error = err.message;
+      const event = { type: 'error', message: err.message };
+      state.buffer.push(event);
+      state.listeners.forEach((fn) => fn(event));
+      state.done = true;
+    });
+    child.on('close', (code) => {
+      const event = code === 0
+        ? { type: 'done', projectName }
+        : { type: 'error', message: `生成进程退出码 ${code}` };
+      state.buffer.push(event);
+      state.listeners.forEach((fn) => fn(event));
+      state.done = true;
+      setTimeout(() => generators.delete(projectName), 60000);
+    });
+    
+    generators.set(projectName, state);
+    send(res, 202, { message: '生成已启动', name: projectName });
+  }},
+  { method: 'GET', pattern: /^\/api\/vault\/search$/, handler: async (req, res) => {
+    const api = await ensureVaultApi();
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const query = url.searchParams.get('q') || '';
+    try {
+      const results = api.searchNotes(query);
+      send(res, 200, results);
+    } catch (err) {
+      send(res, 500, { error: err.message });
+    }
+  }},
+  { method: 'POST', pattern: /^\/api\/vault\/index$/, handler: async (_req, res) => {
+    const api = await ensureVaultApi();
+    const index = api.rebuildIndex();
+    send(res, 200, { notesCount: Object.keys(index.notes).length });
+  }},
+  
   { method: 'GET', pattern: /^\/api\/config$/, handler: async (_req, res) => {
     send(res, 200, readGlobalConfig());
   }},

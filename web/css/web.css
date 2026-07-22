@@ -1477,3 +1477,147 @@ html, body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== Sidebar tabs ===== */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--tile-strong);
+  background: var(--cream);
+  flex-shrink: 0;
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.15s ease-out, background 0.15s ease-out;
+}
+
+.sidebar-tab:hover {
+  opacity: 0.8;
+  background: var(--tile);
+}
+
+.sidebar-tab.active {
+  opacity: 1;
+  background: white;
+  border-bottom: 2px solid var(--teal);
+  margin-bottom: -1px;
+}
+
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar-content.hidden {
+  display: none;
+}
+
+/* ===== Vault ===== */
+.vault-search {
+  padding: 8px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--tile-strong);
+}
+
+.vault-search input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--tile-strong);
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  background: white;
+  transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+
+.vault-search input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+}
+
+.vault-note-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.vault-note-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.1s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vault-note-item:hover {
+  background: var(--tile);
+}
+
+.vault-note-item.active {
+  background: rgba(13, 148, 136, 0.06);
+  border-left-color: var(--teal);
+}
+
+.vault-note-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vault-note-item-meta {
+  font-size: 11px;
+  color: var(--ink);
+  opacity: 0.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vault-links {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.vault-links-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.vault-links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vault-link-item {
+  font-size: 13px;
+  padding: 6px 10px;
+  background: var(--tile);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s ease-out;
+}
+
+.vault-link-item:hover {
+  background: var(--tile-strong);
+}
+

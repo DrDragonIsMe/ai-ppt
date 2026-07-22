@@ -5,6 +5,11 @@
   let projects = [];
   let currentConfig = null;
 
+  // 知识库相关变量
+  let currentNote = null;
+  let notes = [];
+  let currentSidebarTab = 'projects';
+
   const themes = [
     { id: 'web-ui', name: 'Web UI', desc: '专业克制的默认主题', color: '#0D9488' },
     { id: 'business-blue', name: '商务蓝', desc: '稳重专业的商务风', color: '#2563EB' },
@@ -1594,6 +1599,281 @@
     });
   }
 
-  loadModels().then(loadGlobalConfig).then(loadProjects);
+  // =============================================
+  // 知识库相关函数
+  // =============================================
+  function getVaultEls() {
+    return {
+      sidebarTabs: document.querySelectorAll('.sidebar-tab'),
+      projectSidebar: document.getElementById('project-sidebar-content'),
+      vaultSidebar: document.getElementById('vault-sidebar-content'),
+      vaultNoteList: document.getElementById('vault-note-list'),
+      vaultSearchInput: document.getElementById('vault-search-input'),
+      btnVaultRefresh: document.getElementById('btn-vault-refresh'),
+      btnVaultNew: document.getElementById('btn-vault-new'),
+      vaultEmptyState: document.getElementById('vault-no-note-selected'),
+      vaultNotePanel: document.getElementById('vault-note-panel'),
+      vaultNoteTitle: document.getElementById('vault-note-title'),
+      vaultNoteFrontmatter: document.getElementById('vault-note-frontmatter'),
+      vaultNoteContent: document.getElementById('vault-note-content'),
+      btnVaultNoteSave: document.getElementById('btn-vault-note-save'),
+      btnVaultNoteGenerate: document.getElementById('btn-vault-note-generate'),
+      vaultOutlinks: document.getElementById('vault-outlinks'),
+      vaultBacklinks: document.getElementById('vault-backlinks'),
+      configTabs: document.querySelectorAll('.config-tab'),
+      configPanels: document.querySelectorAll('.config-panel')
+    };
+  }
+
+  async function loadNotes() {
+    try {
+      const res = await fetch('/api/vault/notes');
+      notes = await res.json();
+      renderNoteList();
+    } catch (e) {
+      console.error('Failed to load notes:', e);
+    }
+  }
+
+  function renderNoteList(filter = '') {
+    const els = getVaultEls();
+    let html = '';
+    const filteredNotes = filter
+      ? notes.filter(n => n.name && n.name.toLowerCase().includes(filter.toLowerCase()))
+      : notes;
+    
+    if (filteredNotes.length === 0) {
+      html = '<div class="vault-empty" style="padding:20px;text-align:center;opacity:0.6;font-size:13px;">暂无笔记</div>';
+    } else {
+      for (const note of filteredNotes) {
+        html += `<div class="vault-note-item ${currentNote === note.name ? 'active' : ''}" data-name="${escapeHtmlAttr(note.name)}">
+          <div class="vault-note-item-title">${escapeHtml(note.name)}</div>
+          <div class="vault-note-item-meta">${note.mtime ? new Date(note.mtime).toLocaleDateString() : ''}</div>
+        </div>`;
+      }
+    }
+    els.vaultNoteList.innerHTML = html;
+  }
+
+  async function selectNote(name) {
+    currentNote = name;
+    const els = getVaultEls();
+    
+    try {
+      const res = await fetch(`/api/vault/notes/${encodeURIComponent(name)}`);
+      const data = await res.json();
+      
+      els.vaultEmptyState.classList.add('hidden');
+      els.vaultNotePanel.classList.remove('hidden');
+      
+      els.vaultNoteTitle.textContent = data.frontmatter?.title || name;
+      
+      let frontmatterText = '';
+      if (data.frontmatter && Object.keys(data.frontmatter).length > 0) {
+        frontmatterText = '---\n';
+        for (const [key, val] of Object.entries(data.frontmatter)) {
+          if (Array.isArray(val)) {
+            frontmatterText += `${key}: [${val.join(', ')}]\n`;
+          } else {
+            frontmatterText += `${key}: ${val}\n`;
+          }
+        }
+        frontmatterText += '---\n\n';
+      }
+      els.vaultNoteFrontmatter.value = frontmatterText;
+      
+      const contentWithoutFrontmatter = data.content.replace(/^---[\s\S]*?---\n*/, '');
+      els.vaultNoteContent.value = contentWithoutFrontmatter;
+      
+      await loadNoteLinks(name);
+      renderNoteList();
+    } catch (e) {
+      console.error('Failed to load note:', e);
+    }
+  }
+
+  async function loadNoteLinks(name) {
+    const els = getVaultEls();
+    try {
+      const res = await fetch(`/api/vault/notes/${encodeURIComponent(name)}/info`);
+      const info = await res.json();
+      
+      renderLinksList(els.vaultOutlinks, info.outlinks);
+      renderLinksList(els.vaultBacklinks, info.backlinks);
+    } catch (e) {
+      console.error('Failed to load note links:', e);
+    }
+  }
+
+  function renderLinksList(el, links) {
+    if (!links || links.length === 0) {
+      el.innerHTML = '<div style="opacity:0.5;font-size:13px;">暂无</div>';
+      return;
+    }
+    
+    let html = '';
+    for (const link of links) {
+      const name = link.name || link;
+      html += `<div class="vault-link-item" data-name="${escapeHtmlAttr(name)}">${escapeHtml(name)}</div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  async function saveNote() {
+    if (!currentNote) return;
+    const els = getVaultEls();
+    
+    const content = els.vaultNoteFrontmatter.value + els.vaultNoteContent.value;
+    
+    try {
+      const res = await fetch(`/api/vault/notes/${encodeURIComponent(currentNote)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      });
+      
+      if (res.ok) {
+        toast('保存成功');
+        await loadNotes();
+        await loadNoteLinks(currentNote);
+      }
+    } catch (e) {
+      console.error('Failed to save note:', e);
+      toast('保存失败');
+    }
+  }
+
+  async function createNewNote() {
+    const name = prompt('请输入笔记名称');
+    if (!name) return;
+    
+    try {
+      const res = await fetch('/api/vault/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      
+      if (res.ok) {
+        toast('创建成功');
+        await loadNotes();
+        selectNote(name);
+      }
+    } catch (e) {
+      console.error('Failed to create note:', e);
+      toast('创建失败');
+    }
+  }
+
+  async function generateFromNote() {
+    if (!currentNote) return;
+    
+    try {
+      const res = await fetch(`/api/vault/notes/${encodeURIComponent(currentNote)}/generate-ppt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ includeLinked: false })
+      });
+      
+      if (!res.ok) {
+        const err = await res.json();
+        toast(err.error || '生成失败');
+        return;
+      }
+      
+      const data = await res.json();
+      const projectName = data.name || currentNote.replace(/[^\w\u4e00-\u9fa5-]/g, '-');
+      
+      toast('生成中...');
+      
+      setTimeout(async () => {
+        await loadProjects();
+        selectProject(projectName);
+      }, 2000);
+    } catch (e) {
+      console.error('Failed to generate:', e);
+      toast('生成失败');
+    }
+  }
+
+  function switchSidebarTab(tab) {
+    currentSidebarTab = tab;
+    const els = getVaultEls();
+    
+    for (const tabEl of els.sidebarTabs) {
+      if (tabEl.dataset.tab === tab) {
+        tabEl.classList.add('active');
+      } else {
+        tabEl.classList.remove('active');
+      }
+    }
+    
+    if (tab === 'projects') {
+      els.projectSidebar.classList.remove('hidden');
+      els.vaultSidebar.classList.add('hidden');
+    } else {
+      els.projectSidebar.classList.add('hidden');
+      els.vaultSidebar.classList.remove('hidden');
+      loadNotes();
+    }
+  }
+
+  function bindVaultEvents() {
+    const els = getVaultEls();
+    
+    // 侧边栏标签切换
+    for (const tab of els.sidebarTabs) {
+      tab.addEventListener('click', () => switchSidebarTab(tab.dataset.tab));
+    }
+    
+    // 笔记列表点击
+    els.vaultNoteList.addEventListener('click', (e) => {
+      const item = e.target.closest('.vault-note-item');
+      const linkItem = e.target.closest('.vault-link-item');
+      if (linkItem) {
+        const name = linkItem.dataset.name;
+        if (name) selectNote(name);
+        return;
+      }
+      if (item) {
+        selectNote(item.dataset.name);
+      }
+    });
+    
+    // 搜索
+    els.vaultSearchInput.addEventListener('input', e => renderNoteList(e.target.value));
+    
+    // 刷新按钮
+    els.btnVaultRefresh.addEventListener('click', loadNotes);
+    
+    // 新建笔记
+    els.btnVaultNew.addEventListener('click', createNewNote);
+    
+    // 保存笔记
+    els.btnVaultNoteSave.addEventListener('click', saveNote);
+    
+    // 生成 PPT
+    els.btnVaultNoteGenerate.addEventListener('click', generateFromNote);
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function escapeHtmlAttr(str) {
+    return escapeHtml(str).replace(/'/g, '&#39;');
+  }
+
+  // =============================================
+  // 原有的初始化
+  loadModels().then(loadGlobalConfig).then(loadProjects).then(() => {
+    // 绑定知识库事件
+    bindVaultEvents();
+  });
   bindEvents();
 })();

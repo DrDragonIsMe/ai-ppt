@@ -8,3 +8,4 @@ projects/*
 !projects/.gitkeep
 .env*
 .ai-ppt-config.json
+.vault-index.json
