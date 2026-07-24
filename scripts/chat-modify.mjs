@@ -1,34 +1,28 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import { readConfig, writeConfig, getProjectDir } from './config.mjs';
-import { readGlobalConfig } from './global-config.mjs';
 import { generateSlides } from './llm-adapter.mjs';
 import { createSnapshot } from './snapshot.mjs';
 import { injectThemeOverrides } from './theme-overrides.mjs';
+import { writeFileAtomic } from './fs-utils.mjs';
+import {
+  emit,
+  emitError,
+  emitDone,
+  ensureSingleActive,
+  formatUserEdits,
+  buildModelOptions,
+  buildBodyClass,
+  wrapSlides,
+  splitChangeDetails,
+  buildLineDiff,
+} from './generation-common.mjs';
 
-function emit(step, message, detail = null) {
-  const event = { type: 'progress', step, message, detail, time: new Date().toISOString() };
-  process.stdout.write(JSON.stringify(event) + '\n');
-}
-
-function emitError(message) {
-  process.stdout.write(JSON.stringify({ type: 'error', message, time: new Date().toISOString() }) + '\n');
-}
-
-function emitDone() {
-  process.stdout.write(JSON.stringify({ type: 'done', time: new Date().toISOString() }) + '\n');
-}
-
-function escapeHtml(text) {
-  if (text == null) return '';
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+// 超过该页数时 prompt 只放与指令相关的页（+ 前后各 1 页上下文）
+export const PARTIAL_THRESHOLD = 15;
 
 function extractSlidesHtml(html) {
   const $ = load(html);
@@ -37,111 +31,126 @@ function extractSlidesHtml(html) {
   return sections.map((_, el) => $.html(el)).get().join('\n');
 }
 
-function wrapSlides(slidesHtml, title, cfg) {
-  const theme = cfg.theme || 'web-ui';
-  const animation = cfg.animation || 'slide';
-  const themeClass = theme !== 'web-ui' ? ` theme-${theme}` : '';
-  const animClass = animation !== 'none' ? ` anim-${animation}` : '';
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)}</title>
-  <link rel="stylesheet" href="css/ppt.css">
-  <link rel="stylesheet" href="css/themes/theme-switcher.css">
-  <link rel="stylesheet" href="css/themes/web-ui.css">
-  <link rel="stylesheet" href="css/themes/business-blue.css">
-  <link rel="stylesheet" href="css/themes/elegant-purple.css">
-  <link rel="stylesheet" href="css/themes/warm-orange.css">
-  <link rel="stylesheet" href="css/themes/sunset-red.css">
-  <link rel="stylesheet" href="css/themes/tech-green.css">
-  <link rel="stylesheet" href="css/themes/minimal-gray.css">
-  <link rel="stylesheet" href="css/themes/dark-mode.css">
-</head>
-<body class="${themeClass}${animClass}">
-  <div id="app">
-    <main id="stage" class="stage">
-${slidesHtml}    </main>
-
-    <div id="overview" class="overview hidden">
-      <div class="overview-title">幻灯片预览 · 点击跳转</div>
-      <div class="overview-grid"></div>
-    </div>
-
-    <div id="help" class="help">
-      <div class="help-header">
-        <div class="help-title">快捷键</div>
-        <div class="help-hint">按 <kbd>?</kbd> 隐藏/显示</div>
-      </div>
-      <div class="help-content">
-        <div class="help-group">
-          <div class="help-group-title">导航</div>
-          <div class="help-row"><kbd>←</kbd><span>上一页</span></div>
-          <div class="help-row"><kbd>→</kbd><span>下一页</span></div>
-          <div class="help-row"><kbd>Cmd</kbd>+<kbd>←</kbd><span>首页</span></div>
-          <div class="help-row"><kbd>Cmd</kbd>+<kbd>→</kbd><span>尾页</span></div>
-        </div>
-        <div class="help-group">
-          <div class="help-group-title">视图</div>
-          <div class="help-row"><kbd>↑</kbd><span>幻灯片预览</span></div>
-          <div class="help-row"><kbd>F</kbd><span>全屏模式</span></div>
-          <div class="help-row"><kbd>T</kbd><span>切换主题</span></div>
-        </div>
-        <div class="help-group">
-          <div class="help-group-title">导出</div>
-          <div class="help-row"><kbd>↓</kbd><span>导出 PDF</span></div>
-          <div class="help-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>打印/导出面板</span></div>
-        </div>
-        <div class="help-group">
-          <div class="help-group-title">标识笔</div>
-          <div class="help-row"><kbd>M</kbd><span>开启/退出标识笔</span></div>
-          <div class="help-row"><kbd>1</kbd>-<kbd>5</kbd><span>画笔/箭头/矩形/圆/椭圆</span></div>
-          <div class="help-row"><kbd>C</kbd><span>清除本页标记</span></div>
-        </div>
-      </div>
-      <div class="help-footer">
-        <span>全屏时：点击左侧/右侧翻页</span>
-      </div>
-    </div>
-
-    <div id="toast" class="toast"></div>
-    <div id="progress" class="progress"></div>
-    <div id="hud" class="hud"></div>
-  </div>
-  <script src="js/ppt.js"></script>
-</body>
-</html>`;
+// 文档内幻灯片定位：优先 main.stage 内的 section.slide，逐级放宽
+function selectSlides($) {
+  let slides = $('main.stage > section.slide');
+  if (!slides.length) slides = $('main.stage section.slide');
+  if (!slides.length) slides = $('section.slide');
+  if (!slides.length) slides = $('.slide');
+  return slides;
 }
 
-function formatUserEdits(cfg) {
-  const edits = cfg.userEdits;
-  if (!edits || !edits.htmlSnapshot || edits.htmlSnapshot.length === 0) return '';
-  const lines = edits.htmlSnapshot.map((s) => {
-    const heading = s.heading ? `标题：${s.heading}` : '';
-    const text = s.text ? `内容：${s.text}` : '';
-    return `第 ${s.index + 1} 页\n${heading}\n${text}`;
-  });
-  return `\n【用户手动编辑过的幻灯片（必须保留）】\n以下幻灯片是用户曾在可视化编辑器中手动编辑并保存的。除非用户指令明确要求修改这些页面，否则必须原样保留其文字、观点和数据，禁止重写、删除或替换。\n\n${lines.join('\n\n')}\n`;
+// ---- 局部编辑协议：解析 / 合并 ----
+// LLM 只返回需要修改的页，每页前单独一行标记：
+//   === slide N ===（N 为 1-based 页序）或 === slide new ===（末尾新增）
+// 兼容 <!-- slide:N --> 注释写法。未提及的页不返回、保持原样。
+
+export function parsePartialSlides(text) {
+  if (!text) return null;
+  const markerRe = /(?:={2,}\s*slide\s+(\d+|new)\s*={2,}|<!--\s*slide\s*:?\s*(\d+|new)\s*-->)/gi;
+  const matches = [...String(text).matchAll(markerRe)];
+  if (matches.length === 0) return null;
+  const blocks = [];
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index + matches[i][0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const body = text.slice(start, end).trim();
+    const raw = (matches[i][1] || matches[i][2]).toLowerCase();
+    const index = raw === 'new' ? 'new' : Number(raw);
+    const $ = load(body);
+    const section = $('section.slide').first();
+    if (section.length === 0) continue; // 无有效 section 的块跳过
+    blocks.push({ index, html: $.html(section) });
+  }
+  return blocks.length ? blocks : null;
 }
 
-function buildModifyPrompt(cfg, slidesHtml, instruction) {
+// DOM 级合并：替换第 N 页 section（1-based）、new 追加到末尾；
+// head / 主题 link / script / 用户模板外定制 / 未修改页全部原样保留。
+// 返回 { html, applied, slideCount }；无可应用区块或文档内无幻灯片时返回 null。
+export function mergePartialSlides(html, blocks) {
+  const $ = load(html);
+  const slides = selectSlides($);
+  if (!slides.length) return null;
+  const container = slides.first().parent();
+  const applied = [];
+  for (const block of blocks) {
+    if (block.index === 'new') {
+      container.append('\n' + block.html);
+      applied.push('new');
+    } else {
+      const target = selectSlides($).eq(block.index - 1);
+      if (!target.length) continue;
+      target.replaceWith(block.html);
+      applied.push(block.index);
+    }
+  }
+  if (!applied.length) return null;
+  // active 归一：保留原文档的 active 页（替换/新增的 section 不继承 active），全无时补第一页
+  const all = selectSlides($);
+  let activeIdx = -1;
+  all.each((i, el) => { if ($(el).hasClass('active')) activeIdx = i; });
+  all.removeClass('active');
+  selectSlides($).eq(activeIdx === -1 ? 0 : activeIdx).addClass('active');
+  return { html: $.html(), applied, slideCount: selectSlides($).length };
+}
+
+// ---- 大 deck 分页：与指令相关的页 + 前后各 1 页上下文 ----
+
+function extractKeywords(text) {
+  const tokens = new Set();
+  for (const m of String(text).matchAll(/[A-Za-z0-9][A-Za-z0-9_.-]{1,}/g)) tokens.add(m[0].toLowerCase());
+  for (const seg of String(text).replace(/[^一-鿿]/g, ' ').split(/\s+/)) {
+    for (let i = 0; i + 2 <= seg.length; i++) tokens.add(seg.slice(i, i + 2));
+  }
+  return [...tokens];
+}
+
+// 返回 { slides: [{ i, html }], total, truncated }；i 为 1-based 页序
+export function selectRelevantSlides(slidesHtml, instruction, threshold = PARTIAL_THRESHOLD) {
+  const $ = load(`<main>${slidesHtml}</main>`);
+  const all = $('section.slide').map((i, el) => ({ i: i + 1, html: $.html(el), text: $(el).text() })).get();
+  const total = all.length;
+  if (total <= threshold) return { slides: all, total, truncated: false };
+  const rawTokens = extractKeywords(instruction);
+  // 命中超过半数页面的词（如「标题」「内容」）没有区分度，忽略
+  const tokens = rawTokens.filter((t) => all.filter((s) => s.text.toLowerCase().includes(t)).length <= total / 2);
+  const explicit = new Set([...String(instruction).matchAll(/第\s*(\d+)\s*页/g)].map((m) => Number(m[1])));
+  const keep = new Set();
+  for (const s of all) {
+    const hit = explicit.has(s.i) || tokens.some((t) => t && s.text.toLowerCase().includes(t));
+    if (hit) {
+      keep.add(s.i);
+      if (s.i > 1) keep.add(s.i - 1);
+      if (s.i < total) keep.add(s.i + 1);
+    }
+  }
+  if (!keep.size) { keep.add(1); keep.add(2); } // 无命中时保底前两页
+  return { slides: all.filter((s) => keep.has(s.i)), total, truncated: true };
+}
+
+function buildModifyPrompt(cfg, selection, instruction) {
   const title = cfg.params?.title || cfg.name;
   const userEditsSection = formatUserEdits(cfg);
-  return `你是一位专业的演示文稿设计师。下面是一个 HTML 幻灯片项目「${title}」当前的全部幻灯片代码。
+  const slidesBlock = selection.slides.map((s) => `--- 第 ${s.i} 页 ---\n${s.html}`).join('\n\n');
+  const scopeNote = selection.truncated
+    ? `（共 ${selection.total} 页，下面只列出与指令最相关的 ${selection.slides.length} 页及其相邻页；未列出的页保持原样，不要返回）`
+    : `（共 ${selection.total} 页，全部列出）`;
+  return `你是一位专业的演示文稿设计师。下面是一个 HTML 幻灯片项目「${title}」当前的幻灯片代码${scopeNote}。
 
 【用户修改指令】
 ${instruction}
 ${userEditsSection}
 【当前幻灯片 HTML】
-${slidesHtml}
+${slidesBlock}
 
-【要求】
-1. 严格按指令修改幻灯片内容，不要改变整体设计风格和组件类名（如 kicker、tile、lead、ppt-table、hero-stat 等）。
-2. 保持 <section class="slide"> 结构，幻灯片数量不变，除非指令明确要求增删。
-3. 只输出修改后的幻灯片 HTML 片段（若干 <section class="slide">...</section>），不要输出 <html>/<head>/<body>/<main> 标签，不要输出任何解释文字。
-4. 第一页 slide 保留 class="slide active"，其余只保留 class="slide"。
-5. 若存在「用户手动编辑过的幻灯片」，仅当用户指令明确涉及这些页面时才修改它们；否则保持原文字不变。`;
+【输出要求（局部编辑协议）】
+1. 只返回需要修改的幻灯片，不要返回未修改的页。每页完整 HTML 前单独一行写 === slide N ===（N 为上面标注的页码，1-based）；需要在末尾新增一页时写 === slide new ===。
+2. 严格按指令修改内容，不要改变整体设计风格和组件类名（如 kicker、tile、lead、ppt-table、hero-stat 等），保持 <section class="slide"> 结构。
+3. 返回的页不要带 active 类（系统会自动保留原 active 页）。
+4. 若存在「用户手动编辑过的幻灯片」，仅当用户指令明确涉及这些页面时才修改它们；否则保持原文字不变。
+5. 不要输出 <html>/<head>/<body>/<main> 标签，不要输出任何解释文字。
+6. 在全部幻灯片区块之后，单独一行输出 ---修改说明---，然后逐行列出你做的每处修改（第几页 + 改了什么，简明扼要，每条一行）。`;
 }
 
 async function main() {
@@ -172,26 +181,59 @@ async function main() {
     emit('snapshot', '修改前自动保存快照');
     createSnapshot(name, `对话修改前：${instruction.slice(0, 50)}`);
 
-    const prompt = buildModifyPrompt(cfg, slidesHtml, instruction);
+    const selection = selectRelevantSlides(slidesHtml, instruction);
+    if (selection.truncated) {
+      emit('llm', `共 ${selection.total} 页，只将与指令相关的 ${selection.slides.length} 页发给模型`);
+    }
+    const prompt = buildModifyPrompt(cfg, selection, instruction);
     emit('llm', '正在调用模型修改内容');
 
-    const globalCfg = readGlobalConfig();
-    const mcfg = globalCfg.modelConfig || {};
-    const modelOptions = {
-      apiKey: process.env.AI_PPT_API_KEY || undefined,
-      baseUrl: mcfg.baseUrl || undefined,
-      model: mcfg.model || undefined,
-      provider: mcfg.provider || undefined,
-    };
+    const modelOptions = buildModelOptions();
 
     const result = await generateSlides(prompt, modelOptions);
     if (!result) {
-      emitError('未配置可用 LLM，无法完成修改');
+      emitError('未配置可用 LLM：请到「设置」面板配置文本模型或填写 API Key');
       process.exit(1);
     }
+    emit('llm-provider', `使用模型: ${result.provider}`);
+
+    // 分离幻灯片 HTML 与修改说明（---修改说明--- 之后的部分不写入文件）
+    const { content: slidesOut, details: llmDetails } = splitChangeDetails(result.content);
+
+    // 优先走局部编辑协议：按页码区块做 DOM 级合并，保留未修改页与模板外定制
+    let finalHtml = '';
+    let mergedSlideCount = 0;
+    let partialDiffHtml = '';
+    const partials = parsePartialSlides(slidesOut);
+    if (partials) {
+      const merged = mergePartialSlides(html, partials);
+      if (merged) {
+        finalHtml = merged.html;
+        mergedSlideCount = merged.slideCount;
+        partialDiffHtml = extractSlidesHtml(finalHtml);
+        emit('merge', `局部合并：应用 ${merged.applied.length} 个区块（合并后共 ${merged.slideCount} 页）`);
+      }
+    }
+
+    if (finalHtml) {
+      // 局部路径成功：写盘并收尾
+      writeFileAtomic(htmlPath, finalHtml);
+      cfg.status = 'ready';
+      cfg.lastGeneratedAt = new Date().toISOString();
+      writeConfig(name, cfg);
+
+      const summary = `修改完成，共 ${mergedSlideCount} 页幻灯片`;
+      const details = llmDetails || buildLineDiff(slidesHtml, partialDiffHtml);
+      emit('ready', summary);
+      emitDone({ success: true, changed: finalHtml !== html, summary, details });
+      return;
+    }
+
+    // 降级：模型输出无法解析为局部区块，回退「全部幻灯片 + wrapSlides」整页重写（旧行为）
+    emit('fallback', '模型输出未按局部协议返回，回退整页重写');
 
     // Extract slide sections from the model output
-    const newSlides = extractSlidesHtml(result) || result.trim();
+    const newSlides = extractSlidesHtml(slidesOut) || slidesOut.trim();
     const sectionCount = (newSlides.match(/<section\b/g) || []).length;
     if (sectionCount === 0) {
       emitError('模型未返回有效幻灯片内容，修改未应用');
@@ -199,26 +241,29 @@ async function main() {
     }
 
     // Ensure exactly one active slide
-    const $ = load(`<main>${newSlides}</main>`, { xmlMode: false });
-    $('section.slide').removeClass('active');
-    $('section.slide').first().addClass('active');
+    const activeSlides = ensureSingleActive(newSlides);
 
-    let finalHtml = wrapSlides($('main').html(), cfg.params?.title || name, cfg);
+    finalHtml = wrapSlides(activeSlides, cfg.params?.title || name, buildBodyClass(cfg));
     if (cfg.themeOverrides && Object.keys(cfg.themeOverrides).length > 0) {
       finalHtml = injectThemeOverrides(finalHtml, cfg.themeOverrides);
     }
-    fs.writeFileSync(htmlPath, finalHtml, 'utf8');
+    writeFileAtomic(htmlPath, finalHtml);
 
     cfg.status = 'ready';
     cfg.lastGeneratedAt = new Date().toISOString();
     writeConfig(name, cfg);
 
-    emit('ready', `修改完成，共 ${sectionCount} 页幻灯片`);
-    emitDone();
+    const summary = `修改完成，共 ${sectionCount} 页幻灯片`;
+    // LLM 修改说明优先；缺失时用行级 diff 兜底，方便用户知道改了哪里
+    const details = llmDetails || buildLineDiff(slidesHtml, newSlides);
+    emit('ready', summary);
+    emitDone({ success: true, changed: finalHtml !== html, summary, details });
   } catch (err) {
     emitError(err.message);
     process.exit(1);
   }
 }
 
-main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}

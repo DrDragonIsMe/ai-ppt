@@ -1,31 +1,19 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { load } from 'cheerio';
-import { readConfig, writeConfig, getProjectDir, ensureBaseEngine } from './config.mjs';
-import { readGlobalConfig } from './global-config.mjs';
+import { readConfig, writeConfig, getProjectDir, writeDeckIndex } from './config.mjs';
 import { extractFromUrl } from './content-extractor.mjs';
-import { generateSlides } from './llm-adapter.mjs';
-import { injectThemeOverrides } from './theme-overrides.mjs';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-function emit(step, message, detail = null) {
-  const event = { type: 'progress', step, message, detail, time: new Date().toISOString() };
-  process.stdout.write(JSON.stringify(event) + '\n');
-}
-
-function emitError(message) {
-  const event = { type: 'error', message, time: new Date().toISOString() };
-  process.stdout.write(JSON.stringify(event) + '\n');
-}
-
-function emitDone() {
-  const event = { type: 'done', time: new Date().toISOString() };
-  process.stdout.write(JSON.stringify(event) + '\n');
-}
+import {
+  emit,
+  emitError,
+  emitDone,
+  stripMarkdown,
+  formatUserEdits,
+  buildModelOptions,
+  buildBodyClass,
+  buildSlidesPrompt,
+  buildFallbackSlides,
+  generateSlidesHtml,
+} from './generation-common.mjs';
 
 function setStatus(name, status, errorMessage = null) {
   const cfg = readConfig(name);
@@ -33,77 +21,6 @@ function setStatus(name, status, errorMessage = null) {
   cfg.errorMessage = errorMessage;
   if (status === 'ready') cfg.lastGeneratedAt = new Date().toISOString();
   writeConfig(name, cfg);
-}
-
-function escapeHtml(text) {
-  if (text == null) return '';
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function stripMarkdown(text) {
-  if (text == null) return '';
-  return String(text)
-    // horizontal rules
-    .replace(/^[\-*_]{3,}\s*$/gm, '')
-    // ATX headers
-    .replace(/^#{1,6}\s+/gm, '')
-    // blockquotes
-    .replace(/^\s*>\s?/gm, '')
-    // unordered list markers
-    .replace(/^\s*[-*+]\s+/gm, '')
-    // ordered list markers
-    .replace(/^\s*\d+\.\s+/gm, '')
-    // bold / italic
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/__(.*?)__/g, '$1')
-    .replace(/(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)/g, '$1')
-    .replace(/(?<!_)_(?!\s)([^_\n]+?)(?<!\s)_(?!_)/g, '$1')
-    // inline code
-    .replace(/`([^`]+)`/g, '$1')
-    // links [text](url)
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    // images
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
-    // collapse blank lines
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function cleanSlideMarkdown(html) {
-  const $ = load(`<main>${html}</main>`, { xmlMode: false });
-  $('main *').contents().each((_, node) => {
-    if (node.nodeType === 3 && node.nodeValue) {
-      const cleaned = stripMarkdown(node.nodeValue);
-      if (cleaned !== node.nodeValue) {
-        $(node).replaceWith(cleaned);
-      }
-    }
-  });
-  return $('main').html();
-}
-
-function chunkText(text, maxLen = 120) {
-  const sentences = text.split(/([。！？.!?]\s*)/).filter(Boolean);
-  const chunks = [];
-  let current = '';
-  for (let i = 0; i < sentences.length; i++) {
-    const s = sentences[i];
-    if (/^[。！？.!?]\s*$/.test(s)) {
-      current += s;
-      continue;
-    }
-    current += s;
-    if (current.length >= maxLen || i === sentences.length - 1) {
-      chunks.push(current.trim());
-      current = '';
-    }
-  }
-  if (current.trim()) chunks.push(current.trim());
-  return chunks;
 }
 
 function parseSections(content) {
@@ -157,148 +74,44 @@ function extractPoint(line) {
   return point.length >= 5 ? point : null;
 }
 
-function buildFallbackSlides(cfg, content) {
+// 差异化指令：URL/文章来源的提示词（通用脚手架 + 本源的严格规则 + userEdits 约束）
+function buildPrompt(cfg, content) {
+  const p = cfg.params || {};
+  return buildSlidesPrompt({
+    task: '请根据以下内容生成一套演示文稿幻灯片。',
+    title: p.title || cfg.name,
+    audience: p.audience || '通用',
+    style: p.style || '商业汇报',
+    language: p.language || 'zh-CN',
+    slideCount: p.slideCount || 8,
+    contentLabel: '来源内容（已提取关键文本）',
+    content,
+    contentLimit: 6000,
+    extraRules: `- 卡片式页面（tile-row / visual-row）不超过总页数的 1/3，能用表格、图表、时间轴、大数字表达的不要用卡片。
+- 内容中有数据、指标、百分比时，优先用可视化组件展示（big-number、chart-bar、progress-ring、waterfall、timeline-horizontal 等）；数字只使用来源内容中真实存在的；同一行大数字不超过 4 个。
+- kicker / section-title 只允许出现在封面和收尾页；内容页一律不用。
+- 禁止使用 gradient-text 类；禁止在封面放置描述演示原则的标签（badge）；封面只放标题、副标题、署名/日期。
+`,
+    userEditsSection: formatUserEdits(cfg),
+  });
+}
+
+// 兜底：标题 + 解析出的章节要点交给统一参数化模板
+function buildDeckFallback(cfg, content) {
   const title = cfg.params?.title || cfg.name;
-  const sections = parseSections(content);
   const subtitle = [cfg.params?.style, cfg.params?.audience]
     .filter(Boolean)
     .join(' · ');
-
-  let slides = '';
-  slides += slideCover(title, subtitle);
-
-  for (const sec of sections.slice(0, 6)) {
-    slides += slideVisual(sec.title, sec.points.slice(0, 3));
-  }
-
-  slides += slideThankYou(title);
-  return slides;
-}
-
-function slideCover(title, subtitle) {
-  return `      <section class="slide active">
-        <div class="slide-content section-hero" style="text-align: center;">
-          <h1>${escapeHtml(title)}</h1>
-          ${subtitle ? `<p class="lead" style="font-size: clamp(20px, 2.5vw, 34px);">${escapeHtml(subtitle)}</p>` : ''}
-          <div class="divider" style="margin: 40px auto; max-width: 160px;"></div>
-        </div>
-      </section>\n`;
-}
-
-function slideVisual(title, points) {
-  const cards = points.length
-    ? points.map((p, i) => `            <div class="visual-card">\n              <div class="icon">${i + 1}</div>\n              <p>${escapeHtml(p.length > 40 ? p.slice(0, 40) + '…' : p)}</p>\n            </div>`).join('\n')
-    : `            <div class="visual-card">\n              <div class="icon">★</div>\n              <p>详见讲演者口述</p>\n            </div>`;
-  return `      <section class="slide">
-        <div class="slide-content">
-          <h2>${escapeHtml(title)}</h2>
-          <div class="visual-row">
-${cards}
-          </div>
-        </div>
-      </section>\n`;
-}
-
-function slideThankYou(title) {
-  return `      <section class="slide">
-        <div class="slide-content section-hero" style="text-align: center;">
-          <h1>谢谢观看</h1>
-          <p class="lead">${escapeHtml(title)}</p>
-        </div>
-      </section>\n`;
-}
-
-function wrapSlides(slidesHtml, title, cfg) {
-  const theme = cfg.theme || 'web-ui';
-  const animation = cfg.animation || 'slide';
-  const themeClass = theme !== 'web-ui' ? ` theme-${theme}` : '';
-  const animClass = animation !== 'none' ? ` anim-${animation}` : '';
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)}</title>
-  <link rel="stylesheet" href="css/ppt.css">
-  <link rel="stylesheet" href="css/themes/theme-switcher.css">
-  <link rel="stylesheet" href="css/themes/web-ui.css">
-  <link rel="stylesheet" href="css/themes/business-blue.css">
-  <link rel="stylesheet" href="css/themes/elegant-purple.css">
-  <link rel="stylesheet" href="css/themes/warm-orange.css">
-  <link rel="stylesheet" href="css/themes/sunset-red.css">
-  <link rel="stylesheet" href="css/themes/tech-green.css">
-  <link rel="stylesheet" href="css/themes/minimal-gray.css">
-  <link rel="stylesheet" href="css/themes/dark-mode.css">
-</head>
-<body class="${themeClass}${animClass}">
-  <div id="app">
-    <main id="stage" class="stage">
-${slidesHtml}    </main>
-
-    <div id="overview" class="overview hidden">
-      <div class="overview-title">幻灯片预览 · 点击跳转</div>
-      <div class="overview-grid"></div>
-    </div>
-
-    <div id="help" class="help">
-      <div class="help-header">
-        <div class="help-title">快捷键</div>
-        <div class="help-hint">按 <kbd>?</kbd> 隐藏/显示</div>
-      </div>
-      <div class="help-content">
-        <div class="help-group">
-          <div class="help-group-title">导航</div>
-          <div class="help-row"><kbd>←</kbd><span>上一页</span></div>
-          <div class="help-row"><kbd>→</kbd><span>下一页</span></div>
-          <div class="help-row"><kbd>Cmd</kbd>+<kbd>←</kbd><span>首页</span></div>
-          <div class="help-row"><kbd>Cmd</kbd>+<kbd>→</kbd><span>尾页</span></div>
-        </div>
-        <div class="help-group">
-          <div class="help-group-title">视图</div>
-          <div class="help-row"><kbd>↑</kbd><span>幻灯片预览</span></div>
-          <div class="help-row"><kbd>F</kbd><span>全屏模式</span></div>
-          <div class="help-row"><kbd>T</kbd><span>切换主题</span></div>
-        </div>
-        <div class="help-group">
-          <div class="help-group-title">导出</div>
-          <div class="help-row"><kbd>↓</kbd><span>导出 PDF</span></div>
-          <div class="help-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>打印/导出面板</span></div>
-        </div>
-        <div class="help-group">
-          <div class="help-group-title">标识笔</div>
-          <div class="help-row"><kbd>M</kbd><span>开启/退出标识笔</span></div>
-          <div class="help-row"><kbd>1</kbd>-<kbd>5</kbd><span>画笔/箭头/矩形/圆/椭圆</span></div>
-          <div class="help-row"><kbd>C</kbd><span>清除本页标记</span></div>
-        </div>
-      </div>
-      <div class="help-footer">
-        <span>全屏时：点击左侧/右侧翻页</span>
-      </div>
-    </div>
-
-    <div id="toast" class="toast"></div>
-    <div id="progress" class="progress"></div>
-    <div id="hud" class="hud"></div>
-  </div>
-  <script src="js/ppt.js"></script>
-</body>
-</html>`;
-}
-
-function extractMainContent(rawHtml) {
-  if (!rawHtml) return '';
-  // If LLM returned a full document, extract the body or main content.
-  const mainMatch = rawHtml.match(/<main[^>]*class="stage"[^>]*>([\s\S]*?)<\/main>/i);
-  if (mainMatch) return mainMatch[1].trim();
-  const bodyMatch = rawHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  const source = bodyMatch ? bodyMatch[1] : rawHtml;
-  // Extract only section.slide tags if present
-  const $ = load(source);
-  const sections = $('section.slide');
-  if (sections.length > 0) {
-    return sections.map((_, el) => $.html(el)).get().join('\n');
-  }
-  return source.trim();
+  const sections = parseSections(content).slice(0, 6)
+    .map((sec) => ({ heading: sec.title, points: sec.points.slice(0, 3) }));
+  return buildFallbackSlides({
+    title,
+    subtitle,
+    fancyCover: true,
+    closingTitle: '谢谢观看',
+    closingLead: title,
+    sections,
+  });
 }
 
 async function main() {
@@ -342,50 +155,21 @@ async function main() {
     // Model config is now system-level (global config). The API key comes from
     // the environment (AI_PPT_API_KEY passed by the Web UI for this session, or
     // OPENAI_API_KEY from .env.kimi) - never from persisted config.
-    const globalCfg = readGlobalConfig();
-    const mcfg = globalCfg.modelConfig || {};
-    const modelOptions = {
-      apiKey: process.env.AI_PPT_API_KEY || undefined,
-      baseUrl: mcfg.baseUrl || undefined,
-      model: mcfg.model || cfg.params?.model || undefined,
-      provider: mcfg.provider || undefined,
-    };
-    let slidesHtml = '';
-    const llmResult = await generateSlides(prompt, modelOptions);
-    if (llmResult) {
-      emit('llm', 'LLM 返回内容，正在解析');
-      slidesHtml = extractMainContent(llmResult);
-      const sectionCount = (slidesHtml.match(/<section\b/g) || []).length;
-      const expected = Math.max(3, Math.round((cfg.params?.slideCount || 8) * 0.7));
-      if (sectionCount < expected) {
-        emit('fallback', `LLM 仅返回 ${sectionCount} 页（预期 ${expected} 页），使用视觉模板兜底`);
-        slidesHtml = buildFallbackSlides(cfg, content);
-      }
-    } else {
-      emit('llm', '未配置 LLM，使用确定性模板生成');
-    }
-
-    if (!slidesHtml || slidesHtml.length < 200) {
-      emit('fallback', '使用内置模板生成幻灯片');
-      slidesHtml = buildFallbackSlides(cfg, content);
-    }
-
-    // Strip any remaining Markdown markers from slide text nodes
-    slidesHtml = cleanSlideMarkdown(slidesHtml);
-
-    // Ensure exactly one slide has active class
-    const $ = load(`<main>${slidesHtml}</main>`, { xmlMode: false });
-    $('section.slide').removeClass('active');
-    $('section.slide').first().addClass('active');
-    slidesHtml = $('main').html();
+    const modelOptions = buildModelOptions(cfg.params?.model);
+    const minSections = Math.max(3, Math.round((cfg.params?.slideCount || 8) * 0.7));
+    const slidesHtml = await generateSlidesHtml({
+      prompt,
+      modelOptions,
+      minSections,
+      buildFallback: () => buildDeckFallback(cfg, content),
+    });
 
     emit('build', '正在写入 index.html');
-    ensureBaseEngine(name);
-    let html = wrapSlides(slidesHtml, cfg.params?.title || cfg.name, cfg);
-    if (cfg.themeOverrides && Object.keys(cfg.themeOverrides).length > 0) {
-      html = injectThemeOverrides(html, cfg.themeOverrides);
-    }
-    fs.writeFileSync(path.join(projectDir, 'index.html'), html, 'utf8');
+    writeDeckIndex(name, slidesHtml, {
+      title: cfg.params?.title || cfg.name,
+      bodyClass: buildBodyClass(cfg),
+      themeOverrides: cfg.themeOverrides,
+    });
 
     setStatus(name, 'ready');
     emit('ready', '生成完成');
@@ -395,48 +179,6 @@ async function main() {
     emitError(err.message);
     process.exit(1);
   }
-}
-
-function formatUserEdits(cfg) {
-  const edits = cfg.userEdits;
-  if (!edits || !edits.htmlSnapshot || edits.htmlSnapshot.length === 0) return '';
-  const lines = edits.htmlSnapshot.map((s) => {
-    const heading = s.heading ? `标题：${s.heading}` : '';
-    const text = s.text ? `内容：${s.text}` : '';
-    return `第 ${s.index + 1} 页\n${heading}\n${text}`;
-  });
-  return `\n【用户手动编辑过的幻灯片（必须保留）】\n以下幻灯片是用户曾在可视化编辑器中手动编辑并保存的。重新生成时，这些幻灯片的文字内容、核心观点、数据必须原样保留或仅做最小化润色，禁止整体重写、删除或替换为不同内容。未在此列表中的幻灯片可按来源内容正常生成。\n\n${lines.join('\n\n')}\n`;
-}
-
-function buildPrompt(cfg, content) {
-  const p = cfg.params || {};
-  const userEditsSection = formatUserEdits(cfg);
-  return `请根据以下内容为名为 "${p.title || cfg.name}" 的演示文稿生成 HTML 幻灯片片段。
-
-输出格式：
-- 只返回 <main id="stage" class="stage"> 内部的内容，即多个 <section class="slide"> 元素。
-- 第一个 <section> 需要带有 class="slide active"，其余为 class="slide"。
-- 目标受众：${p.audience || '通用'}；风格：${p.style || '商业汇报'}；语言：${p.language || 'zh-CN'}；大约 ${p.slideCount || 8} 页。
-- 不要输出 <html>, <head>, <body>, <script>, <style> 或任何解释文字。
-- 幻灯片正文使用纯文本，不要使用 Markdown 语法（#、**、>、-、\`[链接]\` 等）。
-
-可用 CSS 类（只能使用这些，禁止手写 style 属性和新组件）：
-- 结构：slide-content, h1, h2, h3, lead, divider, section-hero。
-- 要点并列：tile-row, tile, two-col, visual-row, visual-card, icon。
-- 数据：split-visual, hero-stat, big-number, big-number-label, chart-bar, chart-bar-item, progress-ring, data-matrix, waterfall, waterfall-item, ppt-table。
-- 流程与强调：chart-steps, timeline, timeline-item, timeline-horizontal, quote-block, badge-row, badge。
-
-设计原则（必须遵守，优先级高于一切）：
-- 一页只讲一个核心观点，标题即结论；每页保留 1-3 个核心词/短句，详细内容由讲演者口述，任何正文段落不超过 3 行。
-- 版式必须轮换：相邻两页不使用同一种结构；卡片式页面（tile-row / visual-row）不超过总页数的 1/3，能用表格、图表、时间轴、大数字表达的不要用卡片。
-- 内容中有数据、指标、百分比时，优先用可视化组件展示（big-number、chart-bar、progress-ring、waterfall、timeline-horizontal 等）；数字只使用来源内容中真实存在的，禁止编造；同一行大数字不超过 4 个。
-- kicker / section-title 只允许出现在封面和收尾页；内容页一律不用。
-- 禁止使用 gradient-text 类；禁止在封面放置描述演示原则的标签（badge）；封面只放标题、副标题、署名/日期。
-- 标题不超过 20 个汉字，避免折行溢出。
-${userEditsSection}
-来源内容（已提取关键文本）：
-${content.slice(0, 6000)}
-`;
 }
 
 main();

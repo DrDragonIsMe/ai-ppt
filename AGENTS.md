@@ -1,166 +1,70 @@
 # ai-ppt 项目约定
 
-## 目录结构
+> 版本历史见 CHANGELOG.md；本文件只保留现行有效约定。
 
-- `ai-ppt-base/`：PPT 引擎基座，是 **唯一** 的样式与脚本升级源。
-- `projects/`：所有业务 deck 必须放在这里，每个子目录一个 deck。
-- `skills/`：Claude CLI / Kimi CLI 的 skill 定义。
-- `web/`：Web 管理界面静态资源。
-- `server.mjs`：Web 服务入口。
-- `scripts/`：升级、生成、导出、备份等工具脚本。
-- `scripts/upgrade-decks.mjs`：一键将基座 `css/ppt.css` 和 `js/ppt.js` 同步到所有项目。
+## 目录结构
 
 ```
 ai-ppt/
-├── ai-ppt-base/
-│   ├── css/ppt.css
-│   ├── js/ppt.js
-│   └── index.html
-├── projects/
-│   ├── <deck-name>/
-│   │   ├── ai-ppt.json     # 项目配置（来源、参数、状态）
-│   │   ├── css/ppt.css     # 由 upgrade-decks.mjs 从基座同步
-│   │   ├── js/ppt.js       # 由 upgrade-decks.mjs 从基座同步
-│   │   ├── index.html      # 业务内容
-│   │   ├── export/         # 导出产物（PPTX/PDF）
-│   │   └── README.md
-│   └── ...
-├── web/
-│   ├── index.html
-│   ├── css/web.css
-│   └── js/web.js
-├── server.mjs
-├── scripts/
-│   ├── upgrade-decks.mjs
-│   ├── generate-deck.mjs
-│   ├── export-pptx.mjs
-│   ├── export-pdf.mjs
-│   ├── backup.mjs
-│   └── config.mjs
-└── skills/
+├── ai-ppt-base/        # PPT 引擎基座，唯一的样式/脚本升级源（css/ppt.css、css/themes/、js/ppt.js）
+├── projects/<name>/    # 业务 deck：index.html、ai-ppt.json、css/、js/、export/、assets/
+├── web/                # Web 管理界面，无构建 ES Modules
+│   └── js/modules/     # app.mjs 入口 + state/vault/projects/generate/modals 等
+├── server.mjs, routes/ # Web 服务入口与路由模块；vault 路由按域拆分（routes/vault.mjs 为聚合入口，
+│                       # routes/vault-notes/fragments/assets/learn/graph.mjs + 共享 routes/vault-commons.mjs，
+│                       # 合并顺序与拆分前严格一致，域内增删路由需同步调整聚合处 slice 下标）
+├── scripts/            # 生成/导出/备份/快照/搜索/vault 等工具脚本
+├── tests/core.test.mjs # npm test
+└── skills/             # CLI skill 定义
 ```
 
 ## 核心约定
 
-1. **所有业务 deck 必须位于 `projects/` 下。**
-   - 新建 deck：`/ppt-structure <name>` 应生成 `projects/<name>/`。
-   - 预览/编辑 deck：`/ppt-preview <name>`、`/ppt-edit` 应优先查找 `projects/<name>/`。
+1. **所有业务 deck 必须位于 `projects/` 下**：`/ppt-structure` 新建、`/ppt-preview`、`/ppt-edit` 均以此为查找路径。
+2. **不要直接修改项目中的 `css/ppt.css` 和 `js/ppt.js`**：改动在 `ai-ppt-base/` 进行，再 `npm run upgrade-decks` 同步（`--project <name>` 单项目、`--dry-run` 预览）。deck 内用相对路径引用本地引擎文件，保证可独立移动或打包。
+3. **项目配置 `ai-ppt.json`**：每个 deck 必备。关键字段：`sourceType`/`sourceUrl`/`articleText`/`params`/`status`；`sourceSelection` 持久化知识库选材；`userEdits` 记录用户可视化编辑，`generate-deck.mjs`/`chat-modify.mjs` 的 prompt 必须保留这些页的文字与数据。
+4. **系统级模型配置**：三组配置（`modelConfig`/`imageModelConfig`/`videoModelConfig`）存根目录 `.ai-ppt-config.json`（已 gitignore），由「设置」面板（顶栏齿轮，唯一设置入口）修改，对所有项目生效。优先级：环境变量 `OPENAI_*` > 配置文件 > 内置默认；apiKey 不落盘。`sk-kimi-` 开头的 key 自动路由到 Kimi Code 端点（`api.kimi.com/coding/v1` + `kimi-for-coding`）。
+5. **概念模型（以笔记为中心）**：启动默认落 vault tab；顶栏仅 logo/搜索/设置/帮助。PPT 作品 = `projects/<name>`，生命周期 ① 选材 → ② 生成 → ③ 修改 → ④ 发布，在侧边栏 projects tab 管理。主区面板与侧边栏 tab 一一对应，`#project-panel` 仅在 projects tab 且有选中项目时显示。
+6. **生成流程**：`POST /api/projects/:name/generate` → `scripts/generate-deck.mjs`（202 + SSE 进度）；LLM 按 OpenAI 兼容 → Bailian CLI → 确定性模板降级。5 个生成脚本（generate-deck / generate-from-note(s) / generate-from-graph / generate-from-review）共用 `generation-common.mjs` 的分层管线：`buildSlidesPrompt`（统一提示词脚手架，各源只给任务描述/素材/extraRules）→ `generateSlidesHtml`（LLM 调用 + 页数校验 + `buildFallbackSlides` 参数化兜底 + Markdown 清洗 + 单 active）→ `config.mjs` 的 `writeDeckIndex`（mkdir + 复制基座引擎 + wrapSlides + 原子写盘）。源特有逻辑（graph 节点展开、review 错题整理等）保留在各自脚本。
+7. **导出单入口**：项目工具栏 `#export-dropdown` 一个入口（PPTX / 高清图片 PPTX / 浏览器打印 PDF / 单文件 HTML），`Ctrl+P` 展开。产物在 `projects/<name>/export/`：`deck.pptx`（可编辑文字）、`deck-image.pptx`（逐页截图）、`deck.pdf`（Chrome 截图，打印回退）、`deck-single.html`。服务端导出（pptx / pptx-image / pdf）为异步任务：POST 202 → `GET .../export/<type>/events` SSE（NDJSON 协议同生成），done 事件带 `downloadUrl`；同项目同类型重复 POST 409，puppeteer 类导出全局最多 2 个并发（超出 429）；单文件 HTML 保持同步。导出视口与 PDF 页面统一 1280×800（同基座设计基准）。
+8. **备份与快照治理**：批量改动前 `npm run backup`（→ `.backup/<ts>/`，含 `vault/`）。vault 笔记删除/覆盖前自动备份到 `.snapshots/_vault/<ts>/`，保留 200 份（`VAULT_BACKUP_KEEP`，server.mjs `backupVaultNote()` 亦调用 `pruneVaultBackups()`）。项目快照 `snapshot.mjs`（`create/list/restore/delete/prune`），每项目保留 20 份（`SNAPSHOT_KEEP`，create 后自动 prune）；restore 覆盖前自动建安全快照。均有 isSafeName/路径防注入。
+9. **全局搜索**：`scripts/search.mjs` + `GET /api/search`。`invalidateSearchIndex(name)` 语义为「单项目重建索引」——生成/chat/save-edits 后自动刷新，仅删除项目时才真正移除。
+10. **对话式修改**：PPT → `scripts/chat-modify.mjs`（202 + SSE NDJSON，改前自动快照；历史存 `chat-history.json` 最多 50 条）。局部编辑协议：LLM 只返回修改页（`=== slide N ===` / `=== slide new ===`，N 为 1-based），cheerio DOM 级合并进现有 index.html，未修改页与模板外定制保留；输出无法解析为局部区块时回退旧的「全部幻灯片 + wrapSlides」整页重写；超过 15 页时 prompt 只放指令相关页 + 前后各 1 页上下文；笔记 → `scripts/chat-note.mjs`（改前自动备份到 `.snapshots/_vault/`，保留 Front Matter 与 `[[wikilink]]`，失败不动文件）。CLI：`npm run chat-modify -- <name> "<instruction>"`。
+11. **关键数字 / 数据页排版**：同一行 ≤4 项，超出拆页或改表格/卡片；用 `.split-visual` + `.hero-stat` + `.big-number`（字号 `clamp(44px, 5.5vw, 80px)`，禁换行，等宽分布最大 240px）。
+12. **主题**：deck 只用默认主题（`web-ui`）或 `css/themes/` 预设主题；无明确指令不更换、不自创主题配色。主题的单一数据源是 `ai-ppt-base/themes.json`：新增主题 = themes.json 加一条 + `css/themes/<id>.css` 加一个文件，然后 `npm run upgrade-decks`（会同步刷新基座 index.html 的 `theme-links` 标记区块）。`wrapSlides` 的主题 `<link>` 由 `buildThemeLinks()` 按 themes.json 动态生成；`ppt.js` 内的主题数组仅是 /api/themes 不可用时的离线兜底，不必同步。
+13. **Front Matter 统一解析**：`scripts/front-matter.mjs` 是唯一实现（`parseFrontMatter`/`stringifyFrontMatter`/`splitFrontMatter`），支持标量、行内/多行数组、多行字符串、值含冒号；禁止再写新的 FM 解析器。
+14. **写盘原子化**：`scripts/fs-utils.mjs` 的 `writeFileAtomic`/`writeJsonAtomic`（同目录临时文件 + fsync + rename）是所有 JSON/文本写盘的唯一入口；store.mjs 亦复用，不保留第二份实现。
+15. **任务注册表**：`scripts/task-registry.mjs`（`createTaskRegistry`）是媒体/解析任务状态与 NDJSON 任务元信息的唯一实现——内存 Map + 节流落盘到根目录 `.ai-ppt-tasks.json`（已 gitignore，writeJsonAtomic）；状态机 `pending|running → done|error|cancelled|interrupted`。服务启动时 `load()` 把活跃态标记 `interrupted`（轮询端点对未知 id 返回 404 + `{status:'unknown'}`）；取消端点 `POST /api/media/tasks/:id/cancel`、`POST /api/vault/assets/parse-tasks/:id/cancel`（标记后迟到结果被忽略）；`spawnNdjsonTask` 事件 buffer 上限 500 条（`pushBounded` 丢最旧），同名任务覆盖前向旧 SSE 连接推 `{type:'error'}` 取代事件。
 
-2. **不要直接修改项目中的 `css/ppt.css` 和 `js/ppt.js`。**
-   - 样式或交互改动应在 `ai-ppt-base/css/ppt.css`、`ai-ppt-base/js/ppt.js` 中进行。
-   - 改完后运行 `npm run upgrade-decks` 统一覆盖到所有项目。
+## Web 前端约定
 
-3. **升级流程**
-   - 修改 `ai-ppt-base/css/ppt.css` 或 `ai-ppt-base/js/ppt.js`。
-   - 运行 `npm run upgrade-decks` 同步。
-   - 如需单独升级某个项目：`npm run upgrade-decks -- --project <name>`。
-   - 查看影响范围：`npm run upgrade-decks -- --dry-run`。
+16. **模块化**：`app.mjs` 入口、`state.mjs` 集中全局状态 `S`。
+17. **弹窗**：一律用 `modals.mjs` 的 `showInputModal`/`showConfirmModal`；禁止原生 `prompt()`/`confirm()`。
+18. **笔记保存**：`Ctrl+S` 按上下文分派（vault tab 且打开笔记 → 保存笔记；项目工作区 → 保存项目配置）；2 秒防抖自动保存、脏标记（标题与保存按钮 ●）、beforeunload 防丢、localStorage 草稿（key `ai-ppt-note-draft:<name>`，打开时提示恢复）。
+19. **「生成 PPT」统一入口**：`generate.mjs` 的 `#gen-modal` + `openGenerateModal(source)`，`source.kind ∈ note|notes|graph|review`，后端 API 不变。
+20. **笔记工具栏**：收为「保存 + 生成 PPT + ⋯更多」下拉（重命名/预览/大纲/生成配图/附件/AI 修改/删除在 ⋯ 内）。empty-state 为笔记中心引导（新建笔记/写速记），初始 hidden。
+21. **侧边栏「学习」tab**：测验/错题集/复习训练合并为 `data-tab="study"` 的 `#study-panel`，内部二级子 tab exams/mistakes/training，`switchSidebarTab('study', subTab)`，记忆在 `S.studySubtab`。
+22. **笔记渲染管线**（顺序不可调换）：整体 HTML 转义 → PDF 嵌入 `![[x.pdf|N]]` 占位 → 多媒体嵌入占位 → 块引用 `((id))` 占位 → 查询块 `{{query}}` 占位 → `[[wikilink]]` 预处理 → 恢复行首 `&gt;` 引用块 → 任务标记/`key:: value` 内联替换 → `marked.parse()` → 占位换回 HTML → 异步填充块引用/查询。
+23. **重命名笔记必须走** `vault.mjs` 的 `renameNote()`（备份 → 重命名 → 级联更新 `[[旧名]]` → 重建索引），禁止只重命名文件。
 
-4. **路径约定**
-   - 每个 deck 的 `index.html` 使用相对路径引用本地引擎文件：
-     ```html
-     <link rel="stylesheet" href="css/ppt.css">
-     <script src="js/ppt.js"></script>
-     ```
-   - 不要改成基座相对路径（如 `../ai-ppt-base/css/ppt.css`），以保证单个 deck 可独立移动或打包。
+## vault 知识库
 
-5. **项目配置 `ai-ppt.json`**
-   - 每个 deck 目录必须包含 `ai-ppt.json`，供 Web UI 和生成脚本使用。
-   - 关键字段：`sourceType` (`url` | `article`)、`sourceUrl`、`articleText`、`params`（title, audience, style, slideCount, language）、`status`。
-   - 模型配置已提升为系统级别，不再保存在 `ai-ppt.json` 中，见下文第 17 条。
-
-17. **系统级别模型配置**
-    - 模型配置保存在项目根目录 `.ai-ppt-config.json`（已加入 `.gitignore`），通过 Web UI「模型配置」面板或 `POST /api/config` 修改，**对所有项目生效**。
-    - 优先级：环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` > `.ai-ppt-config.json` > 内置默认。
-    - 生成脚本 `generate-deck.mjs` 和对话修改脚本 `chat-modify.mjs` 通过 `readGlobalConfig()` 读取当前模型配置；Web UI 只需在生成/修改时传递临时 API Key（`AI_PPT_API_KEY`），不保存到任何文件。
-
-6. **Web 管理界面**
-   - 启动：`npm run web`（默认端口 3456）。
-   - 功能：创建/删除项目、配置来源与参数、一键生成、实时流程可视化、生成后自动预览、Ctrl+P 导出。
-
-7. **生成流程**
-   - Web UI 点击“生成”会调用 `/api/projects/:name/generate`，后端运行 `scripts/generate-deck.mjs`。
-   - 生成脚本优先使用项目 `modelConfig` 中配置的 OpenAI 兼容 API（`baseUrl`、`model`、`apiKey`）；若未配置 API Key，则回退到环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL`。
-   - 若仍无可用 OpenAI 兼容配置，再尝试 Bailian CLI (`bl chat`)；最后退化为确定性模板，确保无 LLM 也能演示完整流程。
-   - 当 `OPENAI_API_KEY` 以 `sk-kimi-` 开头且未指定 Base URL 时，自动使用 `https://api.kimi.com/coding/v1` 与 `kimi-for-coding` 模型。
-
-8. **导出约定**
-   - PDF：服务端通过 `scripts/export-pdf.mjs` 生成，自动查找系统 Chrome；保留浏览器打印（`@media print` + `window.print()`）作为回退。
-   - PPTX：通过 `scripts/export-pptx.mjs` 生成，输出到 `projects/<name>/export/deck.pptx`（可编辑文字版）。
-   - 高清图片 PPTX：通过 `scripts/export-pptx.mjs --image` 生成，输出到 `projects/<name>/export/deck-image.pptx`（逐页截图，还原度最高）。
-   - Web UI 中 `Ctrl+P` / `Cmd+P` 打开导出面板。
-
-9. **备份约定**
-   - 在批量修改项目、生成、升级 skills 前，运行 `npm run backup`。
-   - 备份保存到 `.backup/<timestamp>/`，包含 `projects/`、`skills/`、`web/`、`server.mjs`、关键文档。
-
-10. **快照约定（项目版本管理）**
-    - `scripts/snapshot.mjs` 提供项目级快照：`create <name> [desc]`、`list <name>`、`restore <name> <id>`、`delete <name> <id>`。
-    - 快照保存到 `.snapshots/<name>/<timestamp-id>/`，包含项目完整目录与 `snapshot.json` 元信息。
-    - Web UI 项目页「版本」标签可创建/恢复/删除快照；对话式修改（chat-modify）在应用修改前会自动保存快照。
-
-11. **全局搜索**
-    - `scripts/search.mjs` 索引所有项目的标题、来源与幻灯片文本；CLI：`npm run search -- <关键词>`。
-    - Web UI 顶栏搜索框（`Ctrl+K` 聚焦）实时查询 `/api/search?q=`，点击结果直接打开项目。
-
-12. **对话式内容修改**
-    - Web UI 预览区「AI 修改」打开聊天面板，输入自然语言指令即可调用当前项目配置的模型修改幻灯片（修改前自动快照）。
-    - 服务端路由 `POST /api/projects/:name/chat` 运行 `scripts/chat-modify.mjs <name> <instruction>`。
-    - CLI：`npm run chat-modify -- <name> "<instruction>"`，方便外部 AI（如 Claude/Kimi CLI）驱动项目内容修改。
-
-13. **Markdown 导入**
-    - Web UI 内容面板提供「从 Markdown 导入」按钮，客户端读取 `.md/.txt` 文件填入文章内容；生成管线会自动清理 Markdown 标记。
-
-14. **可视化编辑与用户编辑保护**
-    - Web UI 预览区提供「编辑模式」按钮；点击后通过 `postMessage` 通知 iframe 开启 `contenteditable`，用户可直接修改幻灯片文字。
-    - 保存时调用 `POST /api/projects/:name/save-edits`，由 `scripts/save-edits.mjs` 把编辑后的 HTML 写回 `index.html`，保存前自动快照，并在 `ai-ppt.json` 中记录 `userEdits`（含每页标题与文本摘要）。
-    - `generate-deck.mjs` 与 `chat-modify.mjs` 在构建 prompt 时读取 `cfg.userEdits`，明确要求 LLM 保留用户手动编辑过的幻灯片的文字、观点和数据；除非用户指令明确涉及这些页面，否则禁止重写、删除或替换。
-    - 该机制同时保留 CLI 驱动能力：外部 AI 仍可通过 `npm run generate -- <name>` 和 `npm run chat-modify -- <name> "<instruction>"` 操作项目，但同样受 `userEdits` 约束。
-
-15. **关键数字 / 数据页排版原则**
-    - 同一行展示，元素不超过 4 个；超过 4 个时应拆页或改用表格/卡片。
-    - 使用 `.split-visual` + `.hero-stat` + `.big-number` 布局，数字字号由 `.big-number` 统一控制（当前 `clamp(44px, 5.5vw, 80px)`），并禁止换行。
-    - 数字项等宽分布，随视口自动缩放，最大宽度 240px。
-
-16. **主题使用约定**
-    - deck 只能使用默认主题（`web-ui`）或 `ai-ppt-base/css/themes/` 中已预设的主题之一。
-    - 没有用户明确指令时，一律使用默认主题，不要自行更换预设主题，更不要新创主题或配色。
+24. **速记碎片**：`vault/fragments/<id>.md`（id `f-<base36时间戳>-<4位随机>`），Front Matter `id/type/tags/created/status`（`inbox`|`organized`）；`#标签` 自动提取；promote 映射以 `organize.mjs` 的 `promoteFragment()` 为准；附件以 `![[name]]` token 入正文（不入 Front Matter），解析块 `📎 <name> 解析（<provider>）：` upsert 整块替换；`voice-*` 录音渲染为 `<audio>`。
+25. **Logseq 语法**：任务 `- TODO|DOING|DONE [#A|B|C]`（`Ctrl/Cmd+Enter` 循环）、行内属性 `key:: value`、块引用 `^id` + `((id))`、查询 `{{query ...}}`（and/or/not + tag/task/property/page）；解析纯函数统一在 `vault-features.mjs`，前后端规则必须一致。每日笔记 `journal-YYYY-MM-DD`。
+26. **资产与产物**：`POST /api/vault/assets` 上传存 `vault/assets/`——前端一律 `FormData` multipart 流式上传（`scripts/multipart.mjs` 零依赖解析器：文件部分写 `vault/assets/.tmp/` 临时文件不驻留内存，校验过后 rename 入库，失败自动清理；base64 JSON 保留为兼容回退），后缀 + 魔数双重校验（白名单见 `routes/vault-commons.mjs` 的 `ASSET_TYPES`），流式路径超限返回 413；`POST /api/vault/assets/:name/parse` 解析（202 + 轮询），`parse-asset.mjs` 按类型多级降级、全程不抛错。产物位置：知识库配图 → `vault/assets/`，PPT 配图 → `projects/<name>/assets/`，报告 → `vault/reports/`，视频 → `vault/assets/video-<时间戳>.mp4`。
 
 ## Skill 行为
 
-- `/ppt-structure <name>`：在 `projects/<name>/` 创建 deck，复制 `ai-ppt-base` 的 `css/ppt.css`、`js/ppt.js`、`README.md`，生成初始 `index.html` 与 `ai-ppt.json`。
-- `/ppt-preview [name]`：优先在 `projects/<name>/` 启动本地服务器；未指定名称时优先当前目录，再搜索 `projects/*/`。Web UI 生成后会自动打开预览。
-- `/ppt-edit [instruction]`：优先编辑 `projects/<name>/index.html`；未指定 deck 时优先当前目录，再搜索 `projects/*/index.html`。
-- `/ppt-export [name] [pdf|pptx]`：导出 deck 为 PDF（浏览器打印或可选 Puppeteer）或 PPTX（服务端生成）。
-- `/ppt-list`：列出 `projects/` 下所有 deck 的标识、标题、状态与最后生成时间。
-- `/ppt-delete <name>`：删除 `projects/<name>/`，操作前会要求确认。
-- `/ppt-design`：幻灯片设计规范（蒸馏自 GitHub 的 impeccable 与 taste-skill）。生成、搭建、编辑、审查 deck 时遵循：先出"设计解读"，版式轮换、眉毛（kicker/section-title）节制、禁渐变文字、禁编造数据，附交付前检查清单。
+- `/ppt-structure <name>`：在 `projects/<name>/` 创建 deck（复制基座 css/js/README，生成初始 index.html 与 ai-ppt.json）。
+- `/ppt-preview [name]` / `/ppt-edit [instruction]`：优先定位 `projects/<name>/`，未指定时优先当前目录再搜索 `projects/*/`。
+- `/ppt-export [name] [pdf|pptx]`：导出 PDF 或 PPTX；`/ppt-list`：列出所有 deck；`/ppt-delete <name>`：删除 deck（需确认）。
+- `/ppt-design`：设计规范（蒸馏自 impeccable 与 taste-skill），生成/编辑/审查 deck 时遵循。
+- `/ppt-anim` 配置动画、`/ppt-data` 数据可视化、`/ppt-theme` 主题管理、`/ppt-publish` 发布与版本管理。
 
 ## 安装与同步 skills
 
-修改 `skills/` 后，运行以下命令让本地 CLI 生效：
+修改 `skills/` 后运行 `node install-skills.js`（或 `./install-skills.sh`）。
 
-```bash
-node install-skills.js
-```
+## 测试
 
-或：
-
-```bash
-./install-skills.sh
-```
-
-## 迁移历史
-
-- v1.5 曾将 CSS/JS 内联到 `index.html`，后因升级维护困难 revert 回分离结构。
-- v1.6 引入 `projects/` 目录，统一存放业务 deck，并新增 `scripts/upgrade-decks.mjs` 同步基座引擎到所有项目。
-- v1.7 新增 Web 管理界面（`web/` + `server.mjs`）、URL/文章内容自动生成管线、PPTX/PDF 导出 skill、项目备份脚本。
-- v1.7.1 高清图片 PPTX 导出禁用动画以截取最终状态；修复 `.two-col > .visual-card` 在可编辑 PPTX 中缺失内容；PDF 导出支持自动查找 Chrome；支持 `.env.kimi` 配置 Kimi Code。
-- v1.7.2 全面对齐 `teal-editorial` 配色（ink #151A19 / cream #FAFAF7 / tile #EDF1F0 / tile-strong #E3E9E7 / teal #00B498 / navy #0B1413）；标题改为衬线、字重 400；PDF 导出改为逐页截图并合并，输出完整多页 PDF；可编辑 PPTX 同步更新配色与字体。
-- v1.7.3 新增模型配置 `modelConfig`（预设 / Base URL / Model / API Key），Web UI 加载模型列表，默认 `kimi-code`；teal 情绪色改为 `#439288`；新增 `/ppt-list` 与 `/ppt-delete` skill。
-- v1.7.4 引入 GitHub 设计 skill（impeccable + taste-skill）的蒸馏版 `/ppt-design`；`generate-deck.mjs` prompt 内置反模板化设计规则，兜底模板去除硬编码文案与编造数据；基座标题增加 `text-wrap: balance`、新增 `prefers-reduced-motion` 兜底；`progress-ring` 支持直观的 `--progress-pct` 百分比（旧 `--progress` dashoffset 写法保持兼容）；`.gradient-text` 标记弃用（保留兼容）；演示 deck 数字页改用标准 `split-visual` + `hero-stat`；修复 `ppt.js` 初始化时用 localStorage/默认主题覆盖 `<body>` 上硬编码 `theme-*` 类的问题——现在 `ai-ppt.json` 的 `theme` 字段在页面加载后真正生效。
-- v1.7.5 修复全屏时左上角帮助面板（`#help`）等悬浮 UI 常驻遮挡内容的问题：原实现用 `:fullscreen:hover` 控制显隐，鼠标只要停留在页面上 UI 就一直可见。改为 JS 无活动检测——全屏下默认隐藏帮助面板/主题切换/HUD/全屏按钮，`mousemove`/`touchstart` 时通过 `<html>.fs-ui-visible` 短暂显示，2 秒无活动后自动淡出；进入和退出全屏时重置该状态。
-- v1.7.6 修复 ↑ 预览（overview）缩略图全空白的 bug：克隆的 `.slide` 继承了基座规则的 `opacity: 0` 和视口相对 padding，旧的 `.slide-content scale(0.22)` 缩放方案因此失效。改为在 `buildOverview()` 中把克隆节点按固定 1280×800 设计尺寸布局后整体 `scale()` 进卡片，缩略图与真实页面一致；同时让 `progress-ring` 与 `waterfall` 组件在缩略图中渲染终态（动画只在 `.slide.active` 上播放）。
-- v1.8.0 大规模功能升级：① 帮助面板分组重设计（导航/视图/导出），Web UI 增加完整快捷键系统（`?`/`Ctrl+N`/`Ctrl+S`/`Ctrl+P`/`Ctrl+G`/`Ctrl+O`/`Ctrl+K`/`1-9`/`Tab`/`Esc`）与帮助面板；② LLM 多后端：`llm-adapter.mjs` 支持 LM Studio 本地模型（`http://localhost:1234/v1`，自动列出已加载模型）与任意 OpenAI 兼容远程端点，Web UI 模型预设新增 `lmstudio` 并可「刷新列表」拉取远程模型；③ 全局搜索：`scripts/search.mjs` + `GET /api/search` + 顶栏搜索框；④ 快照/版本管理：`scripts/snapshot.mjs`（`.snapshots/<name>/<id>/`）+ 快照 API + Web UI「版本」标签；⑤ Markdown 导入：内容面板一键导入 `.md/.txt`；⑥ 对话式修改：`scripts/chat-modify.mjs` + `POST /api/projects/:name/chat` + 预览区「AI 修改」聊天面板，修改前自动快照；⑦ 放映页新增可收起的缩略图导航侧边栏；⑧ `generate-deck.mjs` / `config.mjs` 的模板 HTML 同步新版帮助面板。
-- v1.8.1 演讲者模式与创作工具：① 演讲者模式 `Shift+S`（`s` 已被缩略图侧边栏占用）打开演讲者窗口——`.speaker-note` 备注提取、下一页预览、计时器，窗口随翻页同步；② 新动画 `anim-zoom`/`anim-blur`/`anim-flip`，Web UI 动画面板同步可选；③ 可视化主题编辑器：`POST /api/projects/:name/theme-overrides` 注入 `<style id="theme-overrides">` 并持久化 `ai-ppt.json.themeOverrides`（白名单变量见 server.mjs `ALLOWED_THEME_VARS`）；④ 组件库：`POST /api/projects/:name/component` 将预制 slide 插入倒数第二页，Web UI「组件」标签提供 8 种组件；⑤ 单文件 HTML 导出 `scripts/export-single-html.mjs`（内联本地 CSS/JS）+ `POST /export/html` + 导出面板按钮。
-- v1.8.2 可视化编辑、AI 约束与 Web UI 重设计：① Web UI 预览区新增「编辑模式」，iframe 内 `contenteditable` 直接改字，`POST /api/projects/:name/save-edits` 持久化；② `ai-ppt.json.userEdits` 记录用户编辑，`generate-deck.mjs`/`chat-modify.mjs` prompt 要求 LLM 保留；③ Web UI 改为「顶部工具栏 + 左侧可折叠项目列表 + 中间大画布 + 右侧属性面板」布局；④ 顶部工具栏新增导出下拉菜单；⑤ `scripts/test-smoke.mjs` 覆盖 save-edits；⑥ 模型配置提升为系统级别 `.ai-ppt-config.json`，切换项目不再变化；⑦ 全屏下隐藏帮助面板与缩略图侧边栏；⑧ 新增按页标识笔（`M` 快捷键，圈点保存在当前 slide 的 SVG overlay，非全局）。
+- `npm test` → `node --test tests/core.test.mjs`；`npm run test:smoke` → `node scripts/test-smoke.mjs`。

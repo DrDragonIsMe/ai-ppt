@@ -2,13 +2,46 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+// 循环依赖说明：link-resolver.mjs 也 import 本模块，双方模块顶层都不访问对方绑定，
+// 仅在函数运行时通过 live binding 调用，因此静态循环 import 是安全的。
+import { rebuildIndex } from './link-resolver.mjs';
+import { parseFrontMatter, stringifyFrontMatter } from './front-matter.mjs';
+import { writeFileAtomic, writeJsonAtomic } from './fs-utils.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 const VAULT_DIR = path.join(ROOT, 'vault');
-const VAULT_INDEX = path.join(ROOT, '.vault-index.json');
+const META_DIR = path.join(VAULT_DIR, '.meta');
+const VAULT_INDEX = path.join(META_DIR, 'index.json');
+// 旧索引位置（仓库根目录），仅用于一次性迁移
+const LEGACY_VAULT_INDEX = path.join(ROOT, '.vault-index.json');
 const ASSETS_DIR = path.join(VAULT_DIR, 'assets');
+const FRAGMENTS_DIR = path.join(VAULT_DIR, 'fragments');
+const CARDS_DIR = path.join(VAULT_DIR, 'knowledge-cards');
+const REPORTS_DIR = path.join(VAULT_DIR, 'reports');
+const SNAPSHOTS_VAULT_DIR = path.join(ROOT, '.snapshots', '_vault');
+
+// 保留策略：.snapshots/_vault 最多保留最近 VAULT_BACKUP_KEEP 个笔记备份目录
+const VAULT_BACKUP_KEEP = 200;
+
+// 笔记备份保留策略：备份目录按 ISO 时间戳命名（字典序=时间序），删除最旧的
+export function pruneVaultBackups(keep = VAULT_BACKUP_KEEP) {
+  if (!fs.existsSync(SNAPSHOTS_VAULT_DIR)) return 0;
+  const ids = fs.readdirSync(SNAPSHOTS_VAULT_DIR, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+  let removed = 0;
+  while (ids.length > keep) {
+    const oldest = ids.shift();
+    const target = path.join(SNAPSHOTS_VAULT_DIR, oldest);
+    if (path.dirname(target) !== SNAPSHOTS_VAULT_DIR) break; // 防路径注入
+    fs.rmSync(target, { recursive: true, force: true });
+    removed++;
+  }
+  return removed;
+}
 
 // 确保目录存在
 function ensureVaultDirs() {
@@ -18,10 +51,26 @@ function ensureVaultDirs() {
   if (!fs.existsSync(ASSETS_DIR)) {
     fs.mkdirSync(ASSETS_DIR, { recursive: true });
   }
+  if (!fs.existsSync(META_DIR)) {
+    fs.mkdirSync(META_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(REPORTS_DIR)) {
+    fs.mkdirSync(REPORTS_DIR, { recursive: true });
+  }
+}
+
+// 索引迁移：新路径不存在而旧的根目录索引存在时，复制后删除旧文件
+function migrateIndexIfNeeded() {
+  if (!fs.existsSync(VAULT_INDEX) && fs.existsSync(LEGACY_VAULT_INDEX)) {
+    ensureVaultDirs();
+    fs.copyFileSync(LEGACY_VAULT_INDEX, VAULT_INDEX);
+    fs.unlinkSync(LEGACY_VAULT_INDEX);
+  }
 }
 
 // 读取索引
 function readIndex() {
+  migrateIndexIfNeeded();
   if (!fs.existsSync(VAULT_INDEX)) {
     return { notes: {}, backlinks: {}, tags: {}, created: new Date().toISOString() };
   }
@@ -35,8 +84,10 @@ function readIndex() {
 
 // 写入索引
 function writeIndex(index) {
+  migrateIndexIfNeeded();
+  ensureVaultDirs();
   index.updated = new Date().toISOString();
-  fs.writeFileSync(VAULT_INDEX, JSON.stringify(index, null, 2), 'utf8');
+  writeJsonAtomic(VAULT_INDEX, index);
 }
 
 // 规范化笔记名（用于链接匹配）
@@ -47,6 +98,10 @@ function normalizeNoteName(name) {
 // 获取笔记文件路径
 function getNotePath(name) {
   const baseName = name.trim().replace(/\.md$/i, '') + '.md';
+  // 纵深防御：拒绝路径穿越
+  if (/[/\\]/.test(baseName) || baseName.includes('..')) {
+    throw new Error(`非法笔记名称：${name}`);
+  }
   return path.join(VAULT_DIR, baseName);
 }
 
@@ -83,7 +138,7 @@ function readNote(name) {
 function writeNote(name, content) {
   ensureVaultDirs();
   const notePath = getNotePath(name);
-  fs.writeFileSync(notePath, content, 'utf8');
+  writeFileAtomic(notePath, content);
   return notePath;
 }
 
@@ -118,43 +173,69 @@ function deleteNote(name) {
   return true;
 }
 
-// 解析Front Matter
-function parseFrontMatter(content) {
-  const frontMatter = {};
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
-  if (match) {
-    const lines = match[1].split('\n');
-    for (const line of lines) {
-      const kv = line.match(/^(\w+):\s*(.*)$/);
-      if (kv) {
-        const key = kv[1].trim();
-        let val = kv[2].trim();
-        // 解析数组，如 [HR, SaaS]
-        if (val.startsWith('[') && val.endsWith(']')) {
-          val = val.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean);
-        }
-        frontMatter[key] = val;
-      }
-    }
-    return { frontMatter, content: match[2] };
-  }
-  return { frontMatter: {}, content };
+// 转义正则特殊字符
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// 生成Front Matter字符串
-function stringifyFrontMatter(frontMatter) {
-  if (!frontMatter || Object.keys(frontMatter).length === 0) return '';
-  let lines = ['---'];
-  for (const [key, val] of Object.entries(frontMatter)) {
-    if (Array.isArray(val)) {
-      lines.push(`${key}: [${val.join(', ')}]`);
-    } else if (val !== undefined && val !== null) {
-      lines.push(`${key}: ${val}`);
+// 级联替换全部笔记 / 碎片 / 卡片中的 [[oldName]] 与 [[oldName|显示文本]]（只改链接前半部分）
+function cascadeRenameLinks(oldBase, newBase) {
+  const regex = new RegExp(`\\[\\[\\s*${escapeRegExp(oldBase)}(?=\\s*(?:\\||\\]\\]))`, 'gi');
+  let updatedRefs = 0;
+  for (const dir of [VAULT_DIR, FRAGMENTS_DIR, CARDS_DIR]) {
+    if (!fs.existsSync(dir)) continue;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+      const filePath = path.join(dir, entry.name);
+      const content = fs.readFileSync(filePath, 'utf8');
+      const replaced = content.replace(regex, () => {
+        updatedRefs++;
+        return `[[${newBase}`;
+      });
+      if (replaced !== content) {
+        writeFileAtomic(filePath, replaced);
+      }
     }
   }
-  lines.push('---\n');
-  return lines.join('\n');
+  return updatedRefs;
 }
+
+// 重命名笔记：备份原文件、fs 重命名、级联更新所有 [[Wiki链接]] 引用，最后重建索引
+function renameNote(oldName, newName) {
+  // getNotePath 内含非法名称（/、\、..）防御
+  const oldPath = getNotePath(oldName);
+  const newPath = getNotePath(newName);
+  const newBase = newName.trim().replace(/\.md$/i, '');
+  if (!fs.existsSync(oldPath)) {
+    throw new Error(`笔记 "${oldName}" 不存在`);
+  }
+  if (!newBase) {
+    throw new Error('新名称不能为空');
+  }
+  if (normalizeNoteName(oldName) === normalizeNoteName(newName)) {
+    throw new Error('新旧名称相同');
+  }
+  if (fs.existsSync(newPath)) {
+    throw new Error(`笔记 "${newBase}" 已存在`);
+  }
+  // 备份原文件到 .snapshots/_vault/<时间戳>/（与 server 的 backupVaultNote 同约定），失败只告警不阻断
+  try {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const dir = path.join(SNAPSHOTS_VAULT_DIR, ts);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(oldPath, path.join(dir, path.basename(oldPath)));
+    pruneVaultBackups();
+  } catch (err) {
+    console.error('笔记自动备份失败:', err);
+  }
+  fs.renameSync(oldPath, newPath);
+  const oldBase = oldName.trim().replace(/\.md$/i, '');
+  const updatedRefs = cascadeRenameLinks(oldBase, newBase);
+  rebuildIndex();
+  return { newName: newBase, updatedRefs };
+}
+
+// parseFrontMatter / stringifyFrontMatter 统一由 ./front-matter.mjs 提供（顶部 import + 下方 re-export）
 
 export {
   ensureVaultDirs,
@@ -167,10 +248,12 @@ export {
   writeNote,
   createNote,
   deleteNote,
+  renameNote,
   parseFrontMatter,
   stringifyFrontMatter,
   VAULT_DIR,
   ASSETS_DIR,
+  REPORTS_DIR,
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

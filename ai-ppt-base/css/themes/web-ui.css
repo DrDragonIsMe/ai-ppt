@@ -1,30 +1,30 @@
 /* ===========================================
    Theme: Web UI (Default)
-   - 基于 Web UI 的青色调
+   - 原始 teal-editorial 配色
    - 专业、克制、现代
    =========================================== */
 
 :root,
 body.theme-web-ui {
   /* Brand / Accent */
-  --teal: #0D9488;
-  --teal-light: #14B8A6;
-  --accent: #0D9488;
-  --accent-light: #F0FDFA;
-  --accent-dark: #0F766E;
+  --teal: #439288;
+  --teal-light: #7DD3C0;
+  --accent: #439288;
+  --accent-light: #EAF3F1;
+  --accent-dark: #35766A;
 
   /* Ink + Neutrals */
-  --ink: #1A2332;
-  --navy: #0F172A;
-  --slate: #475569;
-  --muted: #64748B;
-  --cream: #F7F8FA;
+  --ink: #151A19;
+  --navy: #0B1413;
+  --slate: #6B8A83;
+  --muted: #6B8A83;
+  --cream: #FAFAF7;
   --surface: #FFFFFF;
-  --surface-subtle: #EEF1F5;
-  --tile: #EEF1F5;
-  --tile-strong: #E0E4EA;
-  --border: #E0E4EA;
-  --border-strong: #CBD5E1;
+  --surface-subtle: #EDF1F0;
+  --tile: #EDF1F0;
+  --tile-strong: #E3E9E7;
+  --border: #E3E9E7;
+  --border-strong: #CBD5D1;
 
   /* Status */
   --danger: #EF4444;

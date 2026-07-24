@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readGlobalConfig } from './global-config.mjs';
+import { wrapSlides, buildBodyClass, escapeHtml } from './generation-common.mjs';
+import { injectThemeOverrides } from './theme-overrides.mjs';
+import { writeFileAtomic, writeJsonAtomic } from './fs-utils.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,7 +20,36 @@ const BASE_THEMES_DIR = path.join(BASE_DIR, 'css', 'themes');
 export const ROOT_DIR = ROOT;
 export const PROJECTS_ROOT = PROJECTS_DIR;
 
-function getThemeFiles() {
+// ---- 名称校验（统一数据源） ----
+
+// 通用安全名称：拒绝路径穿越和控制字符，允许中文、空格、点等
+export function isSafeName(name) {
+  if (typeof name !== 'string' || name.length === 0) return false;
+  if (/[/\\]/.test(name) || name.includes('..')) return false;
+  // eslint-disable-next-line no-control-regex
+  if ((/[\x00-\x1f\x7f]/.test(name))) return false;
+  return true;
+}
+
+// 项目名称：仅允许字母、数字、中文、下划线、中划线
+const PROJECT_NAME_RE = /^[a-zA-Z0-9_\u4e00-\u9fa5-]+$/;
+export function isSafeProjectName(name) {
+  return typeof name === 'string' && name.length > 0 && PROJECT_NAME_RE.test(name);
+}
+
+// 项目名校验：拒绝路径穿越
+export function assertSafeProjectName(name) {
+  if (!isSafeName(name)) {
+    throw new Error(`非法项目名：${name}`);
+  }
+}
+
+// 项目名清洗：非法字符替换为 -
+export function sanitizeProjectName(name) {
+  return name.replace(/[^\w\u4e00-\u9fa5-]/g, '-');
+}
+
+export function getThemeFiles() {
   if (!fs.existsSync(BASE_THEMES_DIR)) {
     return [];
   }
@@ -42,6 +74,8 @@ export function listProjects() {
         status: cfg.status || 'draft',
         title: cfg.params?.title || e.name,
         lastGeneratedAt: cfg.lastGeneratedAt || null,
+        sourceType: cfg.sourceType || null,
+        sourceSelection: cfg.sourceSelection || null,
       };
     });
 }
@@ -54,8 +88,10 @@ export function projectExists(name) {
   return fs.existsSync(getProjectDir(name));
 }
 
-export function ensureBaseEngine(name) {
-  const dir = getProjectDir(name);
+// 把基座引擎（ppt.css / ppt.js / css/themes/*）复制到目标目录。
+// 唯一实现：config.mjs 的 ensureBaseEngine 与 upgrade-decks.mjs 都走这里。
+// 返回 { themeCount } 供调用方打印日志。
+export function copyBaseEngine(dir) {
   const themeFiles = getThemeFiles();
 
   fs.mkdirSync(path.join(dir, 'css'), { recursive: true });
@@ -70,38 +106,35 @@ export function ensureBaseEngine(name) {
       fs.copyFileSync(themeFile, path.join(themesDest, path.basename(themeFile)));
     }
   }
+  return { themeCount: themeFiles.length };
+}
+
+export function ensureBaseEngine(name) {
+  copyBaseEngine(getProjectDir(name));
+}
+
+// 生成管线的落盘步骤：建目录 → 复制基座引擎 → wrapSlides → （可选）主题覆盖 → 原子写入 index.html
+export function writeDeckIndex(name, slidesHtml, { title, bodyClass, themeOverrides = null }) {
+  const dir = getProjectDir(name);
+  fs.mkdirSync(dir, { recursive: true });
+  ensureBaseEngine(name);
+  let html = wrapSlides(slidesHtml, title, bodyClass);
+  if (themeOverrides && Object.keys(themeOverrides).length > 0) {
+    html = injectThemeOverrides(html, themeOverrides);
+  }
+  writeFileAtomic(path.join(dir, 'index.html'), html);
+  return html;
 }
 
 export function createStarterHtml(name, title, theme = 'web-ui', animation = 'slide') {
   const subtitle = '由 ai-ppt 自动生成';
-  const themeClass = theme !== 'web-ui' ? ` theme-${theme}` : '';
-  const animClass = animation !== 'none' ? ` anim-${animation}` : '';
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)}</title>
-  <link rel="stylesheet" href="css/ppt.css">
-  <link rel="stylesheet" href="css/themes/theme-switcher.css">
-  <link rel="stylesheet" href="css/themes/web-ui.css">
-  <link rel="stylesheet" href="css/themes/business-blue.css">
-  <link rel="stylesheet" href="css/themes/elegant-purple.css">
-  <link rel="stylesheet" href="css/themes/warm-orange.css">
-  <link rel="stylesheet" href="css/themes/sunset-red.css">
-  <link rel="stylesheet" href="css/themes/tech-green.css">
-  <link rel="stylesheet" href="css/themes/minimal-gray.css">
-  <link rel="stylesheet" href="css/themes/dark-mode.css">
-</head>
-<body class="${themeClass}${animClass}">
-  <div id="app">
-    <main id="stage" class="stage">
-      <section class="slide active">
+  const bodyClass = buildBodyClass({ theme, animation });
+  const slidesHtml = `      <section class="slide active">
         <div class="slide-content" style="text-align: center;">
           <div class="kicker">AI 生成</div>
           <h1>${escapeHtml(title)}</h1>
           <p class="lead">${escapeHtml(subtitle)}</p>
-          <p style="font-size: 16px; opacity: 0.55; margin-top: 40px;">点击“生成幻灯片”开始</p>
+          <p style="font-size: 16px; opacity: 0.55; margin-top: 40px;">点击"生成幻灯片"开始</p>
         </div>
       </section>
       <section class="slide">
@@ -117,62 +150,14 @@ export function createStarterHtml(name, title, theme = 'web-ui', animation = 'sl
           <h1>谢谢</h1>
         </div>
       </section>
-    </main>
-
-    <div id="overview" class="overview hidden">
-      <div class="overview-title">幻灯片预览 · 点击跳转</div>
-      <div class="overview-grid"></div>
-    </div>
-
-    <div id="help" class="help">
-      <div class="help-header">
-        <div class="help-title">快捷键</div>
-        <div class="help-hint">按 <kbd>?</kbd> 隐藏/显示</div>
-      </div>
-      <div class="help-content">
-        <div class="help-group">
-          <div class="help-group-title">导航</div>
-          <div class="help-row"><kbd>←</kbd><span>上一页</span></div>
-          <div class="help-row"><kbd>→</kbd><span>下一页</span></div>
-          <div class="help-row"><kbd>Cmd</kbd>+<kbd>←</kbd><span>首页</span></div>
-          <div class="help-row"><kbd>Cmd</kbd>+<kbd>→</kbd><span>尾页</span></div>
-        </div>
-        <div class="help-group">
-          <div class="help-group-title">视图</div>
-          <div class="help-row"><kbd>↑</kbd><span>幻灯片预览</span></div>
-          <div class="help-row"><kbd>F</kbd><span>全屏模式</span></div>
-          <div class="help-row"><kbd>T</kbd><span>切换主题</span></div>
-        </div>
-        <div class="help-group">
-          <div class="help-group-title">导出</div>
-          <div class="help-row"><kbd>↓</kbd><span>导出 PDF</span></div>
-          <div class="help-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>打印/导出面板</span></div>
-        </div>
-        <div class="help-group">
-          <div class="help-group-title">标识笔</div>
-          <div class="help-row"><kbd>M</kbd><span>开启/退出标识笔</span></div>
-          <div class="help-row"><kbd>1</kbd>-<kbd>5</kbd><span>画笔/箭头/矩形/圆/椭圆</span></div>
-          <div class="help-row"><kbd>C</kbd><span>清除本页标记</span></div>
-        </div>
-      </div>
-      <div class="help-footer">
-        <span>全屏时：点击左侧/右侧翻页</span>
-      </div>
-    </div>
-
-    <div id="toast" class="toast"></div>
-    <div id="progress" class="progress"></div>
-    <div id="hud" class="hud"></div>
-  </div>
-  <script src="js/ppt.js"></script>
-</body>
-</html>`;
+`;
+  return wrapSlides(slidesHtml, title || name || 'ai-ppt', bodyClass);
 }
 
 export function createProject(name, title) {
   ensureProjectsDir();
-  if (!name || !/^[a-zA-Z0-9_-]+$/.test(name)) {
-    throw new Error('项目名称只能包含字母、数字、下划线和中划线');
+  if (!isSafeProjectName(name)) {
+    throw new Error('项目名称只能包含字母、数字、中文、下划线和中划线');
   }
   const dir = getProjectDir(name);
   if (fs.existsSync(dir)) {
@@ -182,7 +167,7 @@ export function createProject(name, title) {
   ensureBaseEngine(name);
   fs.copyFileSync(BASE_README, path.join(dir, 'README.md'));
   const config = defaultConfig(name, title);
-  fs.writeFileSync(path.join(dir, 'index.html'), createStarterHtml(name, title || name, config.theme, config.animation), 'utf8');
+  writeFileAtomic(path.join(dir, 'index.html'), createStarterHtml(name, title || name, config.theme, config.animation));
   writeConfig(name, config);
   return config;
 }
@@ -299,7 +284,7 @@ export function writeConfig(name, config) {
   const safe = JSON.parse(JSON.stringify(config));
   if (safe.modelConfig) delete safe.modelConfig.apiKey;
   if (safe.params) delete safe.params.model;
-  fs.writeFileSync(file, JSON.stringify(safe, null, 2), 'utf8');
+  writeJsonAtomic(file, safe);
 }
 
 export function updateStatus(name, status, errorMessage = null) {
@@ -319,11 +304,11 @@ export function applyThemeAndAnimation(name, theme, animation) {
 
   let html = fs.readFileSync(htmlPath, 'utf8');
 
-  // Build classes array
+  // Build classes array — theme class is always written (including the default
+  // web-ui) so ppt.js initThemes can tell "configured as web-ui" apart from
+  // "no theme info" and not fall back to a stale localStorage theme.
   const classes = [];
-  if (theme && theme !== 'web-ui') {
-    classes.push(`theme-${theme}`);
-  }
+  classes.push(`theme-${theme || 'web-ui'}`);
   if (animation && animation !== 'none') {
     classes.push(`anim-${animation}`);
   }
@@ -339,18 +324,10 @@ export function applyThemeAndAnimation(name, theme, animation) {
     html = html.replace('<body>', `<body class="${classStr}">`);
   }
 
-  fs.writeFileSync(htmlPath, html, 'utf8');
+  writeFileAtomic(htmlPath, html);
   return true;
 }
 
-function escapeHtml(text) {
-  if (text == null) return '';
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const cmd = process.argv[2];

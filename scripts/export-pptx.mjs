@@ -4,21 +4,32 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import PptxGenJS from 'pptxgenjs';
-import { getProjectDir, readConfig } from './config.mjs';
+import { getProjectDir, readConfig, ROOT_DIR } from './config.mjs';
+import { emit, emitDone, emitError } from './generation-common.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// Colors mirror the Web UI token set (web/css/web.css) so the exported PPTX
-// matches the on-screen deck. Brand/accent = teal #0D9488.
+// 与基座设计基准一致（ai-ppt-base/css/ppt.css：1280×800）
+const PAGE_WIDTH = 1280;
+const PAGE_HEIGHT = 800;
+
+// 产物相对路径与下载 URL（done 事件携带，前端直接触发下载）
+function downloadInfo(file) {
+  const rel = path.relative(ROOT_DIR, file).replace(/\\/g, '/');
+  return { file: rel, downloadUrl: '/' + rel };
+}
+
+// Colors mirror the deck default theme (teal-editorial) so the exported PPTX
+// matches the on-screen deck. Brand/accent = teal #439288.
 const COLORS = {
-  cream: 'F7F8FA',
-  tile: 'EEF1F5',
-  tileStrong: 'E0E4EA',
-  accent: '0D9488',
-  accentLight: 'F0FDFA',
-  navy: '0F172A',
-  ink: '1A2332',
-  slate: '475569',
+  cream: 'FAFAF7',
+  tile: 'EDF1F0',
+  tileStrong: 'E3E9E7',
+  accent: '439288',
+  accentLight: 'EAF3F1',
+  navy: '0B1413',
+  ink: '151A19',
+  slate: '6B8A83',
 };
 
 // Sans-serif (Web UI uses PingFang SC; Songti SC was the rejected serif direction).
@@ -616,13 +627,14 @@ function renderSlide(slide, $, $slide) {
   }
 }
 
-export async function exportPptx(name) {
+export async function exportPptx(name, onProgress) {
   const projectDir = getProjectDir(name);
   const indexHtml = path.join(projectDir, 'index.html');
   if (!fs.existsSync(indexHtml)) {
     throw new Error(`项目 ${name} 的 index.html 不存在`);
   }
 
+  onProgress?.('parse', '正在解析幻灯片结构');
   const html = fs.readFileSync(indexHtml, 'utf8');
   const $ = load(html);
   const slides = $('section.slide');
@@ -639,10 +651,15 @@ export async function exportPptx(name) {
     background: { color: COLORS.cream },
   });
 
+  let slideIdx = 0;
   slides.each((_, el) => {
+    slideIdx++;
+    onProgress?.('render', `正在转换第 ${slideIdx}/${slides.length} 页`);
     const slide = pres.addSlide({ masterName: 'MASTER_SLIDE' });
     renderSlide(slide, $, $(el));
   });
+
+  onProgress?.('write', '正在写入 PPTX 文件');
 
   const exportDir = path.join(projectDir, 'export');
   fs.mkdirSync(exportDir, { recursive: true });
@@ -671,9 +688,10 @@ export async function findChrome() {
   throw new Error('未找到 Chrome，请安装 Google Chrome 或设置 PUPPETEER_EXECUTABLE_PATH');
 }
 
-async function captureSlideImages(indexHtml) {
+async function captureSlideImages(indexHtml, onProgress) {
   const puppeteer = await import('puppeteer-core');
   const executablePath = await findChrome();
+  onProgress?.('launch', '正在启动浏览器');
   const browser = await puppeteer.launch({
     executablePath,
     headless: 'new',
@@ -682,7 +700,7 @@ async function captureSlideImages(indexHtml) {
 
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 2 });
+    await page.setViewport({ width: PAGE_WIDTH, height: PAGE_HEIGHT, deviceScaleFactor: 2 });
     await page.goto('file://' + indexHtml, { waitUntil: 'networkidle0' });
     await page.evaluate(() => document.fonts.ready);
 
@@ -704,6 +722,7 @@ async function captureSlideImages(indexHtml) {
 
     const images = [];
     for (let i = 0; i < slideCount; i++) {
+      onProgress?.('capture', `正在截取第 ${i + 1}/${slideCount} 页`);
       await page.evaluate((idx) => {
         // Hide UI chrome
         ['#help', '#progress', '#hud', '#toast', '#overview'].forEach((sel) => {
@@ -726,7 +745,7 @@ async function captureSlideImages(indexHtml) {
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const base64 = await page.screenshot({
         type: 'png',
-        clip: { x: 0, y: 0, width: 1280, height: 720 },
+        clip: { x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT },
         encoding: 'base64',
       });
       images.push('data:image/png;base64,' + base64);
@@ -737,14 +756,15 @@ async function captureSlideImages(indexHtml) {
   }
 }
 
-export async function exportPptxImage(name) {
+export async function exportPptxImage(name, onProgress) {
   const projectDir = getProjectDir(name);
   const indexHtml = path.join(projectDir, 'index.html');
   if (!fs.existsSync(indexHtml)) {
     throw new Error(`项目 ${name} 的 index.html 不存在`);
   }
 
-  const images = await captureSlideImages(indexHtml);
+  const images = await captureSlideImages(indexHtml, onProgress);
+  onProgress?.('write', '正在写入 PPTX 文件');
   const pres = new PptxGenJS();
   pres.layout = 'LAYOUT_16x9';
   pres.author = 'ai-ppt';
@@ -770,6 +790,8 @@ export async function exportPptxImage(name) {
   return outFile;
 }
 
+// CLI：NDJSON 协议输出到 stdout（progress/done/error，与 generate-deck.mjs 一致），
+// 服务端 spawnNdjsonTask 逐行解析；stderr 仅用于非协议日志。
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const imageMode = args.includes('--image');
@@ -778,10 +800,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.error('Usage: node scripts/export-pptx.mjs [--image] <project>');
     process.exit(1);
   }
-  (imageMode ? exportPptxImage(name) : exportPptx(name))
-    .then((file) => console.log(file))
+  const onProgress = (step, message) => emit(step, message);
+  (imageMode ? exportPptxImage(name, onProgress) : exportPptx(name, onProgress))
+    .then((file) => emitDone(downloadInfo(file)))
     .catch((err) => {
-      console.error(err.stack || err.message);
+      emitError(err.stack || err.message);
       process.exit(1);
     });
 }

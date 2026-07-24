@@ -36,6 +36,8 @@ export function runBackup(label = 'manual') {
   copyDir(path.join(ROOT, 'projects'), path.join(backupDir, 'projects'));
   copyDir(path.join(ROOT, 'skills'), path.join(backupDir, 'skills'));
   copyDir(path.join(ROOT, 'web'), path.join(backupDir, 'web'));
+  // vault 是用户笔记、卡片、测验、错题等唯一不可再生的数据，必须纳入备份
+  copyDir(path.join(ROOT, 'vault'), path.join(backupDir, 'vault'));
 
   backupFile(path.join(ROOT, 'AGENTS.md'), backupDir);
   backupFile(path.join(ROOT, 'README.md'), backupDir);

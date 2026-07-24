@@ -15,17 +15,31 @@ import {
   PRESET_MODELS,
   applyThemeAndAnimation,
   defaultModelConfig,
+  isSafeName,
+  isSafeProjectName,
 } from './scripts/config.mjs';
 import { readGlobalConfig, writeGlobalConfig } from './scripts/global-config.mjs';
-import { listModels } from './scripts/llm-adapter.mjs';
-import { search } from './scripts/search.mjs';
+import { listModels, generateSlides } from './scripts/llm-adapter.mjs';
+import { search, buildSearchIndex, invalidateSearchIndex } from './scripts/search.mjs';
 import { createSnapshot, listSnapshots, restoreSnapshot, deleteSnapshot } from './scripts/snapshot.mjs';
 import { exportSingleHtml } from './scripts/export-single-html.mjs';
 import { load as loadHtml } from 'cheerio';
 import { injectThemeOverrides } from './scripts/theme-overrides.mjs';
-import { exportPptx, exportPptxImage } from './scripts/export-pptx.mjs';
-import { exportPdf } from './scripts/export-pdf.mjs';
 import { saveEditedHtml } from './scripts/save-edits.mjs';
+import { buildGraph, readGraph } from './scripts/knowledge-graph.mjs';
+import { getCards, loadCard, saveCard, deleteCard, recordReview, getDueCards, loadMastery, saveMastery } from './scripts/knowledge-cards.mjs';
+import { getExamPapers, getExamPaper, saveExamPaper, deleteExamPaper, getExamStats, getMistakes, getMistake, saveMistake, deleteMistake, recordMistakeReview, getMistakeStats, addMistakeFromExam, buildSmartExam } from './scripts/exam-papers.mjs';
+import { listFragments, getFragment, createFragment, updateFragment, deleteFragment } from './scripts/fragments.mjs';
+import { buildOrganizeSuggestions, applyOrganizeActions } from './scripts/organize.mjs';
+import { generateImage, generateVideo, probeMediaProvider } from './scripts/media-gen.mjs';
+import { runBackup } from './scripts/backup.mjs';
+import { pruneVaultBackups } from './scripts/vault.mjs';
+import { createTaskRegistry, pushBounded, NDJSON_BUFFER_CAP } from './scripts/task-registry.mjs';
+import { randomUUID } from 'node:crypto';
+import configRoutes from './routes/config.mjs';
+import mediaRoutes from './routes/media.mjs';
+import vaultRoutes from './routes/vault.mjs';
+import projectRoutes from './routes/projects.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,17 +48,39 @@ const WEB_DIR = path.join(ROOT, 'web');
 const PROJECTS_DIR = path.join(ROOT, 'projects');
 const PUBLISHED_DIR = path.join(ROOT, 'published');
 const PORT = process.env.AI_PPT_PORT || 3456;
+// 默认只绑定回环地址，避免本机服务直接暴露到局域网；如需局域网访问设 AI_PPT_HOST=0.0.0.0
+const HOST = process.env.AI_PPT_HOST || '127.0.0.1';
 
 const generators = new Map();
+// 对话式修改（chat）任务状态，结构与 generators 相同，相互独立
+const chats = new Map();
+// 笔记 AI 对话修改任务状态（契约 O），与项目 chats 相互独立
+const noteChats = new Map();
+// 导出任务状态（键 `${name}:${type}`），路由实现见 routes/projects.mjs
+const exportTasks = new Map();
+// 统一任务注册表：媒体/解析任务状态 + NDJSON 任务元信息，内存 Map + 落盘持久化。
+// 服务重启后所有活跃任务被标记 interrupted，轮询/SSE 端点据此返回明确错误。
+const taskRegistry = createTaskRegistry({ filePath: path.join(ROOT, '.ai-ppt-tasks.json') });
+taskRegistry.load();
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf',
@@ -76,6 +112,11 @@ function loadEnvFile() {
 loadEnvFile();
 
 function send(res, status, data, type = 'application/json') {
+  // 204 No Content must not carry a body
+  if (status === 204) {
+    res.writeHead(204);
+    return res.end();
+  }
   const body = typeof data === 'string' ? data : JSON.stringify(data);
   res.writeHead(status, {
     'Content-Type': type,
@@ -97,35 +138,69 @@ function sendFile(res, filePath) {
   });
 }
 
-async function readBody(req) {
+const MAX_BODY_BYTES = 10 * 1024 * 1024; // 默认请求体上限 10MB
+
+// maxBytes 可按路由放宽（如音视频资产上传），超限行为不变
+async function readBody(req, maxBytes = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', (d) => { body += d; });
+    let size = 0;
+    let tooLarge = false;
+    req.on('data', (d) => {
+      if (tooLarge) return;
+      size += d.length;
+      if (size > maxBytes) {
+        tooLarge = true;
+        const err = new Error(`请求体超过大小限制（${Math.round(maxBytes / 1024 / 1024)}MB）`);
+        err.statusCode = 413;
+        reject(err);
+        req.resume(); // 丢弃剩余数据，避免连接挂起
+        return;
+      }
+      body += d;
+    });
     req.on('end', () => {
+      if (tooLarge) return;
       try {
         resolve(body ? JSON.parse(body) : {});
       } catch (e) {
         reject(e);
       }
     });
+    req.on('error', reject);
   });
 }
 
-function spawnGenerator(name, apiKey) {
-  if (generators.has(name)) {
-    const g = generators.get(name);
-    if (!g.done) return g;
+// NDJSON 任务 store → 任务注册表 kind（元信息持久化，重启后可识别 interrupted 任务）
+const NDJSON_STORE_KINDS = new Map([
+  [generators, 'generate'],
+  [chats, 'chat'],
+  [noteChats, 'note-chat'],
+  [exportTasks, 'export'],
+]);
+
+// 通用 NDJSON 子进程任务：逐行解析 stdout 事件存入 buffer 并推送给 SSE 监听者。
+// store 为任务状态 Map（generators / chats），name 为状态键（通常是项目名）。
+// Pass a session-only API key (if provided by the Web UI) to the child via
+// env. It is never written to disk; child scripts prefer it over the
+// ambient OPENAI_API_KEY.
+function spawnNdjsonTask(store, name, script, args, apiKey) {
+  // 同名任务覆盖旧 state 前：向旧 SSE 连接推错误事件并关闭，避免旧连接静默失效
+  const prev = store.get(name);
+  if (prev) {
+    const ev = { type: 'error', message: '任务已被新任务取代' };
+    prev.listeners.forEach((fn) => { try { fn(ev); } catch { /* 连接可能已断开 */ } });
+    prev.listeners.clear();
+    prev.done = true;
+    try { prev.process?.kill?.(); } catch { /* 进程可能已退出 */ }
   }
 
-  // Pass a session-only API key (if provided by the Web UI) to the child via
-  // env. It is never written to disk; generate-deck.mjs prefers it over the
-  // ambient OPENAI_API_KEY.
   const env = { ...process.env };
   if (apiKey) env.AI_PPT_API_KEY = apiKey;
 
   const child = spawn(process.execPath, [
-    path.join(ROOT, 'scripts', 'generate-deck.mjs'),
-    name,
+    path.join(ROOT, 'scripts', script),
+    ...args,
   ], { cwd: ROOT, env });
 
   const state = {
@@ -137,44 +212,91 @@ function spawnGenerator(name, apiKey) {
     error: null,
   };
 
+  // 元信息写入任务注册表（kind/name/status/起止时间），供重启恢复识别
+  const kind = NDJSON_STORE_KINDS.get(store) || 'ndjson';
+  const metaId = `ndjson:${kind}:${name}`;
+  taskRegistry.create(metaId, { kind, name, status: 'running', startedAt: new Date().toISOString() });
+
+  const pushEvent = (event) => {
+    pushBounded(state.buffer, event, NDJSON_BUFFER_CAP);
+    state.listeners.forEach((fn) => fn(event));
+  };
+
   const rl = createInterface({ input: child.stdout });
   rl.on('line', (line) => {
+    if (!line.trim()) return;
     let event;
     try {
       event = JSON.parse(line);
     } catch {
       event = { type: 'log', message: line };
     }
-    state.buffer.push(event);
-    state.listeners.forEach((fn) => fn(event));
+    pushEvent(event);
   });
 
   child.stderr.on('data', (d) => {
-    const event = { type: 'stderr', message: d.toString() };
-    state.buffer.push(event);
-    state.listeners.forEach((fn) => fn(event));
+    pushEvent({ type: 'stderr', message: d.toString() });
   });
 
   child.on('error', (err) => {
     state.error = err.message;
-    const event = { type: 'error', message: err.message };
-    state.buffer.push(event);
-    state.listeners.forEach((fn) => fn(event));
+    pushEvent({ type: 'error', message: err.message });
     state.done = true;
   });
 
   child.on('close', (code) => {
-    const event = code === 0
-      ? { type: 'done' }
-      : { type: 'error', message: `生成进程退出码 ${code}` };
-    state.buffer.push(event);
-    state.listeners.forEach((fn) => fn(event));
+    // 脚本自己输出过 done/error 终态事件时不再重复补发
+    const last = state.buffer[state.buffer.length - 1];
+    const alreadyFinal = last && (last.type === 'done' || last.type === 'error');
+    if (!alreadyFinal) {
+      pushEvent(code === 0
+        ? { type: 'done' }
+        : { type: 'error', message: `进程退出码 ${code}` });
+    }
     state.done = true;
-    setTimeout(() => generators.delete(name), 60000);
+    const finalEvent = state.buffer[state.buffer.length - 1];
+    if (finalEvent && finalEvent.type === 'error') {
+      taskRegistry.fail(metaId, finalEvent.message || '任务失败');
+    } else {
+      taskRegistry.complete(metaId);
+    }
+    setTimeout(() => store.delete(name), 60000);
   });
 
-  generators.set(name, state);
+  store.set(name, state);
   return state;
+}
+
+// 重启恢复：注册表里 interrupted 的 NDJSON 任务回填为已完成（错误事件）的合成 state，
+// 使 GET .../events 回放一条明确错误后收尾，而不是 404/挂起。
+function restoreInterruptedNdjsonTasks() {
+  for (const t of taskRegistry.list()) {
+    if (t.status !== 'interrupted' || !t.name) continue;
+    const store = [...NDJSON_STORE_KINDS.entries()].find(([, k]) => k === t.kind)?.[0];
+    if (!store || store.has(t.name)) continue;
+    const state = {
+      name: t.name,
+      process: null,
+      buffer: [{ type: 'error', message: t.error || '服务已重启，任务中断，请重试' }],
+      listeners: new Set(),
+      done: true,
+      error: t.error || 'interrupted',
+    };
+    store.set(t.name, state);
+    setTimeout(() => { if (store.get(t.name) === state) store.delete(t.name); }, 60000).unref();
+  }
+}
+restoreInterruptedNdjsonTasks();
+
+// 是否有进行中（未完成）的任务，用于并发防护
+function hasActiveTask(store, name) {
+  const state = store.get(name);
+  return !!(state && !state.done);
+}
+
+function spawnGenerator(name, apiKey) {
+  if (hasActiveTask(generators, name)) return generators.get(name);
+  return spawnNdjsonTask(generators, name, 'generate-deck.mjs', [name], apiKey);
 }
 
 function serveSse(res, state) {
@@ -184,25 +306,65 @@ function serveSse(res, state) {
     Connection: 'keep-alive',
   });
 
-  // Avoid double-ending the response: send all buffered events, then end
-  // only once at the end when the generator has already finished.
-  const sendEvent = (event) => {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-  };
-
-  state.buffer.forEach(sendEvent);
+  // 已结束的任务只需回放完整 buffer 后收尾
   if (state.done) {
+    for (const event of state.buffer) {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    }
     res.end();
     return;
   }
 
+  // sentCount 记录已推送的 buffer 事件数，用于回放与实时推送之间去重
+  let sentCount = 0;
+  const sendEvent = (event) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+    sentCount++;
+  };
+
+  // 先注册 listener 再回放 buffer，避免注册前到达的事件丢失；
+  // listener 触发时已计入 sentCount，回放时自动跳过不重复推送
   state.listeners.add(sendEvent);
-  reqOnClose(res, () => state.listeners.delete(sendEvent));
+  while (sentCount < state.buffer.length) {
+    sendEvent(state.buffer[sentCount]);
+  }
+
+  // 25 秒心跳（SSE 注释行），防止中间代理因长时间无数据断连
+  const heartbeat = setInterval(() => {
+    res.write(':hb\n\n');
+  }, 25000);
+
+  reqOnClose(res, () => {
+    state.listeners.delete(sendEvent);
+    clearInterval(heartbeat);
+  });
 }
 
 function reqOnClose(reqOrRes, fn) {
   reqOrRes.on('close', fn);
   reqOrRes.on('error', fn);
+}
+
+// PPT chat 历史（契约 P）：持久化到 projects/<name>/chat-history.json，最多保留 50 条。
+// 读取/写入失败均降级（返回空数组 / 静默忽略），不影响 chat 主流程。
+function readChatHistory(name) {
+  try {
+    const messages = JSON.parse(fs.readFileSync(path.join(PROJECTS_DIR, name, 'chat-history.json'), 'utf8'));
+    return Array.isArray(messages) ? messages : [];
+  } catch {
+    return [];
+  }
+}
+
+function appendChatHistory(name, role, content) {
+  try {
+    const messages = readChatHistory(name);
+    messages.push({ role, content, time: new Date().toISOString() });
+    const trimmed = messages.slice(-50);
+    fs.writeFileSync(path.join(PROJECTS_DIR, name, 'chat-history.json'), JSON.stringify(trimmed, null, 2));
+  } catch (err) {
+    console.error('chat 历史写入失败:', err);
+  }
 }
 
 // Confine a resolved path under its root to prevent path traversal (../).
@@ -215,7 +377,25 @@ function isWithinRoot(rootPath, relPath) {
   return target === root || target.startsWith(root + path.sep);
 }
 
-const PROJECT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+// PROJECT_NAME_RE 已迁移到 config.mjs 的 isSafeProjectName()
+
+// isSafeName 现在从 config.mjs 导入（统一数据源）
+
+// Validate a route/body name; sends 400 and returns false when invalid.
+function validName(name, res, error = '非法名称') {
+  if (!isSafeName(name)) {
+    send(res, 400, { error });
+    return false;
+  }
+  return true;
+}
+
+// 多模态模型配置默认值（契约 E）：空 model 表示使用 CLI 默认模型
+const DEFAULT_MEDIA_MODEL_CONFIG = { provider: 'arkcli', model: '' };
+
+// presentGlobalConfig → routes/config.mjs
+
+// resolveMediaTarget → routes/media.mjs
 
 // Vault helpers (dynamic import to keep server.mjs light)
 let vaultApi = null;
@@ -224,6 +404,7 @@ async function ensureVaultApi() {
   const vaultMod = await import(path.join(ROOT, 'scripts', 'vault.mjs'));
   const linkResolverMod = await import(path.join(ROOT, 'scripts', 'link-resolver.mjs'));
   const generateFromNoteMod = await import(path.join(ROOT, 'scripts', 'generate-from-note.mjs'));
+  const generateReportMod = await import(path.join(ROOT, 'scripts', 'generate-report.mjs'));
   vaultApi = {
     listNotes: vaultMod.listNotes,
     readNote: vaultMod.readNote,
@@ -238,475 +419,205 @@ async function ensureVaultApi() {
     rebuildIndex: linkResolverMod.rebuildIndex,
     getNoteInfo: linkResolverMod.getNoteInfo,
     searchNotes: linkResolverMod.searchNotes,
+    renameNote: vaultMod.renameNote,
+    findUnlinkedMentions: linkResolverMod.findUnlinkedMentions,
+    linkMentions: linkResolverMod.linkMentions,
+    getAllTags: linkResolverMod.getAllTags,
+    runQuery: linkResolverMod.runQuery,
     generateFromNote: generateFromNoteMod.generateFromNote,
+    generateReport: generateReportMod.generateReport,
   };
   return vaultApi;
 }
 
+// 删除/覆盖笔记前自动备份原文件到 .snapshots/_vault/<时间戳>/，失败只告警不阻断
+function backupVaultNote(api, name) {
+  try {
+    const src = api.getNotePath(name);
+    if (!fs.existsSync(src)) return;
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const dir = path.join(ROOT, '.snapshots', '_vault', ts);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(src, path.join(dir, path.basename(src)));
+    pruneVaultBackups();
+  } catch (err) {
+    console.error('笔记自动备份失败:', err);
+  }
+}
+
+// 三组模型配置对外呈现（供 configRoutes 使用）
+function presentGlobalConfigFn(cfg) {
+  const strip = (group, fallback) => {
+    const { apiKey, ...rest } = group || fallback;
+    if (apiKey) rest.apiKeySet = true;
+    return rest;
+  };
+  return {
+    modelConfig: strip(cfg.modelConfig, {}),
+    imageModelConfig: strip(cfg.imageModelConfig, DEFAULT_MEDIA_MODEL_CONFIG),
+    videoModelConfig: strip(cfg.videoModelConfig, DEFAULT_MEDIA_MODEL_CONFIG),
+  };
+}
+
+// ---- 路由模块依赖装配（DI）----
+// 每个路由工厂一个命名 deps 对象（禁止位置传参），启动时用 assertDeps 校验必需键，
+// 缺依赖直接报清晰错误，而不是运行期 undefined。
+function assertDeps(moduleName, deps, required) {
+  const missing = required.filter((k) => deps[k] === undefined);
+  if (missing.length) {
+    throw new Error(`[server] 路由模块 ${moduleName} 缺少依赖: ${missing.join(', ')}`);
+  }
+}
+
+// vault（知识库：笔记/碎片/资产/学习/星图，按域拆分于 routes/vault-*.mjs）
+const vaultDeps = {
+  // 基础工具
+  send, readBody, validName, sendFile, ROOT,
+  ensureVaultApi, backupVaultNote,
+  // NDJSON 任务
+  hasActiveTask, spawnNdjsonTask, serveSse,
+  generators, noteChats,
+  // 学习域（卡片/测验/错题）
+  getCards, loadCard, saveCard, deleteCard, recordReview, getDueCards,
+  getExamPapers, getExamPaper, saveExamPaper, deleteExamPaper, getExamStats,
+  getMistakes, getMistake, saveMistake, deleteMistake, recordMistakeReview,
+  getMistakeStats, addMistakeFromExam, buildSmartExam,
+  // 碎片域
+  listFragments, getFragment, createFragment, updateFragment, deleteFragment,
+  buildOrganizeSuggestions, applyOrganizeActions,
+  // 星图/搜索/多笔记生成
+  buildGraph, readGraph, generateSlides,
+  readGlobalConfig, DEFAULT_MEDIA_MODEL_CONFIG, ensureDir, randomUUID,
+  generateVideo, taskRegistry,
+};
+assertDeps('vault', vaultDeps, [
+  'send', 'readBody', 'validName', 'sendFile', 'ROOT',
+  'ensureVaultApi', 'backupVaultNote',
+  'hasActiveTask', 'spawnNdjsonTask', 'serveSse',
+  'generators', 'noteChats',
+  'getCards', 'loadCard', 'saveCard', 'deleteCard', 'recordReview', 'getDueCards',
+  'getExamPapers', 'getExamPaper', 'saveExamPaper', 'deleteExamPaper', 'getExamStats',
+  'getMistakes', 'getMistake', 'saveMistake', 'deleteMistake', 'recordMistakeReview',
+  'getMistakeStats', 'addMistakeFromExam', 'buildSmartExam',
+  'listFragments', 'getFragment', 'createFragment', 'updateFragment', 'deleteFragment',
+  'buildOrganizeSuggestions', 'applyOrganizeActions',
+  'buildGraph', 'readGraph', 'generateSlides',
+  'readGlobalConfig', 'DEFAULT_MEDIA_MODEL_CONFIG', 'ensureDir', 'randomUUID',
+  'generateVideo', 'taskRegistry',
+]);
+
+// config（模型配置）
+const configDeps = {
+  send, readBody, presentGlobalConfig: presentGlobalConfigFn,
+  readGlobalConfig, writeGlobalConfig, PRESET_MODELS, listModels,
+};
+assertDeps('config', configDeps, [
+  'send', 'readBody', 'presentGlobalConfig',
+  'readGlobalConfig', 'writeGlobalConfig', 'PRESET_MODELS', 'listModels',
+]);
+
+// media（图片/视频生成与任务轮询）
+const mediaDeps = {
+  send, readBody, validName, readGlobalConfig, DEFAULT_MEDIA_MODEL_CONFIG,
+  ensureDir, randomUUID, generateImage, generateVideo, probeMediaProvider,
+  taskRegistry, ROOT, projectExists, getProjectDir,
+};
+assertDeps('media', mediaDeps, [
+  'send', 'readBody', 'validName', 'readGlobalConfig', 'DEFAULT_MEDIA_MODEL_CONFIG',
+  'ensureDir', 'randomUUID', 'generateImage', 'generateVideo', 'probeMediaProvider',
+  'taskRegistry', 'ROOT', 'projectExists', 'getProjectDir',
+]);
+
+// projects（项目 CRUD/生成/chat/导出/快照/发布）
+const projectDeps = {
+  send, readBody, validName, ROOT, PROJECTS_DIR, PUBLISHED_DIR,
+  listProjects, createProject, deleteProject,
+  readConfig, writeConfig, getProjectDir, projectExists, applyThemeAndAnimation,
+  generators, chats, spawnGenerator, spawnNdjsonTask, hasActiveTask, serveSse,
+  exportTasks,
+  readChatHistory, appendChatHistory,
+  exportSingleHtml,
+  loadHtml, injectThemeOverrides, saveEditedHtml, search, invalidateSearchIndex,
+  createSnapshot, listSnapshots, restoreSnapshot, deleteSnapshot,
+};
+assertDeps('projects', projectDeps, [
+  'send', 'readBody', 'validName', 'ROOT', 'PROJECTS_DIR', 'PUBLISHED_DIR',
+  'listProjects', 'createProject', 'deleteProject',
+  'readConfig', 'writeConfig', 'getProjectDir', 'projectExists', 'applyThemeAndAnimation',
+  'generators', 'chats', 'spawnGenerator', 'spawnNdjsonTask', 'hasActiveTask', 'serveSse',
+  'exportTasks',
+  'readChatHistory', 'appendChatHistory',
+  'exportSingleHtml',
+  'loadHtml', 'injectThemeOverrides', 'saveEditedHtml', 'search', 'invalidateSearchIndex',
+  'createSnapshot', 'listSnapshots', 'restoreSnapshot', 'deleteSnapshot',
+]);
+
+// 路由表：系统路由（主题/Dashboard/备份）+ 4 个路由模块
+// 约定：按数组顺序首条匹配即返回，字面量路由必须排在通配符路由之前。
 const routes = [
-  // Vault endpoints
-  { method: 'GET', pattern: /^\/api\/vault\/notes$/, handler: async (_req, res) => {
-    const api = await ensureVaultApi();
-    api.ensureVaultDirs();
-    send(res, 200, api.listNotes());
-  }},
-  { method: 'GET', pattern: /^\/api\/vault\/notes\/([^/]+)$/, handler: async (req, res, matches) => {
-    const api = await ensureVaultApi();
-    const name = decodeURIComponent(matches[1]);
-    const content = api.readNote(name);
-    if (content === null) return send(res, 404, { error: '笔记不存在' });
-    const { frontMatter } = api.parseFrontMatter(content);
-    send(res, 200, { name, content, frontMatter });
-  }},
-  { method: 'GET', pattern: /^\/api\/vault\/notes\/([^/]+)\/info$/, handler: async (req, res, matches) => {
-    const api = await ensureVaultApi();
-    const name = decodeURIComponent(matches[1]);
-    try {
-      // Rebuild index to get fresh backlinks
-      api.rebuildIndex();
-      const info = api.getNoteInfo(name);
-      send(res, 200, info);
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/vault\/notes$/, handler: async (req, res) => {
-    const api = await ensureVaultApi();
-    const body = await readBody(req);
-    try {
-      const notePath = api.createNote(body.name, body.content || '');
-      // Rebuild index after creating
-      api.rebuildIndex();
-      send(res, 201, { name: body.name, path: notePath });
-    } catch (err) {
-      send(res, 400, { error: err.message });
-    }
-  }},
-  { method: 'PUT', pattern: /^\/api\/vault\/notes\/([^/]+)$/, handler: async (req, res, matches) => {
-    const api = await ensureVaultApi();
-    const name = decodeURIComponent(matches[1]);
-    const body = await readBody(req);
-    try {
-      const notePath = api.writeNote(name, body.content);
-      // Rebuild index after modifying
-      api.rebuildIndex();
-      send(res, 200, { name, path: notePath });
-    } catch (err) {
-      send(res, 400, { error: err.message });
-    }
-  }},
-  { method: 'DELETE', pattern: /^\/api\/vault\/notes\/([^/]+)$/, handler: async (req, res, matches) => {
-    const api = await ensureVaultApi();
-    const name = decodeURIComponent(matches[1]);
-    try {
-      api.deleteNote(name);
-      api.rebuildIndex();
-      send(res, 204, {});
-    } catch (err) {
-      send(res, 400, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/vault\/notes\/([^/]+)\/generate-ppt$/, handler: async (req, res, matches) => {
-    const api = await ensureVaultApi();
-    const name = decodeURIComponent(matches[1]);
-    const body = await readBody(req);
-    const projectName = body.projectName || name.replace(/[^\w\u4e00-\u9fa5-]/g, '-');
-    const includeLinked = body.includeLinked || false;
-    
-    // Spawn generator in background, similar to existing spawnGenerator
-    const env = { ...process.env };
-    if (body.apiKey) env.AI_PPT_API_KEY = body.apiKey;
-    
-    const child = spawn(process.execPath, [
-      path.join(ROOT, 'scripts', 'generate-from-note.mjs'),
-      name,
-      projectName,
-      ...(includeLinked ? ['--include-linked'] : []),
-    ], { cwd: ROOT, env });
-    
-    const state = {
-      name: projectName,
-      process: child,
-      buffer: [],
-      listeners: new Set(),
-      done: false,
-      error: null,
-    };
-    
-    const rl = createInterface({ input: child.stdout });
-    rl.on('line', (line) => {
-      let event;
+  // 主题列表：从 themes.json 唯一数据源读取
+  {
+    method: 'GET', pattern: /^\/api\/themes$/, handler: async (_req, res) => {
       try {
-        event = JSON.parse(line);
+        const themesPath = path.join(ROOT, 'ai-ppt-base', 'themes.json');
+        const themes = JSON.parse(fs.readFileSync(themesPath, 'utf8'));
+        send(res, 200, themes);
       } catch {
-        event = { type: 'log', message: line };
+        send(res, 200, []);
       }
-      state.buffer.push(event);
-      state.listeners.forEach((fn) => fn(event));
-    });
-    child.stderr.on('data', (d) => {
-      const event = { type: 'stderr', message: d.toString() };
-      state.buffer.push(event);
-      state.listeners.forEach((fn) => fn(event));
-    });
-    child.on('error', (err) => {
-      state.error = err.message;
-      const event = { type: 'error', message: err.message };
-      state.buffer.push(event);
-      state.listeners.forEach((fn) => fn(event));
-      state.done = true;
-    });
-    child.on('close', (code) => {
-      const event = code === 0
-        ? { type: 'done', projectName }
-        : { type: 'error', message: `生成进程退出码 ${code}` };
-      state.buffer.push(event);
-      state.listeners.forEach((fn) => fn(event));
-      state.done = true;
-      setTimeout(() => generators.delete(projectName), 60000);
-    });
-    
-    generators.set(projectName, state);
-    send(res, 202, { message: '生成已启动', name: projectName });
-  }},
-  { method: 'GET', pattern: /^\/api\/vault\/search$/, handler: async (req, res) => {
-    const api = await ensureVaultApi();
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const query = url.searchParams.get('q') || '';
-    try {
-      const results = api.searchNotes(query);
-      send(res, 200, results);
-    } catch (err) {
-      send(res, 500, { error: err.message });
     }
-  }},
-  { method: 'POST', pattern: /^\/api\/vault\/index$/, handler: async (_req, res) => {
-    const api = await ensureVaultApi();
-    const index = api.rebuildIndex();
-    send(res, 200, { notesCount: Object.keys(index.notes).length });
-  }},
-  
-  { method: 'GET', pattern: /^\/api\/config$/, handler: async (_req, res) => {
-    send(res, 200, readGlobalConfig());
-  }},
-  { method: 'POST', pattern: /^\/api\/config$/, handler: async (req, res) => {
-    const body = await readBody(req);
-    try {
-      const cfg = writeGlobalConfig(body);
-      send(res, 200, cfg);
-    } catch (err) {
-      send(res, 500, { error: err.message });
+  },
+  // Dashboard（契约 K）
+  {
+    method: 'GET', pattern: /^\/api\/dashboard$/, handler: async (_req, res) => {
+      const result = {
+        todayFragments: 0, inboxFragments: 0, dueCards: 0, lowMasteryMistakes: 0,
+        recentFragments: [], counts: { notes: 0, cards: 0, exams: 0, mistakes: 0, projects: 0 },
+      };
+      try {
+        const fragments = listFragments();
+        const today = new Date().toLocaleDateString('sv');
+        result.todayFragments = fragments.filter((f) => {
+          if (!f.created) return false;
+          const d = new Date(f.created);
+          return !Number.isNaN(d.getTime()) && d.toLocaleDateString('sv') === today;
+        }).length;
+        result.inboxFragments = fragments.filter((f) => f.status === 'inbox').length;
+        result.recentFragments = fragments.slice(0, 10);
+      } catch { /* 碎片数据降级 */ }
+      try { result.dueCards = getDueCards().length; } catch { /* 卡片数据降级 */ }
+      try {
+        const mistakes = getMistakes();
+        result.lowMasteryMistakes = mistakes.filter((m) => (m.mastery || 0) <= 2).length;
+        result.counts.mistakes = mistakes.length;
+      } catch { /* 错题数据降级 */ }
+      try { result.counts.cards = getCards().length; } catch { /* 卡片计数降级 */ }
+      try { result.counts.exams = getExamPapers().length; } catch { /* 测验计数降级 */ }
+      try { const api = await ensureVaultApi(); result.counts.notes = api.listNotes().length; } catch { /* 笔记计数降级 */ }
+      try { result.counts.projects = listProjects().length; } catch { /* 项目计数降级 */ }
+      send(res, 200, result);
     }
-  }},
-  { method: 'GET', pattern: /^\/api\/models$/, handler: async (_req, res) => {
-    send(res, 200, PRESET_MODELS);
-  }},
-  { method: 'POST', pattern: /^\/api\/models\/list-remote$/, handler: async (req, res) => {
-    const body = await readBody(req);
-    try {
-      const models = await listModels({
-        baseUrl: body.baseUrl,
-        apiKey: body.apiKey,
-      });
-      send(res, 200, models);
-    } catch (err) {
-      send(res, 200, []); // silently fail - just return empty list
+  },
+  // 手动备份（契约 Q）
+  {
+    method: 'POST', pattern: /^\/api\/backup$/, handler: async (_req, res) => {
+      try { send(res, 200, { dir: runBackup('manual') }); }
+      catch (err) { send(res, err.statusCode || 500, { error: err.message }); }
     }
-  }},
-  { method: 'GET', pattern: /^\/api\/projects$/, handler: async (_req, res) => {
-    send(res, 200, listProjects());
-  }},
-  { method: 'GET', pattern: /^\/api\/search$/, handler: async (req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const query = url.searchParams.get('q') || '';
-    try {
-      send(res, 200, search(query));
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects$/, handler: async (req, res) => {
-    const body = await readBody(req);
-    try {
-      const cfg = createProject(body.name, body.title);
-      send(res, 201, cfg);
-    } catch (err) {
-      send(res, 400, { error: err.message });
-    }
-  }},
-  { method: 'DELETE', pattern: /^\/api\/projects\/([^/]+)$/, handler: async (req, res, matches) => {
-    try {
-      deleteProject(matches[1]);
-      send(res, 204, {});
-    } catch (err) {
-      send(res, 400, { error: err.message });
-    }
-  }},
-  { method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/config$/, handler: async (_req, res, matches) => {
-    if (!projectExists(matches[1])) return send(res, 404, { error: '项目不存在' });
-    send(res, 200, readConfig(matches[1]));
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/config$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    const body = await readBody(req);
-    const cfg = readConfig(name);
-    if (body.sourceType !== undefined) cfg.sourceType = body.sourceType;
-    if (body.sourceUrl !== undefined) cfg.sourceUrl = body.sourceUrl;
-    if (body.articleText !== undefined) cfg.articleText = body.articleText;
-    if (body.params) cfg.params = { ...cfg.params, ...body.params };
-    if (body.modelConfig) cfg.modelConfig = { ...cfg.modelConfig, ...body.modelConfig };
-    if (body.theme !== undefined) cfg.theme = body.theme;
-    if (body.animation !== undefined) cfg.animation = body.animation;
-    writeConfig(name, cfg); // writeConfig strips apiKey/params.model
-    // Apply theme and animation to existing HTML file
-    try {
-      applyThemeAndAnimation(name, cfg.theme || 'web-ui', cfg.animation || 'slide');
-    } catch (err) {
-      // Don't fail the request if HTML update fails
-      console.error('Failed to apply theme/animation:', err);
-    }
-    send(res, 200, readConfig(name));
-  }},
-  { method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/snapshots$/, handler: async (_req, res, matches) => {
-    if (!projectExists(matches[1])) return send(res, 404, { error: '项目不存在' });
-    send(res, 200, listSnapshots(matches[1]));
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/snapshots$/, handler: async (req, res, matches) => {
-    if (!projectExists(matches[1])) return send(res, 404, { error: '项目不存在' });
-    const body = await readBody(req);
-    try {
-      send(res, 201, createSnapshot(matches[1], body.description || ''));
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/snapshots\/([^/]+)\/restore$/, handler: async (_req, res, matches) => {
-    if (!projectExists(matches[1])) return send(res, 404, { error: '项目不存在' });
-    try {
-      restoreSnapshot(matches[1], matches[2]);
-      send(res, 200, { restored: matches[2] });
-    } catch (err) {
-      send(res, 400, { error: err.message });
-    }
-  }},
-  { method: 'DELETE', pattern: /^\/api\/projects\/([^/]+)\/snapshots\/([^/]+)$/, handler: async (_req, res, matches) => {
-    if (!projectExists(matches[1])) return send(res, 404, { error: '项目不存在' });
-    try {
-      deleteSnapshot(matches[1], matches[2]);
-      send(res, 204, {});
-    } catch (err) {
-      send(res, 400, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/chat$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    const body = await readBody(req);
-    const instruction = (body.instruction || '').trim();
-    if (!instruction) return send(res, 400, { error: '请提供修改指令' });
-
-    const env = { ...process.env };
-    if (body.apiKey) env.AI_PPT_API_KEY = body.apiKey;
-
-    try {
-      const result = await new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, [
-          path.join(ROOT, 'scripts', 'chat-modify.mjs'),
-          name,
-          instruction,
-        ], { cwd: ROOT, env });
-        let lastError = '';
-        child.stdout.on('data', (d) => {
-          for (const line of d.toString().split('\n').filter(Boolean)) {
-            try {
-              const event = JSON.parse(line);
-              if (event.type === 'error') lastError = event.message;
-            } catch { /* ignore */ }
-          }
-        });
-        child.stderr.on('data', () => { /* ignore */ });
-        child.on('error', reject);
-        child.on('close', (code) => {
-          if (code === 0) resolve();
-          else reject(new Error(lastError || `修改进程退出码 ${code}`));
-        });
-      });
-      send(res, 200, { ok: true });
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/save-edits$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    const body = await readBody(req);
-    const html = (body.html || '').trim();
-    if (!html) return send(res, 400, { error: '请提供编辑后的 HTML' });
-    try {
-      const record = saveEditedHtml(name, html);
-      send(res, 200, record);
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/generate$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    const body = await readBody(req);
-    spawnGenerator(name, body.apiKey);
-    send(res, 202, { message: '生成已启动', name });
-  }},
-  { method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/generate\/events$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    const state = generators.get(name) || spawnGenerator(name);
-    serveSse(res, state);
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/pptx$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    try {
-      const file = await exportPptx(name);
-      const rel = path.relative(ROOT, file);
-      send(res, 200, { file: rel, downloadUrl: '/' + rel.replace(/\\/g, '/') });
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/pptx-image$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    try {
-      const file = await exportPptxImage(name);
-      const rel = path.relative(ROOT, file);
-      send(res, 200, { file: rel, downloadUrl: '/' + rel.replace(/\\/g, '/') });
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/pdf$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    try {
-      const result = await exportPdf(name);
-      if (result.fallback) {
-        send(res, 200, { fallback: true, message: result.message });
-      } else {
-        const rel = path.relative(ROOT, result.file);
-        send(res, 200, { file: rel, downloadUrl: '/' + rel.replace(/\\/g, '/') });
-      }
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/html$/, handler: async (_req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    try {
-      const file = await exportSingleHtml(name);
-      const rel = path.relative(ROOT, file);
-      send(res, 200, { file: rel, downloadUrl: '/' + rel.replace(/\\/g, '/') });
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/component$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    const body = await readBody(req);
-    const componentHtml = (body.html || '').trim();
-    if (!componentHtml) return send(res, 400, { error: '请提供组件 HTML' });
-    try {
-      insertComponent(name, componentHtml);
-      send(res, 200, { ok: true });
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/theme-overrides$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    const body = await readBody(req);
-    try {
-      applyThemeOverrides(name, body.overrides || {});
-      send(res, 200, { ok: true });
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  // Publish endpoints
-  { method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/publish$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    try {
-      const result = await publishProject(name);
-      send(res, 201, result);
-    } catch (err) {
-      send(res, 500, { error: err.message });
-    }
-  }},
-  { method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/publish$/, handler: async (req, res, matches) => {
-    const name = matches[1];
-    if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-    const history = getPublishHistory(name);
-    send(res, 200, history);
-  }},
-  { method: 'GET', pattern: /^\/api\/published$/, handler: async (req, res) => {
-    const list = listPublishedProjects();
-    send(res, 200, list);
-  }},
+  },
+  // 路由模块：vault（知识库）、config（配置）、media（媒体）、projects（项目）
+  ...vaultRoutes(vaultDeps),
+  ...configRoutes(configDeps),
+  ...mediaRoutes(mediaDeps),
+  ...projectRoutes(projectDeps),
 ];
+
 
 function projectExists(name) {
   return fs.existsSync(getProjectDir(name));
 }
 
-// Insert a component slide before the last slide (usually the thank-you page).
-function insertComponent(name, componentHtml) {
-  const htmlPath = path.join(getProjectDir(name), 'index.html');
-  if (!fs.existsSync(htmlPath)) {
-    throw new Error('项目尚未生成幻灯片');
-  }
-  const $ = loadHtml(fs.readFileSync(htmlPath, 'utf8'));
-  const slides = $('main.stage section.slide');
-  if (slides.length === 0) {
-    throw new Error('未找到幻灯片结构');
-  }
-
-  let section = componentHtml;
-  if (!/class="[^"]*slide/.test(section)) {
-    section = `<section class="slide">${section}</section>`;
-  }
-
-  if (slides.length > 1) {
-    $(slides[slides.length - 1]).before('\n' + section + '\n');
-  } else {
-    $('main.stage').append('\n' + section + '\n');
-  }
-
-  // Keep exactly the first slide active
-  $('main.stage section.slide').removeClass('active');
-  $('main.stage section.slide').first().addClass('active');
-
-  fs.writeFileSync(htmlPath, $.html(), 'utf8');
-}
-
-// Inject/replace a <style id="theme-overrides"> block that overrides CSS variables.
-function applyThemeOverrides(name, overrides) {
-  const htmlPath = path.join(getProjectDir(name), 'index.html');
-  if (!fs.existsSync(htmlPath)) {
-    throw new Error('项目尚未生成幻灯片');
-  }
-  let html = fs.readFileSync(htmlPath, 'utf8');
-  html = injectThemeOverrides(html, overrides);
-  fs.writeFileSync(htmlPath, html, 'utf8');
-
-  // Persist overrides in config so they survive regeneration flows
-  const cfg = readConfig(name);
-  cfg.themeOverrides = overrides;
-  writeConfig(name, cfg);
-}
+// insertComponent / applyThemeOverrides → routes/projects.mjs
 
 function serveStatic(req, res, root, urlPath) {
   // Prevent path traversal: resolved target must stay under root.
@@ -744,7 +655,7 @@ const server = http.createServer(async (req, res) => {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Vary', 'Origin');
     }
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
@@ -757,7 +668,7 @@ const server = http.createServer(async (req, res) => {
       if (matches) {
         return route.handler(req, res, matches).catch((err) => {
           console.error(err);
-          send(res, 500, { error: err.message });
+          send(res, err.statusCode || 500, { error: err.message });
         });
       }
     }
@@ -766,7 +677,7 @@ const server = http.createServer(async (req, res) => {
     const projectMatch = pathname.match(/^\/projects\/([^/]+)\/(.*)$/);
     if (projectMatch) {
       const [, name, sub] = projectMatch;
-      if (!PROJECT_NAME_RE.test(name)) {
+      if (!isSafeProjectName(name)) {
         res.writeHead(404);
         return res.end('Not found');
       }
@@ -780,7 +691,7 @@ const server = http.createServer(async (req, res) => {
     const publishedMatch = pathname.match(/^\/published\/([^/]+)\/([^/]+)\/(.*)$/);
     if (publishedMatch) {
       const [, name, version, sub] = publishedMatch;
-      if (!PROJECT_NAME_RE.test(name)) {
+      if (!isSafeProjectName(name)) {
         res.writeHead(404);
         return res.end('Not found');
       }
@@ -794,7 +705,7 @@ const server = http.createServer(async (req, res) => {
     return serveStatic(req, res, WEB_DIR, pathname === '/' ? 'index.html' : pathname);
   } catch (err) {
     console.error(err);
-    send(res, 500, { error: err.message });
+    send(res, err.statusCode || 500, { error: err.message });
   }
 });
 
@@ -802,120 +713,11 @@ function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-function copyDirSync(src, dst) {
-  ensureDir(dst);
-  const entries = fs.readdirSync(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const dstPath = path.join(dst, entry.name);
-    if (entry.isDirectory()) {
-      copyDirSync(srcPath, dstPath);
-    } else {
-      fs.copyFileSync(srcPath, dstPath);
-    }
+server.listen(PORT, HOST, () => {
+  console.log(`ai-ppt web server running at http://${HOST}:${PORT}`);
+  if (HOST === '127.0.0.1' || HOST === 'localhost') {
+    console.log('当前仅监听本机回环地址；如需局域网访问，请设置 AI_PPT_HOST=0.0.0.0 后重启');
   }
-}
-
-function getPublishHistory(name) {
-  const projectPublishDir = path.join(PUBLISHED_DIR, name);
-  if (!fs.existsSync(projectPublishDir)) return [];
-  const entries = fs.readdirSync(projectPublishDir, { withFileTypes: true });
-  const versions = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (entry.name === 'latest') continue;
-    const metaPath = path.join(projectPublishDir, entry.name, 'meta.json');
-    if (fs.existsSync(metaPath)) {
-      try {
-        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-        versions.push(meta);
-      } catch {
-        // skip invalid meta
-      }
-    }
-  }
-  versions.sort((a, b) => {
-    const va = parseInt(a.version.replace('v', ''), 10);
-    const vb = parseInt(b.version.replace('v', ''), 10);
-    return vb - va;
-  });
-  return versions;
-}
-
-function listPublishedProjects() {
-  if (!fs.existsSync(PUBLISHED_DIR)) return [];
-  const entries = fs.readdirSync(PUBLISHED_DIR, { withFileTypes: true });
-  const projects = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const history = getPublishHistory(entry.name);
-    projects.push({
-      name: entry.name,
-      latest: history[0] || null,
-      versions: history.length,
-    });
-  }
-  return projects;
-}
-
-async function publishProject(name) {
-  const cfg = readConfig(name);
-  const projectDir = getProjectDir(name);
-  if (!fs.existsSync(path.join(projectDir, 'index.html'))) {
-    throw new Error('项目尚未生成幻灯片，请先生成再发布');
-  }
-
-  ensureDir(PUBLISHED_DIR);
-  const projectPublishDir = path.join(PUBLISHED_DIR, name);
-  ensureDir(projectPublishDir);
-
-  const history = getPublishHistory(name);
-  const nextVersionNum = history.length > 0
-    ? parseInt(history[0].version.replace('v', ''), 10) + 1
-    : 1;
-  const version = `v${nextVersionNum}`;
-  const versionDir = path.join(projectPublishDir, version);
-  const latestDir = path.join(projectPublishDir, 'latest');
-
-  // Copy to version dir
-  copyDirSync(projectDir, versionDir);
-
-  // Write meta
-  const meta = {
-    version,
-    publishedAt: new Date().toISOString(),
-    theme: cfg.theme || 'web-ui',
-    animation: cfg.animation || 'slide',
-    url: `/published/${name}/${version}/index.html`,
-  };
-  fs.writeFileSync(path.join(versionDir, 'meta.json'), JSON.stringify(meta, null, 2));
-
-  // Update latest symlink/copy
-  if (fs.existsSync(latestDir)) {
-    if (fs.lstatSync(latestDir).isSymbolicLink()) {
-      fs.unlinkSync(latestDir);
-    } else {
-      fs.rmSync(latestDir, { recursive: true, force: true });
-    }
-  }
-  try {
-    // Try symlink first
-    fs.symlinkSync(version, latestDir, 'dir');
-  } catch {
-    // Fallback to copy on Windows or when symlink fails
-    copyDirSync(versionDir, latestDir);
-  }
-
-  // Also update latest meta
-  fs.writeFileSync(path.join(latestDir, 'meta.json'), JSON.stringify({
-    ...meta,
-    version: 'latest',
-    url: `/published/${name}/latest/index.html`,
-  }, null, 2));
-
-  return meta;
-}
-
-server.listen(PORT, () => {
-  console.log(`ai-ppt web server running at http://localhost:${PORT}`);
+  // 启动后异步构建搜索索引
+  try { buildSearchIndex(); console.log('搜索索引已构建完成'); } catch (e) { console.error('搜索索引构建失败:', e.message); }
 });

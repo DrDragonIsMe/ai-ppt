@@ -8,7 +8,7 @@ ai-ppt 现在内置了 8 种精心设计的主题，支持一键切换。主题�
 
 | 主题 ID | 名称 | 主色 | 适用场景 |
 |---------|------|------|----------|
-| `web-ui` | Web UI | `#0D9488` | 专业、克制、现代（默认主题）|
+| `web-ui` | Web UI | `#439288` | 专业、克制、现代（默认主题，teal-editorial）|
 | `business-blue` | 商务蓝 | `#2563EB` | 金融、咨询、B2B 演示 |
 | `elegant-purple` | 优雅紫 | `#7C3AED` | 设计、时尚、高端服务 |
 | `warm-orange` | 温暖橙 | `#EA580C` | 消费、零售、生活方式 |
@@ -68,16 +68,15 @@ ai-ppt 现在内置了 8 种精心设计的主题，支持一键切换。主题�
 }
 ```
 
-### 步骤 2：在 ppt.js 中注册主题
+### 步骤 2：在 themes.json 中注册主题
 
-编辑 `ai-ppt-base/js/ppt.js`，在 `themes` 数组中添加新主题：
+编辑 `ai-ppt-base/themes.json`（主题的唯一数据源），添加新主题条目：
 
-```javascript
-const themes = [
-  // ... 现有主题
-  { id: 'my-theme', name: '我的主题', color: '#你的主色' },
-];
+```json
+{ "id": "my-theme", "name": "我的主题", "desc": "一句话描述", "color": "#你的主色" }
 ```
+
+生成管线（`wrapSlides`）会按 themes.json 自动在 deck 的 `<head>` 注入对应 `<link>`；`ppt.js` 里的同名数组只是 `/api/themes` 不可用时的离线兜底，新主题不登记也能正常工作（仅 file:// 直开时切换器里看不到它）。
 
 ### 步骤 3：升级现有项目
 

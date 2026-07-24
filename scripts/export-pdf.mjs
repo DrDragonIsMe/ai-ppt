@@ -2,12 +2,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getProjectDir } from './config.mjs';
+import { getProjectDir, ROOT_DIR } from './config.mjs';
 import { findChrome } from './export-pptx.mjs';
+import { emit, emitDone, emitError } from './generation-common.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 
-export async function exportPdf(name) {
+// 与基座设计基准一致（ai-ppt-base/css/ppt.css：1280×800）
+const PAGE_WIDTH = 1280;
+const PAGE_HEIGHT = 800;
+
+// 产物相对路径与下载 URL（done 事件携带，前端直接触发下载）
+function downloadInfo(file) {
+  const rel = path.relative(ROOT_DIR, file).replace(/\\/g, '/');
+  return { file: rel, downloadUrl: '/' + rel };
+}
+
+export async function exportPdf(name, onProgress) {
   const projectDir = getProjectDir(name);
   const indexHtml = path.join(projectDir, 'index.html');
   if (!fs.existsSync(indexHtml)) {
@@ -22,6 +33,7 @@ export async function exportPdf(name) {
   }
 
   const executablePath = await findChrome();
+  onProgress?.('launch', '正在启动浏览器');
   const browser = await puppeteer.launch({
     executablePath,
     headless: 'new',
@@ -29,7 +41,7 @@ export async function exportPdf(name) {
   });
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
+    await page.setViewport({ width: PAGE_WIDTH, height: PAGE_HEIGHT });
     await page.goto('file://' + indexHtml, { waitUntil: 'networkidle0' });
     await page.evaluate(() => document.fonts.ready);
 
@@ -56,6 +68,7 @@ export async function exportPdf(name) {
 
     const images = [];
     for (let i = 0; i < slideCount; i++) {
+      onProgress?.('capture', `正在截取第 ${i + 1}/${slideCount} 页`);
       await page.evaluate((idx) => {
         document.querySelectorAll('#stage > .slide').forEach((s, j) => {
           s.style.position = 'absolute';
@@ -72,12 +85,13 @@ export async function exportPdf(name) {
 
       const png = await page.screenshot({
         type: 'png',
-        clip: { x: 0, y: 0, width: 1280, height: 720 },
+        clip: { x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT },
         encoding: 'base64',
       });
       images.push(Buffer.from(png, 'base64'));
     }
 
+    onProgress?.('build', '正在合并 PDF');
     const outFile = path.join(exportDir, 'deck.pdf');
     await buildPdfFromImages(images, outFile);
 
@@ -98,8 +112,8 @@ async function buildPdfFromImages(images, outputFile) {
   }
 
   const pdfDoc = await lib.PDFDocument.create();
-  const pageWidth = 1280;
-  const pageHeight = 720;
+  const pageWidth = PAGE_WIDTH;
+  const pageHeight = PAGE_HEIGHT;
 
   for (const imageBytes of images) {
     const img = await pdfDoc.embedPng(imageBytes);
@@ -116,22 +130,25 @@ async function buildPdfFromImages(images, outputFile) {
   fs.writeFileSync(outputFile, buf);
 }
 
+// CLI：NDJSON 协议输出到 stdout（progress/done/error，与 generate-deck.mjs 一致），
+// 服务端 spawnNdjsonTask 逐行解析；stderr 仅用于非协议日志。
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const name = process.argv[2];
   if (!name) {
     console.error('Usage: node scripts/export-pdf.mjs <project>');
     process.exit(1);
   }
-  exportPdf(name)
+  exportPdf(name, (step, message) => emit(step, message))
     .then((result) => {
       if (result.fallback) {
-        console.log(result.message);
+        emitError(result.message);
+        process.exit(1);
       } else {
-        console.log(result.file);
+        emitDone(downloadInfo(result.file));
       }
     })
     .catch((err) => {
-      console.error(err.stack || err.message);
+      emitError(err.stack || err.message);
       process.exit(1);
     });
 }

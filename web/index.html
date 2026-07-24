@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ai-ppt Workspace</title>
   <link rel="stylesheet" href="/css/web.css">
 </head>
+
 <body>
   <div id="app">
     <header class="topbar">
@@ -13,36 +15,24 @@
         <div class="brand">
           <div class="logo">ai-ppt</div>
         </div>
-        <div class="project-select-wrap">
-          <select id="project-select" class="project-select" title="切换项目">
-            <option value="">选择项目…</option>
-          </select>
-          <button id="btn-create-project" class="btn-icon" title="新建项目 (Ctrl+N)">+</button>
-        </div>
-      </div>
-      <div class="topbar-center">
-        <div class="project-title" id="project-title">未选择项目</div>
-        <div class="status" id="project-status">draft</div>
       </div>
       <div class="topbar-right">
         <div class="topbar-search">
           <input type="search" id="input-global-search" placeholder="搜索项目或内容… (Ctrl+K)">
           <div id="search-results" class="search-results hidden"></div>
         </div>
-        <button id="btn-edit-mode" class="btn-secondary" disabled>编辑模式</button>
-        <button id="btn-generate" class="btn-primary" disabled>生成幻灯片</button>
-        <div class="dropdown" id="export-dropdown">
-          <button id="btn-export" class="btn-secondary" disabled>导出 ▾</button>
-          <div class="dropdown-menu hidden">
-            <button id="dropdown-export-pptx">PPTX（可编辑文字）</button>
-            <button id="dropdown-export-pptx-image">高清图片 PPTX</button>
-            <button id="dropdown-export-pdf">浏览器打印 / PDF</button>
-            <button id="dropdown-export-html">单文件 HTML</button>
-          </div>
-        </div>
-        <button id="btn-open-preview" class="btn-secondary" disabled>新窗口预览</button>
+        <button id="btn-settings" class="btn-secondary btn-icon" title="系统设置">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
+          </svg>
+        </button>
         <button id="btn-help" class="btn-secondary btn-icon" title="快捷键 (?)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <path d="M12 17h.01"></path>
@@ -54,35 +44,79 @@
     <div class="layout">
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-tabs">
-          <button class="sidebar-tab active" data-tab="projects">项目列表</button>
+          <button class="sidebar-tab active" data-tab="fragments">速记</button>
           <button class="sidebar-tab" data-tab="vault">知识库</button>
+          <button class="sidebar-tab" data-tab="cards">知识卡片</button>
+          <button class="sidebar-tab" data-tab="study">学习</button>
+          <button class="sidebar-tab" data-tab="projects">PPT 作品</button>
         </div>
-        
-        <div id="project-sidebar-content" class="sidebar-content">
+
+        <div id="fragments-sidebar-content" class="sidebar-content">
           <div class="sidebar-header">
-            <div class="sidebar-title">项目列表</div>
-            <button id="btn-collapse-sidebar" class="btn-icon sidebar-collapse" title="折叠/展开">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M15 18l-6-6 6-6"></path>
-              </svg>
-            </button>
+            <div class="sidebar-title">速记</div>
+          </div>
+          <div class="fragment-input-area" id="fragment-input-area">
+            <textarea id="fragment-input" rows="3" placeholder="记录一个知识点、一道题、一个想法… #标签，可直接粘贴/拖入图片、音视频、PDF"></textarea>
+            <div id="fragment-attachments" class="fragment-attachments hidden"></div>
+            <div class="fragment-input-footer">
+              <div class="fragment-input-hint">#标签 会自动识别 · Enter 提交，Shift+Enter 换行</div>
+              <button id="btn-fragment-voice" class="btn-secondary fragment-voice-btn" title="语音听记（录音后自动转写为文字）">🎙</button>
+              <button id="btn-fragment-attach" class="btn-secondary fragment-attach-btn" title="添加附件（图片/音视频/PDF/docx）">📎</button>
+              <button id="btn-organize" class="btn-secondary fragment-organize-btn" disabled>AI 整理</button>
+            </div>
+            <input type="file" id="fragment-file-input" multiple accept="image/*,video/*,audio/*,.pdf,.docx" style="display:none;">
+          </div>
+          <div class="fragment-filters">
+            <button class="fragment-filter active" data-filter="all">全部</button>
+            <button class="fragment-filter" data-filter="inbox">待整理</button>
+          </div>
+          <div id="fragment-list" class="vault-note-list"></div>
+        </div>
+
+        <div id="project-sidebar-content" class="sidebar-content hidden">
+          <div class="sidebar-header">
+            <div class="sidebar-title">PPT 作品</div>
+            <div style="display:flex;gap:6px;">
+              <button id="btn-create-project-side" class="btn-icon" title="新建项目 (Ctrl+N)">+</button>
+              <button id="btn-collapse-sidebar" class="btn-icon sidebar-collapse" title="折叠/展开">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 18l-6-6 6-6"></path>
+                </svg>
+              </button>
+            </div>
           </div>
           <div id="project-list" class="project-list"></div>
         </div>
-        
+
         <div id="vault-sidebar-content" class="sidebar-content hidden">
           <div class="sidebar-header">
             <div class="sidebar-title">知识库笔记</div>
             <div style="display:flex;gap:6px;">
+              <button id="btn-vault-tasks" class="btn-icon" title="任务面板">☑</button>
+              <button id="btn-vault-tags" class="btn-icon" title="标签浏览">#</button>
+              <button id="btn-vault-journal" class="btn-icon" title="今日笔记（每日笔记）">📅</button>
+              <button id="btn-vault-graph" class="btn-icon" title="知识星图">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="5" cy="11" r="3"></circle>
+                  <circle cx="19" cy="6" r="3"></circle>
+                  <circle cx="15" cy="17" r="3"></circle>
+                  <path d="M8 13l6 3"></path>
+                  <path d="M16 9l-5 2"></path>
+                </svg>
+              </button>
               <button id="btn-vault-refresh" class="btn-icon" title="刷新列表">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21.5 2v6h-6"></path>
                   <path d="M2.5 22v-6h6"></path>
                   <path d="M22 12a10 10 0 0 0-20 0"></path>
                 </svg>
               </button>
               <button id="btn-vault-new" class="btn-icon" title="新建笔记">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
@@ -92,25 +126,612 @@
           <div class="vault-search">
             <input type="search" id="vault-search-input" placeholder="搜索笔记…">
           </div>
+          <div id="vault-note-select-bar" class="vault-note-select-bar hidden">
+            <span id="vault-note-select-count">已选 0 篇</span>
+            <button id="btn-note-gen-open" class="btn-primary" style="padding:4px 10px;font-size:12px;">生成媒体</button>
+            <button id="btn-note-select-clear" class="btn-secondary" style="padding:4px 10px;font-size:12px;">清空</button>
+          </div>
           <div id="vault-note-list" class="vault-note-list"></div>
+        </div>
+
+        <div id="cards-sidebar-content" class="sidebar-content hidden">
+          <div class="sidebar-header">
+            <div class="sidebar-title">知识卡片</div>
+            <div style="display:flex;gap:6px;">
+              <button id="btn-cards-due" class="btn-icon" title="待复习">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2v4"></path>
+                  <path d="M18.2 6.8l2.8 2.8"></path>
+                  <path d="M22 12v4"></path>
+                  <path d="M17.2 17.2l2.8 2.8"></path>
+                  <path d="M12 22v-4"></path>
+                  <path d="M6.8 17.2l-2.8 2.8"></path>
+                  <path d="M2 16v-4"></path>
+                  <path d="M3.0 6.8l2.8-2.8"></path>
+                  <path d="M6 12a6 6 0 1 0 12 0 6 6 0 0 0-12 0"></path>
+                </svg>
+              </button>
+              <button id="btn-cards-refresh" class="btn-icon" title="刷新列表">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21.5 2v6h-6"></path>
+                  <path d="M2.5 22v-6h6"></path>
+                  <path d="M22 12a10 10 0 0 0-20 0"></path>
+                </svg>
+              </button>
+              <button id="btn-cards-new" class="btn-icon" title="新建卡片">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="cards-list" class="vault-note-list"></div>
         </div>
       </aside>
 
       <main class="workspace">
-        <div id="empty-state" class="empty-state">
-          <h2>选择一个项目或创建新项目</h2>
-          <p>在右侧属性面板配置来源与参数后点击生成，即可自动创建 HTML 幻灯片。</p>
-          <button id="btn-create-empty" class="btn-primary">+ 新建项目</button>
+        <div id="empty-state" class="empty-state hidden">
+          <h2>从速记开始，或打开一篇笔记</h2>
+          <p>这里是你的知识中枢：随手记录速记，沉淀为笔记后可一键生成 PPT、视频或报告</p>
+          <div style="display:flex;gap:10px;justify-content:center;">
+            <button id="btn-empty-new-note" class="btn-primary">+ 新建笔记</button>
+            <button id="btn-empty-fragment" class="btn-secondary">写速记</button>
+          </div>
+        </div>
+
+        <!-- Dashboard：未选项目时的默认主区 -->
+        <div id="dashboard-panel" class="dashboard-panel hidden">
+          <div class="dashboard-header">
+            <div class="dashboard-title">工作台</div>
+            <div class="dashboard-sub">今日概览与快捷入口</div>
+          </div>
+          <div class="dashboard-stats">
+            <div class="dashboard-stat-card">
+              <div class="dashboard-stat-value" id="dash-stat-today">-</div>
+              <div class="dashboard-stat-label">今日速记</div>
+            </div>
+            <div class="dashboard-stat-card">
+              <div class="dashboard-stat-value" id="dash-stat-inbox">-</div>
+              <div class="dashboard-stat-label">待整理</div>
+            </div>
+            <div class="dashboard-stat-card">
+              <div class="dashboard-stat-value" id="dash-stat-due">-</div>
+              <div class="dashboard-stat-label">待复习卡片</div>
+            </div>
+            <div class="dashboard-stat-card">
+              <div class="dashboard-stat-value" id="dash-stat-mistakes">-</div>
+              <div class="dashboard-stat-label">待巩固错题</div>
+            </div>
+          </div>
+          <div class="dashboard-body">
+            <section class="card dashboard-recent">
+              <div class="card-title">最近碎片</div>
+              <div id="dashboard-recent-list" class="dashboard-recent-list"></div>
+            </section>
+            <section class="card dashboard-side">
+              <div class="card-title">快捷操作</div>
+              <div class="dashboard-actions">
+                <button id="btn-dash-journal" class="btn-secondary">今日笔记</button>
+                <button id="btn-dash-write" class="btn-secondary">写速记</button>
+                <button id="btn-dash-organize" class="btn-secondary">AI 整理</button>
+                <button id="btn-dash-smart-exam" class="btn-secondary">智能组卷</button>
+                <button id="btn-dash-graph" class="btn-secondary">知识星图</button>
+              </div>
+              <div class="card-title" style="margin-top:20px;">内容概览</div>
+              <div id="dashboard-counts" class="dashboard-counts"></div>
+            </section>
+          </div>
+        </div>
+
+        <div id="graph-panel" class="graph-panel hidden">
+          <div class="graph-header">
+            <div class="graph-title">知识星图</div>
+            <div class="graph-actions">
+              <span class="graph-hint">Shift+点击可多选节点</span>
+              <button id="btn-graph-generate-deck" class="btn-primary" style="padding:6px 12px;font-size:12px;"
+                disabled>生成 PPT</button>
+              <label class="graph-toggle" title="只显示权重前 20 的节点及其间连线">
+                <input type="checkbox" id="graph-highfreq-toggle"> 只看高频
+              </label>
+              <button id="btn-graph-refresh" class="btn-secondary" style="padding:6px 12px;font-size:12px;">刷新</button>
+              <button id="btn-graph-fit" class="btn-secondary" style="padding:6px 12px;font-size:12px;">适应</button>
+            </div>
+          </div>
+          <div class="graph-body">
+            <div id="graph-container" class="graph-container">
+              <canvas id="graph-canvas"></canvas>
+              <div class="graph-legend">
+                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#00B498"></i>笔记</span>
+                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#d97706"></i>卡片</span>
+                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#8b5cf6"></i>碎片</span>
+                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#5f9ea0"></i>标签</span>
+              </div>
+            </div>
+            <div id="graph-sidebar" class="graph-sidebar">
+              <div class="graph-info">
+                <div class="graph-info-title" id="graph-selected-title">选择节点</div>
+                <div class="graph-info-content" id="graph-selected-info">
+                  点击节点查看详细信息
+                </div>
+                <div class="graph-info-actions" id="graph-actions" style="margin-top:12px;display:none;">
+                  <button id="btn-open-note" class="btn-primary" style="width:100%;padding:8px 12px;">打开笔记</button>
+                  <button id="btn-generate-ppt" class="btn-secondary"
+                    style="width:100%;padding:8px 12px;margin-top:8px;">生成PPT</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="cards-panel" class="cards-panel hidden">
+          <div id="cards-list-view" class="cards-list-view">
+            <div class="cards-list-header">
+              <span>卡片列表</span>
+              <button id="btn-cards-review-deck" class="btn-secondary" style="padding:6px 12px;font-size:12px;">生成复习
+                PPT</button>
+            </div>
+            <div class="cards-list-container"></div>
+          </div>
+          <div id="cards-detail-view" class="cards-detail-view hidden">
+            <div class="card-detail-header">
+              <div>
+                <div class="card-detail-title" id="card-title">选择卡片</div>
+                <div id="card-mastery" style="font-size:12px;opacity:0.65;margin-top:4px;"></div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button id="btn-card-prev" class="btn-secondary" style="padding:6px 12px;font-size:12px;">← 上一张</button>
+                <button id="btn-card-next" class="btn-secondary" style="padding:6px 12px;font-size:12px;">下一张 →</button>
+                <button id="btn-card-edit" class="btn-secondary" style="padding:6px 12px;font-size:12px;">编辑</button>
+                <button id="btn-card-save" class="btn-primary"
+                  style="padding:6px 12px;font-size:12px;display:none;">保存</button>
+                <button id="btn-card-delete" class="btn-secondary"
+                  style="padding:6px 12px;font-size:12px;display:none;">删除</button>
+              </div>
+            </div>
+            <div id="card-view-mode" class="card-view-mode">
+              <div class="card-question-section">
+                <div class="card-section-title">问题</div>
+                <div id="card-question" class="card-content"></div>
+              </div>
+              <div class="card-divider">
+                <button id="btn-show-answer" class="btn-secondary">显示答案</button>
+                <button id="btn-ai-expand" class="btn-secondary" style="margin-left:8px;">✨ AI 扩展知识</button>
+              </div>
+              <div id="card-answer-section" class="card-answer-section hidden">
+                <div class="card-section-title">答案</div>
+                <div id="card-answer" class="card-content"></div>
+                <div class="card-section-title">解析</div>
+                <div id="card-explanation" class="card-content"></div>
+                <div class="card-rating-section">
+                  <div class="card-section-title">熟练程度</div>
+                  <div class="card-rating-buttons">
+                    <button class="card-rating-btn" data-rating="1">不记得</button>
+                    <button class="card-rating-btn" data-rating="2">有点印象</button>
+                    <button class="card-rating-btn" data-rating="3">基本掌握</button>
+                    <button class="card-rating-btn" data-rating="4">掌握得好</button>
+                    <button class="card-rating-btn" data-rating="5">完全掌握</button>
+                  </div>
+                </div>
+              </div>
+              <div id="ai-expand-section" class="ai-expand-section hidden">
+                <div class="card-section-title">AI 知识扩展</div>
+                <div id="ai-expand-result" class="ai-expand-result"></div>
+                <div id="ai-expand-actions" class="ai-expand-actions hidden">
+                  <button id="btn-create-cards-from-expand" class="btn-primary">创建知识卡片</button>
+                </div>
+              </div>
+            </div>
+            <div id="card-edit-mode" class="card-edit-mode hidden">
+              <div class="field">
+                <label>标题</label>
+                <input type="text" id="card-edit-title" placeholder="卡片标题">
+              </div>
+              <div class="field">
+                <label>分类</label>
+                <input type="text" id="card-edit-subject" placeholder="例如：产品知识">
+              </div>
+              <div class="field">
+                <label>标签</label>
+                <input type="text" id="card-edit-tags" placeholder="用逗号分隔，例如：数学,函数,代数">
+              </div>
+              <div class="field">
+                <label>难度</label>
+                <select id="card-edit-difficulty">
+                  <option value="1">1 - 简单</option>
+                  <option value="2">2 - 普通</option>
+                  <option value="3">3 - 中等</option>
+                  <option value="4">4 - 较难</option>
+                  <option value="5">5 - 困难</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>问题</label>
+                <textarea id="card-edit-question" rows="4" placeholder="问题内容"></textarea>
+              </div>
+              <div class="field">
+                <label>答案</label>
+                <textarea id="card-edit-answer" rows="4" placeholder="答案内容"></textarea>
+              </div>
+              <div class="field">
+                <label>解析</label>
+                <textarea id="card-edit-explanation" rows="4" placeholder="解析内容"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Study Panel：学习（测验 / 错题集 / 复习训练 三合一） -->
+        <div id="study-panel" class="study-panel hidden">
+          <div class="study-subtabs">
+            <button class="study-subtab active" data-subtab="exams">测验</button>
+            <button class="study-subtab" data-subtab="mistakes">错题集</button>
+            <button class="study-subtab" data-subtab="training">复习训练</button>
+          </div>
+
+        <!-- Exam Papers Panel -->
+        <div id="exams-panel" class="exams-panel hidden">
+          <div style="flex:1;display:flex;height:100%;">
+            <!-- 左侧测验列表 -->
+            <div style="width:38%;min-width:280px;max-width:380px;flex-shrink:0;border-right:1px solid var(--tile-strong);display:flex;flex-direction:column;">
+              <div style="padding:16px;border-bottom:1px solid var(--tile-strong);">
+                <div style="font-size:18px;font-weight:700;margin-bottom:12px;">测验管理</div>
+                <div style="display:flex;gap:8px;">
+                  <button id="btn-new-exam" class="btn-primary" style="flex:1;">+ 新建测验</button>
+                  <button id="btn-smart-exam" class="btn-secondary" style="flex:1;">智能组卷</button>
+                </div>
+              </div>
+              <!-- 统计卡片 -->
+              <div style="padding:12px 16px;background:var(--tile);">
+                <div id="exams-stats" style="display:flex;gap:16px;font-size:13px;">
+                  <div><strong id="stat-exam-count">0</strong> 份测验</div>
+                  <div><strong id="stat-question-count">0</strong> 道题目</div>
+                </div>
+              </div>
+              <div id="exams-list" style="flex:1;overflow-y:auto;padding:16px;"></div>
+            </div>
+            <!-- 右侧测验详情 -->
+            <div id="exam-detail" style="flex:1;display:flex;flex-direction:column;display:none;">
+              <div
+                style="padding:16px;border-bottom:1px solid var(--tile-strong);display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                  <div id="exam-detail-title" style="font-size:18px;font-weight:700;"></div>
+                  <div id="exam-detail-meta" style="font-size:13px;opacity:0.7;"></div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                  <button id="btn-edit-exam" class="btn-secondary">编辑</button>
+                  <button id="btn-delete-exam" class="btn-secondary" style="color:var(--danger);">删除</button>
+                </div>
+              </div>
+              <div id="exam-detail-content" style="flex:1;overflow-y:auto;padding:16px;"></div>
+            </div>
+            <!-- 空状态 -->
+            <div id="exam-empty" style="flex:1;display:flex;align-items:center;justify-content:center;">
+              <div style="text-align:center;opacity:0.7;">
+                <div style="font-size:48px;margin-bottom:12px;">📝</div>
+                <div>选择一份测验或创建新测验</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mistakes Panel -->
+        <div id="mistakes-panel" class="mistakes-panel hidden">
+          <div style="flex:1;display:flex;height:100%;">
+            <!-- 左侧错题列表 -->
+            <div style="width:38%;min-width:280px;max-width:380px;flex-shrink:0;border-right:1px solid var(--tile-strong);display:flex;flex-direction:column;">
+              <div style="padding:16px;border-bottom:1px solid var(--tile-strong);">
+                <div style="font-size:18px;font-weight:700;margin-bottom:12px;">错题集</div>
+                <div style="display:flex;gap:8px;">
+                  <button id="btn-new-mistake" class="btn-primary" style="flex:1;">+ 记录错题</button>
+                  <button id="btn-mistakes-review-deck" class="btn-secondary" style="flex:1;">生成复习 PPT</button>
+                </div>
+              </div>
+              <!-- 筛选和统计 -->
+              <div style="padding:12px 16px;background:var(--tile);">
+                <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+                  <select id="mistake-filter-subject"
+                    style="flex:1;min-width:100px;padding:8px;border:1px solid var(--tile-strong);border-radius:8px;font-size:13px;">
+                    <option value="">全部分类</option>
+                  </select>
+                  <select id="mistake-filter-mastery"
+                    style="flex:1;min-width:100px;padding:8px;border:1px solid var(--tile-strong);border-radius:8px;font-size:13px;">
+                    <option value="">全部熟练度</option>
+                    <option value="0-1">需要复习</option>
+                    <option value="2-3">基本掌握</option>
+                    <option value="4-5">完全掌握</option>
+                  </select>
+                </div>
+                <div id="mistakes-stats" style="display:flex;gap:16px;font-size:13px;">
+                  <div><strong id="stat-mistake-count">0</strong> 道错题</div>
+                  <div><strong id="stat-review-count">0</strong> 次复习</div>
+                  <div><strong id="stat-mastered-count">0</strong> 道已掌握</div>
+                </div>
+              </div>
+              <div id="mistakes-list" style="flex:1;overflow-y:auto;padding:16px;"></div>
+            </div>
+            <!-- 右侧错题详情 -->
+            <div id="mistake-detail" style="flex:1;display:flex;flex-direction:column;display:none;">
+              <div
+                style="padding:16px;border-bottom:1px solid var(--tile-strong);display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                  <div id="mistake-detail-title" style="font-size:16px;font-weight:700;"></div>
+                  <div id="mistake-detail-meta" style="font-size:13px;opacity:0.7;"></div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                  <button id="btn-mark-mastered" class="btn-secondary">✅ 标记已掌握</button>
+                  <button id="btn-edit-mistake" class="btn-secondary">编辑</button>
+                  <button id="btn-delete-mistake" class="btn-secondary" style="color:var(--danger);">删除</button>
+                </div>
+              </div>
+              <div id="mistake-detail-content" style="flex:1;overflow-y:auto;padding:16px;"></div>
+            </div>
+            <!-- 空状态 -->
+            <div id="mistake-empty" style="flex:1;display:flex;align-items:center;justify-content:center;">
+              <div style="text-align:center;opacity:0.7;">
+                <div style="font-size:48px;margin-bottom:12px;">❌</div>
+                <div>选择一道错题或记录新错题</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Training Panel -->
+        <div id="training-panel" class="training-panel hidden">
+          <div style="flex:1;display:flex;flex-direction:column;height:100%;">
+            <div
+              style="padding:16px;border-bottom:1px solid var(--tile-strong);display:flex;align-items:center;justify-content:space-between;">
+              <div style="font-size:18px;font-weight:700;">复习训练</div>
+            </div>
+            <div id="training-content"
+              style="flex:1;overflow-y:auto;padding:32px;display:flex;justify-content:center;align-items:center;">
+              <div id="training-welcome" style="text-align:center;">
+                <div style="font-size:24px;font-weight:700;margin-bottom:16px;">开始你的复习！</div>
+                <div style="opacity:0.7;margin-bottom:24px;">选择要复习的内容类型</div>
+                <div style="display:flex;gap:16px;justify-content:center;">
+                  <button id="btn-train-cards" class="btn-primary" style="padding:16px 32px;font-size:16px;">📚
+                    复习知识卡片</button>
+                  <button id="btn-train-mistakes" class="btn-secondary" style="padding:16px 32px;font-size:16px;">❌
+                    攻克易错题</button>
+                </div>
+              </div>
+              <div id="training-session" class="hidden" style="width:100%;max-width:700px;">
+                <div style="text-align:center;margin-bottom:24px;">
+                  <div id="training-progress" style="font-size:14px;opacity:0.7;">1 / 10</div>
+                </div>
+                <div id="training-card"
+                  style="padding:24px;border:1px solid var(--tile-strong);border-radius:16px;background:white;">
+                  <div id="training-question" style="font-size:20px;font-weight:600;margin-bottom:16px;"></div>
+                  <div id="training-answer-section" class="hidden">
+                    <div style="margin-bottom:16px;">
+                      <div style="font-size:14px;opacity:0.7;margin-bottom:4px;">答案</div>
+                      <div id="training-answer" style="font-size:16px;"></div>
+                    </div>
+                    <div id="training-analysis-section" class="hidden">
+                      <div style="font-size:14px;opacity:0.7;margin-bottom:4px;">解析</div>
+                      <div id="training-analysis" style="font-size:16px;"></div>
+                    </div>
+                    <div style="margin-top:24px;">
+                      <div style="font-size:14px;opacity:0.7;margin-bottom:12px;">你掌握得如何？</div>
+                      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn-secondary training-rate-btn" data-rate="1">😵 完全忘记</button>
+                        <button class="btn-secondary training-rate-btn" data-rate="2">🤔 有点印象</button>
+                        <button class="btn-secondary training-rate-btn" data-rate="3">😐 基本掌握</button>
+                        <button class="btn-secondary training-rate-btn" data-rate="4">😊 掌握得不错</button>
+                        <button class="btn-secondary training-rate-btn" data-rate="5">🎉 完全掌握</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div style="text-align:center;margin-top:24px;">
+                  <button id="btn-show-training-answer" class="btn-primary"
+                    style="padding:12px 32px;font-size:16px;">显示答案</button>
+                  <button id="btn-end-training" class="btn-secondary"
+                    style="padding:12px 32px;font-size:16px;margin-left:8px;">结束复习</button>
+                </div>
+                <div id="training-complete" class="hidden" style="text-align:center;">
+                  <div style="font-size:28px;font-weight:700;margin-bottom:16px;">🎉 复习完成！</div>
+                  <div style="opacity:0.7;margin-bottom:24px;">太棒了，你完成了本次复习！</div>
+                  <button id="btn-back-to-welcome" class="btn-primary"
+                    style="padding:12px 32px;font-size:16px;">返回</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        <!-- 知识库笔记编辑器（不依赖项目选择） -->
+        <div id="vault-panel" class="vault-panel hidden">
+          <div id="vault-no-note-selected" class="empty-state" style="padding:40px 20px;">
+            <h3 style="font-size:16px;">选择一篇笔记</h3>
+            <p style="opacity:0.65;">从左侧知识库列表选择一篇笔记，或点击「新建笔记」创建</p>
+          </div>
+
+          <div id="vault-note-panel" class="hidden">
+            <section class="card">
+              <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                <span id="vault-note-title">笔记标题</span>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <div id="vault-journal-nav" class="journal-nav hidden">
+                    <button id="btn-journal-prev" class="btn-secondary" style="padding:6px 10px;font-size:12px;"
+                      title="前一天">←</button>
+                    <div class="journal-list-wrap">
+                      <button id="btn-journal-list" class="btn-secondary"
+                        style="padding:6px 12px;font-size:12px;">日记列表</button>
+                      <div id="journal-list-dropdown" class="journal-list-dropdown hidden"></div>
+                    </div>
+                    <button id="btn-journal-next" class="btn-secondary" style="padding:6px 10px;font-size:12px;"
+                      title="后一天">→</button>
+                  </div>
+                  <button id="btn-vault-note-save" class="btn-secondary"
+                    style="padding:6px 12px;font-size:12px;">保存</button>
+                  <button id="btn-vault-note-generate" class="btn-primary" style="padding:6px 12px;font-size:12px;">生成
+                    PPT</button>
+                  <div class="dropdown" id="vault-note-more-dropdown">
+                    <button id="btn-vault-note-more" class="btn-secondary"
+                      style="padding:6px 12px;font-size:12px;">⋯ 更多</button>
+                    <div class="dropdown-menu hidden">
+                      <button id="btn-vault-note-rename">重命名</button>
+                      <button id="btn-vault-note-preview">预览</button>
+                      <button id="btn-vault-outline-toggle">大纲</button>
+                      <button id="btn-vault-note-image">生成配图</button>
+                      <button id="btn-vault-note-pdf" title="插入图片/音视频/PDF/docx 附件">附件</button>
+                      <button id="btn-vault-note-chat">AI 修改</button>
+                      <button id="btn-vault-note-delete" style="color:var(--danger);">删除</button>
+                    </div>
+                  </div>
+                  <input type="file" id="input-vault-pdf" accept="image/*,video/*,audio/*,.pdf,.docx" style="display:none;">
+                </div>
+              </div>
+              <div class="vault-note-editor-row">
+                <div class="vault-note-editor-main">
+                  <div id="vault-note-edit-area">
+                    <div class="field" style="margin-bottom:8px;">
+                      <label>Front Matter (可选)</label>
+                      <textarea id="vault-note-frontmatter" rows="6"
+                        style="font-family:var(--font-mono);font-size:12px;"></textarea>
+                    </div>
+                    <div class="field">
+                      <label>笔记内容 (支持 Markdown 与 [[Wiki链接]])</label>
+                      <div class="vault-note-content-wrap">
+                        <textarea id="vault-note-content" rows="16" placeholder="在此编写笔记内容..."></textarea>
+                        <div id="wiki-suggest" class="wiki-suggest hidden"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="vault-note-preview" class="vault-note-preview hidden"></div>
+                </div>
+                <aside id="vault-note-outline" class="vault-note-outline">
+                  <div class="vault-note-outline-title">大纲</div>
+                  <div id="vault-note-outline-list" class="vault-note-outline-list"></div>
+                </aside>
+              </div>
+            </section>
+
+            <div id="note-chat-dock" class="chat-dock note-chat-dock hidden">
+              <div id="note-chat-messages" class="chat-messages"></div>
+              <div class="chat-input-row">
+                <input type="text" id="note-chat-input" placeholder="例如：把第二段精简为三条要点 / 补充一个例子…">
+                <button id="btn-note-chat-send" class="btn-primary" style="white-space:nowrap;">发送</button>
+              </div>
+            </div>
+
+            <section class="card" id="vault-links-card" style="margin-top:12px;">
+              <div class="card-title">链接信息</div>
+              <div class="vault-links">
+                <div>
+                  <div class="vault-links-title">出链 (该笔记链接到)</div>
+                  <div id="vault-outlinks" class="vault-links-list">暂无</div>
+                </div>
+                <div>
+                  <div class="vault-links-title">入链 (链接到该笔记)</div>
+                  <div id="vault-backlinks" class="vault-links-list">暂无</div>
+                </div>
+              </div>
+              <div style="margin-top:16px;">
+                <div class="vault-links-title">提及（未链接的出现）</div>
+                <div id="vault-mentions" class="vault-links-list">暂无</div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- 标签浏览（不依赖项目选择） -->
+        <div id="tags-panel" class="tags-panel hidden">
+          <div class="tags-header">
+            <div class="tags-title">标签浏览</div>
+            <div class="tags-actions">
+              <span class="graph-hint">点击标签查看关联的笔记 / 卡片 / 碎片</span>
+              <button id="btn-tags-close" class="btn-secondary" style="padding:6px 12px;font-size:12px;">返回</button>
+            </div>
+          </div>
+          <div class="tags-body">
+            <div id="tags-cloud" class="tags-cloud"></div>
+            <div id="tags-detail" class="tags-detail hidden">
+              <div class="tags-detail-title">#<span id="tags-detail-name"></span></div>
+              <div class="tags-columns">
+                <div class="tags-column">
+                  <div class="tags-column-title">笔记</div>
+                  <div id="tags-detail-notes" class="tags-column-list"></div>
+                </div>
+                <div class="tags-column">
+                  <div class="tags-column-title">知识卡片</div>
+                  <div id="tags-detail-cards" class="tags-column-list"></div>
+                </div>
+                <div class="tags-column">
+                  <div class="tags-column-title">速记碎片</div>
+                  <div id="tags-detail-fragments" class="tags-column-list"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 任务面板（不依赖项目选择） -->
+        <div id="tasks-panel" class="tags-panel hidden">
+          <div class="tags-header">
+            <div class="tags-title">任务</div>
+            <div class="tags-actions">
+              <span class="graph-hint">来自全部笔记的 TODO / DOING / DONE，点击跳来源笔记</span>
+              <button id="btn-tasks-close" class="btn-secondary" style="padding:6px 12px;font-size:12px;">返回</button>
+            </div>
+          </div>
+          <div class="tags-body" id="tasks-body"></div>
         </div>
 
         <div id="project-panel" class="project-panel hidden">
+          <div class="project-toolbar">
+            <div class="project-toolbar-info">
+              <div class="project-title" id="project-panel-title">未选择项目</div>
+              <div class="status" id="project-panel-status">draft</div>
+            </div>
+            <div class="project-toolbar-actions">
+              <button id="btn-edit-mode" class="btn-secondary" disabled>编辑模式</button>
+              <button id="btn-generate" class="btn-primary" disabled>生成 PPT</button>
+              <div class="dropdown" id="export-dropdown">
+                <button id="btn-export" class="btn-secondary" disabled>导出 ▾</button>
+                <div class="dropdown-menu hidden">
+                  <button id="dropdown-export-pptx">PPTX（可编辑文字）</button>
+                  <button id="dropdown-export-pptx-image">高清图片 PPTX</button>
+                  <button id="dropdown-export-pdf">浏览器打印 / PDF</button>
+                  <button id="dropdown-export-html">单文件 HTML</button>
+                </div>
+              </div>
+              <button id="btn-open-preview" class="btn-secondary" disabled>新窗口预览</button>
+            </div>
+          </div>
+          <div class="pipeline-bar" id="pipeline-bar">
+            <button class="pipeline-step" data-stage="select" title="从知识库或外部来源选材">
+              <span class="pipeline-dot">1</span><span class="pipeline-label">选材</span>
+            </button>
+            <span class="pipeline-line"></span>
+            <button class="pipeline-step" data-stage="generate" title="生成幻灯片">
+              <span class="pipeline-dot">2</span><span class="pipeline-label">生成</span>
+            </button>
+            <span class="pipeline-line"></span>
+            <button class="pipeline-step" data-stage="modify" title="编辑模式 / AI 修改">
+              <span class="pipeline-dot">3</span><span class="pipeline-label">修改</span>
+            </button>
+            <span class="pipeline-line"></span>
+            <button class="pipeline-step" data-stage="publish" title="发布当前版本">
+              <span class="pipeline-dot">4</span><span class="pipeline-label">发布</span>
+            </button>
+          </div>
           <div class="workspace-canvas">
             <div class="workspace-preview-header">
               <div class="workspace-preview-title">实时预览</div>
               <div class="workspace-preview-status" id="edit-status"></div>
               <div class="workspace-preview-actions">
-                <button id="btn-toggle-chat" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">AI 修改</button>
-                <button id="btn-open-preview-header" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">在新窗口打开</button>
+                <button id="btn-ai-image" class="btn-secondary"
+                  style="padding: 6px 12px; font-size: 12px;">生成配图</button>
+                <button id="btn-toggle-chat" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">AI
+                  修改</button>
+                <button id="btn-open-preview-header" class="btn-secondary"
+                  style="padding: 6px 12px; font-size: 12px;">在新窗口打开</button>
               </div>
             </div>
             <div class="workspace-preview-frame">
@@ -128,8 +749,7 @@
           <div class="workspace-config">
             <div class="workspace-config-scroll">
               <div class="config-tabs">
-                <button class="config-tab active" data-tab="content">内容</button>
-                <button class="config-tab" data-tab="vault">知识库</button>
+                <button class="config-tab active" data-tab="content">选材</button>
                 <button class="config-tab" data-tab="style">主题</button>
                 <button class="config-tab" data-tab="animation">动画</button>
                 <button class="config-tab" data-tab="publish">发布</button>
@@ -143,6 +763,7 @@
                   <div class="tabs">
                     <button class="tab active" data-source="article">文章内容</button>
                     <button class="tab" data-source="url">网页 URL</button>
+                    <button class="tab" data-source="vault">知识库选材</button>
                   </div>
                   <div class="field hidden" id="field-url">
                     <label>网页 URL</label>
@@ -151,10 +772,49 @@
                   <div class="field" id="field-article">
                     <label style="display:flex;justify-content:space-between;align-items:center;">
                       <span>文章内容</span>
-                      <button id="btn-import-md" class="btn-secondary" style="padding:4px 10px;font-size:12px;">从 Markdown 导入</button>
+                      <button id="btn-import-md" class="btn-secondary" style="padding:4px 10px;font-size:12px;">从
+                        Markdown 导入</button>
                     </label>
                     <textarea id="input-article" rows="6" placeholder="粘贴文章或内容，支持 Markdown 格式…"></textarea>
                     <input type="file" id="input-md-file" accept=".md,.markdown,.txt" style="display:none;">
+                  </div>
+                  <div class="field hidden" id="field-vault-source">
+                    <label>从知识库勾选素材，「汇总为素材」后可在「文章内容」中预览编辑</label>
+                    <div class="vault-source-groups">
+                      <div class="vault-source-group">
+                        <div class="vault-source-group-header">
+                          <span class="vault-source-group-title">笔记</span>
+                          <input type="search" class="vault-source-filter" data-group="notes" placeholder="过滤笔记…">
+                        </div>
+                        <div class="vault-source-list" id="vault-source-notes"></div>
+                      </div>
+                      <div class="vault-source-group">
+                        <div class="vault-source-group-header">
+                          <span class="vault-source-group-title">知识卡片</span>
+                          <input type="search" class="vault-source-filter" data-group="cards" placeholder="过滤卡片…">
+                        </div>
+                        <div class="vault-source-list" id="vault-source-cards"></div>
+                      </div>
+                      <div class="vault-source-group">
+                        <div class="vault-source-group-header">
+                          <span class="vault-source-group-title">碎片</span>
+                          <input type="search" class="vault-source-filter" data-group="fragments" placeholder="过滤碎片…">
+                        </div>
+                        <div class="vault-source-list" id="vault-source-fragments"></div>
+                      </div>
+                      <div class="vault-source-group">
+                        <div class="vault-source-group-header">
+                          <span class="vault-source-group-title">错题</span>
+                          <input type="search" class="vault-source-filter" data-group="mistakes" placeholder="过滤错题…">
+                        </div>
+                        <div class="vault-source-list" id="vault-source-mistakes"></div>
+                      </div>
+                    </div>
+                    <div class="vault-source-actions">
+                      <button id="btn-vault-source-collect" class="btn-primary" style="flex:1;">汇总为素材</button>
+                      <button id="btn-vault-source-review-deck" class="btn-secondary" style="flex:1;"
+                        disabled>生成 PPT</button>
+                    </div>
                   </div>
                 </section>
 
@@ -193,50 +853,10 @@
                   </div>
                 </section>
 
-                <section class="card model-config-card">
-                  <div class="card-title">模型配置 <span class="hint-inline">系统级别 · 对所有项目生效</span></div>
-                  <div class="fields-grid">
-                    <div class="field field-wide">
-                      <label>模型预设</label>
-                      <select id="input-model-preset">
-                        <option value="">加载中…</option>
-                      </select>
-                    </div>
-                    <div id="lmstudio-hint" class="field field-wide hidden">
-                      <div style="font-size: 13px; color: #0D9488; background: #F0FDFA; padding: 10px 12px; border-radius: 8px;">
-                        💡 需要先启动 LM Studio，然后在 LM Studio 中开启 "Local Server"
-                      </div>
-                    </div>
-                    <div class="field">
-                      <label>Provider</label>
-                      <input type="text" id="input-model-provider" placeholder="kimi / openai / lmstudio">
-                    </div>
-                    <div class="field field-wide" style="display: flex; gap: 8px;">
-                      <label style="flex: 1;">模型名称</label>
-                      <div style="flex: 1; display: flex; gap: 8px;">
-                        <select id="input-model-name" style="flex: 1;">
-                          <option value="">选择或输入模型…</option>
-                        </select>
-                        <button id="btn-refresh-models" class="btn-secondary" style="padding: 8px 12px; white-space: nowrap;">刷新列表</button>
-                      </div>
-                    </div>
-                    <div class="field field-wide">
-                      <label>Base URL</label>
-                      <input type="url" id="input-model-base-url" placeholder="https://api.kimi.com/coding/v1">
-                    </div>
-                    <div class="field field-wide">
-                      <label>API Key <span class="hint-inline">临时 · 仅本次生成, 不保存; 留空则用环境变量</span></label>
-                      <input type="password" id="input-model-api-key" placeholder="sk-...">
-                    </div>
-                  </div>
-                </section>
-
                 <div class="actions-bar">
                   <button id="btn-save" class="btn-secondary">保存配置</button>
-                  <button id="btn-generate-content" class="btn-primary">生成幻灯片</button>
+                  <button id="btn-generate-content" class="btn-primary">生成 PPT</button>
                   <button id="btn-preview" class="btn-secondary" disabled>预览</button>
-                  <button id="btn-export-pptx" class="btn-secondary" disabled>导出 PPTX</button>
-                  <button id="btn-export-pptx-image" class="btn-secondary" disabled>导出高清 PPTX</button>
                 </div>
 
                 <section id="progress-card" class="card progress-card hidden">
@@ -244,47 +864,6 @@
                   <div id="progress-steps" class="progress-steps"></div>
                   <div id="progress-log" class="progress-log"></div>
                 </section>
-              </div>
-
-              <div class="config-panel" data-panel="vault">
-                <div id="vault-no-note-selected" class="empty-state" style="padding:40px 20px;">
-                  <h3 style="font-size:16px;">选择一篇笔记</h3>
-                  <p style="opacity:0.65;">从左侧知识库列表选择一篇笔记，或点击「新建笔记」创建</p>
-                </div>
-
-                <div id="vault-note-panel" class="hidden">
-                  <section class="card">
-                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-                      <span id="vault-note-title">笔记标题</span>
-                      <div style="display:flex;gap:8px;">
-                        <button id="btn-vault-note-save" class="btn-secondary" style="padding:6px 12px;font-size:12px;">保存</button>
-                        <button id="btn-vault-note-generate" class="btn-primary" style="padding:6px 12px;font-size:12px;">生成 PPT</button>
-                      </div>
-                    </div>
-                    <div class="field" style="margin-bottom:8px;">
-                      <label>Front Matter (可选)</label>
-                      <textarea id="vault-note-frontmatter" rows="6" style="font-family:var(--font-mono);font-size:12px;"></textarea>
-                    </div>
-                    <div class="field">
-                      <label>笔记内容 (支持 Markdown 与 [[Wiki链接]])</label>
-                      <textarea id="vault-note-content" rows="16" placeholder="在此编写笔记内容..."></textarea>
-                    </div>
-                  </section>
-
-                  <section class="card" id="vault-links-card" style="margin-top:12px;">
-                    <div class="card-title">链接信息</div>
-                    <div class="vault-links">
-                      <div>
-                        <div class="vault-links-title">出链 (该笔记链接到)</div>
-                        <div id="vault-outlinks" class="vault-links-list">暂无</div>
-                      </div>
-                      <div>
-                        <div class="vault-links-title">入链 (链接到该笔记)</div>
-                        <div id="vault-backlinks" class="vault-links-list">暂无</div>
-                      </div>
-                    </div>
-                  </section>
-                </div>
               </div>
 
               <div class="config-panel" data-panel="style">
@@ -298,7 +877,7 @@
                   <div class="fields-grid">
                     <div class="field">
                       <label>主色（--teal）</label>
-                      <input type="color" id="input-var-teal" value="#0D9488">
+                      <input type="color" id="input-var-teal" value="#439288">
                     </div>
                     <div class="field">
                       <label>文字色（--ink）</label>
@@ -312,7 +891,8 @@
                       <label>标题字体（--font-heading）</label>
                       <select id="input-var-font-heading">
                         <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
-                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif'>无衬线 · PingFang SC / Microsoft YaHei</option>
+                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif'>无衬线 · PingFang SC / Microsoft YaHei
+                        </option>
                         <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
                       </select>
                     </div>
@@ -320,7 +900,8 @@
                       <label>正文字体（--font-body）</label>
                       <select id="input-var-font-body">
                         <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
-                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif' selected>无衬线 · PingFang SC / Microsoft YaHei</option>
+                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif' selected>无衬线 · PingFang SC /
+                          Microsoft YaHei</option>
                         <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
                       </select>
                     </div>
@@ -383,7 +964,8 @@
                   <div class="card-title">访问链接</div>
                   <div class="publish-history">
                     <div class="publish-history-title">最新版本</div>
-                    <div id="publish-latest" style="padding: 12px; background: var(--tile); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; word-break: break-all; color: var(--ink); opacity: 0.6;">
+                    <div id="publish-latest"
+                      style="padding: 12px; background: var(--tile); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; word-break: break-all; color: var(--ink); opacity: 0.6;">
                       暂未发布
                     </div>
                   </div>
@@ -406,7 +988,8 @@
                     <label>快照说明（可选）</label>
                     <input type="text" id="snapshot-description" placeholder="例如：修改封面标题之前">
                   </div>
-                  <button id="btn-create-snapshot" class="btn-primary" style="width: 100%; margin-top: 4px;">保存当前版本为快照</button>
+                  <button id="btn-create-snapshot" class="btn-primary"
+                    style="width: 100%; margin-top: 4px;">保存当前版本为快照</button>
                 </section>
 
                 <section class="card">
@@ -429,6 +1012,131 @@
                 </section>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- 系统设置（不依赖项目选择） -->
+        <div id="settings-panel" class="settings-panel hidden">
+          <div class="settings-header">
+            <div class="settings-title">系统设置 · 对所有项目生效</div>
+          </div>
+          <div class="settings-body">
+            <section class="card model-config-card">
+              <div class="card-title">模型配置 <span class="hint-inline">系统级别 · 对所有项目生效</span></div>
+              <div class="model-config-section">文本模型</div>
+              <div class="fields-grid">
+                <div class="field field-wide">
+                  <label>模型预设</label>
+                  <select id="input-model-preset">
+                    <option value="">加载中…</option>
+                  </select>
+                </div>
+                <div id="lmstudio-hint" class="field field-wide hidden">
+                  <div
+                    style="font-size: 13px; color: #0D9488; background: #F0FDFA; padding: 10px 12px; border-radius: 8px;">
+                    💡 需要先启动 LM Studio，然后在 LM Studio 中开启 "Local Server"
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Provider</label>
+                  <input type="text" id="input-model-provider" placeholder="kimi / openai / lmstudio">
+                </div>
+                <div class="field field-wide" style="display: flex; gap: 8px;">
+                  <label style="flex: 1;">模型名称</label>
+                  <div style="flex: 1; display: flex; gap: 8px;">
+                    <select id="input-model-name" style="flex: 1;">
+                      <option value="">选择或输入模型…</option>
+                    </select>
+                    <button id="btn-refresh-models" class="btn-secondary"
+                      style="padding: 8px 12px; white-space: nowrap;">刷新列表</button>
+                  </div>
+                </div>
+                <div class="field field-wide">
+                  <label>Base URL</label>
+                  <input type="url" id="input-model-base-url" placeholder="https://api.kimi.com/coding/v1">
+                </div>
+                <div class="field field-wide">
+                  <label>API Key <span class="hint-inline">留空则用环境变量或已保存的配置</span></label>
+                  <input type="password" id="input-model-api-key" placeholder="sk-...">
+                  <label class="checkbox-inline"><input type="checkbox" id="input-model-persist-api-key">
+                    保存到本地配置（.ai-ppt-config.json，已 gitignore）</label>
+                </div>
+              </div>
+
+              <div class="model-config-section">生图模型</div>
+              <div class="fields-grid">
+                <div class="field">
+                  <label>Provider</label>
+                  <select id="input-image-model-provider">
+                    <option value="arkcli">火山引擎 arkcli</option>
+                    <option value="bailian">阿里云百炼 bl</option>
+                    <option value="openai">OpenAI 兼容</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>模型名称 <span class="hint-inline">留空使用 CLI 默认模型</span></label>
+                  <input type="text" id="input-image-model-name" placeholder="doubao-seedream-4-5">
+                </div>
+                <div id="image-model-openai-fields" class="field-wide hidden" style="display: contents;">
+                  <div class="field">
+                    <label>Base URL</label>
+                    <input type="url" id="input-image-model-base-url" placeholder="https://api.openai.com/v1">
+                  </div>
+                  <div class="field">
+                    <label>API Key <span class="hint-inline">留空则用环境变量或已保存的配置</span></label>
+                    <input type="password" id="input-image-model-api-key" placeholder="sk-...">
+                    <label class="checkbox-inline"><input type="checkbox" id="input-image-model-persist-api-key">
+                      保存到本地配置（.ai-ppt-config.json，已 gitignore）</label>
+                  </div>
+                </div>
+                <div class="field field-wide">
+                  <button id="btn-test-image-model" class="btn-secondary" style="padding: 8px 16px;">测试</button>
+                </div>
+              </div>
+
+              <div class="model-config-section">生视频模型</div>
+              <div class="fields-grid">
+                <div class="field">
+                  <label>Provider</label>
+                  <select id="input-video-model-provider">
+                    <option value="arkcli">火山引擎 arkcli</option>
+                    <option value="bailian">阿里云百炼 bl</option>
+                    <option value="openai">OpenAI 兼容</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>模型名称 <span class="hint-inline">留空使用 CLI 默认模型</span></label>
+                  <input type="text" id="input-video-model-name" placeholder="doubao-seedance-1-0-pro">
+                </div>
+                <div id="video-model-openai-fields" class="field-wide hidden" style="display: contents;">
+                  <div class="field">
+                    <label>Base URL</label>
+                    <input type="url" id="input-video-model-base-url" placeholder="https://api.openai.com/v1">
+                  </div>
+                  <div class="field">
+                    <label>API Key <span class="hint-inline">留空则用环境变量或已保存的配置</span></label>
+                    <input type="password" id="input-video-model-api-key" placeholder="sk-...">
+                    <label class="checkbox-inline"><input type="checkbox" id="input-video-model-persist-api-key">
+                      保存到本地配置（.ai-ppt-config.json，已 gitignore）</label>
+                  </div>
+                </div>
+                <div class="field field-wide">
+                  <button id="btn-test-video-model" class="btn-secondary" style="padding: 8px 16px;">测试</button>
+                </div>
+              </div>
+
+              <div class="actions-bar" style="margin-bottom: 0;">
+                <button id="btn-save-model-config" class="btn-primary">保存模型配置</button>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-title">数据与备份</div>
+              <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 12px;">
+                所有数据保存在本地目录：projects/ 存放 PPT 作品，vault/ 存放知识库（速记、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。
+              </p>
+              <button id="btn-backup-now" class="btn-primary" style="padding: 8px 16px;">立即备份</button>
+            </section>
           </div>
         </div>
       </main>
@@ -454,24 +1162,311 @@
     </div>
   </div>
 
-  <div id="export-modal" class="modal hidden">
+  <!-- 通用输入弹窗（替代原生 prompt） -->
+  <div id="input-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-body">
-      <h3>导出</h3>
-      <p class="hint">检测到 Ctrl+P / Cmd+P 快捷键</p>
-      <div class="export-options">
-        <button id="export-pdf" class="btn-secondary">浏览器打印 / PDF</button>
-        <button id="export-pptx" class="btn-secondary">下载 PPTX（可编辑文字）</button>
-        <button id="export-pptx-image" class="btn-secondary">下载 PPTX（高清图片 · 还原度更高）</button>
-        <button id="export-html" class="btn-secondary">下载单文件 HTML</button>
+      <h3 id="input-modal-title">输入</h3>
+      <div class="field">
+        <label id="input-modal-label"></label>
+        <input type="text" id="input-modal-input">
       </div>
       <div class="modal-actions">
-        <button id="btn-close-export" class="btn-secondary">关闭</button>
+        <button id="btn-cancel-input-modal" class="btn-secondary">取消</button>
+        <button id="btn-confirm-input-modal" class="btn-primary">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用确认弹窗（替代原生 confirm） -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body">
+      <h3 id="confirm-modal-title">确认操作</h3>
+      <p class="hint" id="confirm-modal-message"></p>
+      <div class="modal-actions">
+        <button id="btn-cancel-confirm-modal" class="btn-secondary">取消</button>
+        <button id="btn-confirm-confirm-modal" class="btn-primary">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rename-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body">
+      <h3>重命名笔记</h3>
+      <div class="field">
+        <label>新名称（正文中的 [[双链]] 引用会同步更新）</label>
+        <input type="text" id="rename-note-input" placeholder="新的笔记名称">
+      </div>
+      <div class="modal-actions">
+        <button id="btn-cancel-rename" class="btn-secondary">取消</button>
+        <button id="btn-confirm-rename" class="btn-primary">重命名</button>
       </div>
     </div>
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <!-- 测验表单弹窗（新建/编辑共用） -->
+  <div id="exam-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body modal-wide">
+      <h3 id="exam-modal-title">新建测验</h3>
+      <div class="fields-grid">
+        <div class="field">
+          <label>标题</label>
+          <input type="text" id="exam-form-title" placeholder="测验标题">
+        </div>
+        <div class="field">
+          <label>分类</label>
+          <input type="text" id="exam-form-subject" placeholder="如：产品、技术">
+        </div>
+        <div class="field">
+          <label>难度</label>
+          <select id="exam-form-difficulty">
+            <option value="easy">简单</option>
+            <option value="medium" selected>中等</option>
+            <option value="hard">困难</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>日期</label>
+          <input type="date" id="exam-form-date">
+        </div>
+        <div class="field field-wide">
+          <label>标签（用逗号分隔）</label>
+          <input type="text" id="exam-form-tags" placeholder="如：期中, 重点">
+        </div>
+        <div class="field field-wide">
+          <label>说明</label>
+          <textarea id="exam-form-description" rows="2" placeholder="测验说明（可选）"></textarea>
+        </div>
+      </div>
+      <div class="field" style="margin-top:4px;">
+        <label style="display:flex;justify-content:space-between;align-items:center;">
+          <span>题目</span>
+          <button id="btn-exam-add-question" class="btn-secondary" style="padding:4px 10px;font-size:12px;">+
+            添加题目</button>
+        </label>
+        <div id="exam-questions-list"></div>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-cancel-exam" class="btn-secondary">取消</button>
+        <button id="btn-confirm-exam" class="btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 智能组卷弹窗 -->
+  <div id="smart-exam-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body">
+      <h3>智能组卷</h3>
+      <div class="field">
+        <label>题目数量</label>
+        <select id="smart-exam-count">
+          <option value="5" selected>5 题</option>
+          <option value="10">10 题</option>
+          <option value="15">15 题</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>分类（可选）</label>
+        <input type="text" id="smart-exam-subject" placeholder="留空则不限分类">
+      </div>
+      <div style="font-size:13px;opacity:0.7;line-height:1.6;">将根据低熟练度卡片、到期复习和历史错题自动组卷</div>
+      <div class="modal-actions">
+        <button id="btn-cancel-smart-exam" class="btn-secondary">取消</button>
+        <button id="btn-confirm-smart-exam" class="btn-primary">开始组卷</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 错题表单弹窗（记录/编辑共用） -->
+  <div id="mistake-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body modal-wide">
+      <h3 id="mistake-modal-title">记录错题</h3>
+      <div class="field">
+        <label>题目</label>
+        <textarea id="mistake-form-question" rows="3" placeholder="错题题目内容"></textarea>
+      </div>
+      <div class="fields-grid">
+        <div class="field">
+          <label>我的错误答案</label>
+          <textarea id="mistake-form-wrong" rows="2"></textarea>
+        </div>
+        <div class="field">
+          <label>正确答案</label>
+          <textarea id="mistake-form-correct" rows="2"></textarea>
+        </div>
+        <div class="field">
+          <label>分类</label>
+          <input type="text" id="mistake-form-subject" placeholder="如：产品知识">
+        </div>
+        <div class="field">
+          <label>题型</label>
+          <input type="text" id="mistake-form-questiontype" placeholder="如：选择题、填空题">
+        </div>
+        <div class="field">
+          <label>难度</label>
+          <select id="mistake-form-difficulty">
+            <option value="easy">简单</option>
+            <option value="medium" selected>中等</option>
+            <option value="hard">困难</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>标签（用逗号分隔）</label>
+          <input type="text" id="mistake-form-tags" placeholder="如：易错, 重点">
+        </div>
+      </div>
+      <div class="field">
+        <label>解析 / 错因</label>
+        <textarea id="mistake-form-analysis" rows="2"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-cancel-mistake" class="btn-secondary">取消</button>
+        <button id="btn-confirm-mistake" class="btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 生成复习 PPT 弹窗 -->
+  <div id="review-deck-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body">
+      <h3 id="review-deck-title">生成复习 PPT</h3>
+      <div class="field">
+        <label>项目标识（英文/数字/中划线）</label>
+        <input type="text" id="review-deck-name" placeholder="review-cards-20240101">
+      </div>
+      <div class="modal-actions">
+        <button id="btn-cancel-review-deck" class="btn-secondary">取消</button>
+        <button id="btn-confirm-review-deck" class="btn-primary">开始生成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 统一生成弹窗（PPT / 视频 / 报告，来源由调用方传入） -->
+  <div id="gen-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body modal-wide">
+      <h3 id="gen-modal-title">生成</h3>
+      <div class="field">
+        <label>来源</label>
+        <div id="gen-source" class="graph-deck-nodes"></div>
+      </div>
+      <div class="field" id="gen-type-field">
+        <label>生成类型</label>
+        <div class="note-gen-types">
+          <label><input type="radio" name="gen-type" value="ppt" checked> PPT</label>
+          <label><input type="radio" name="gen-type" value="video"> 视频</label>
+          <label><input type="radio" name="gen-type" value="report"> 报告</label>
+        </div>
+      </div>
+      <div id="gen-params-ppt" class="note-gen-params">
+        <div id="gen-ppt-extra-params">
+          <div class="field">
+            <label>页数</label>
+            <input type="number" id="gen-slide-count" value="8" min="3" max="30">
+          </div>
+          <div class="field">
+            <label>受众</label>
+            <input type="text" id="gen-audience" placeholder="例如：管理层">
+          </div>
+          <div class="field">
+            <label>风格</label>
+            <input type="text" id="gen-style" value="商业汇报">
+          </div>
+        </div>
+        <div class="field" id="gen-project-name-field">
+          <label>项目标识（英文/数字/中划线）</label>
+          <input type="text" id="gen-project-name" placeholder="notes-deck-20240101">
+        </div>
+      </div>
+      <div id="gen-params-video" class="note-gen-params hidden">
+        <div class="field">
+          <label>补充说明（可选）</label>
+          <textarea id="gen-video-prompt" rows="3" placeholder="例如：竖屏 60 秒，配旁白"></textarea>
+        </div>
+      </div>
+      <div id="gen-params-report" class="note-gen-params hidden">
+        <div class="field">
+          <label>报告标题</label>
+          <input type="text" id="gen-report-title" placeholder="笔记汇总报告">
+        </div>
+        <div class="field">
+          <label>报告文件名（可选）</label>
+          <input type="text" id="gen-report-name" placeholder="report-20240101">
+        </div>
+      </div>
+      <div id="gen-result" class="note-gen-result hidden"></div>
+      <div class="modal-actions">
+        <button id="btn-cancel-gen" class="btn-secondary">取消</button>
+        <button id="btn-confirm-gen" class="btn-primary">开始生成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI 配图弹窗（笔记 / 项目共用） -->
+  <div id="ai-image-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body">
+      <h3 id="ai-image-modal-title">生成配图</h3>
+      <div class="field">
+        <label>图片描述</label>
+        <textarea id="ai-image-prompt" rows="3" placeholder="例如：扁平风格的数据增长曲线插图，青绿色调"></textarea>
+      </div>
+      <div class="ai-image-hint">生图可能需要 30-60 秒，点击生成后请耐心等待</div>
+      <div class="modal-actions">
+        <button id="btn-cancel-ai-image" class="btn-secondary">取消</button>
+        <button id="btn-confirm-ai-image" class="btn-primary">生成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 语音听记弹窗 -->
+  <div id="voice-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body voice-body">
+      <h3>语音听记</h3>
+      <div class="voice-timer" id="voice-timer">00:00</div>
+      <div class="voice-status" id="voice-status">准备录音…</div>
+      <canvas id="voice-wave" class="voice-wave" width="320" height="64"></canvas>
+      <div class="voice-hint">完成后自动保存为速记，并转写为文字（可校对）</div>
+      <div class="modal-actions">
+        <button id="btn-voice-cancel" class="btn-secondary">取消</button>
+        <button id="btn-voice-pause" class="btn-secondary" disabled>暂停</button>
+        <button id="btn-voice-finish" class="btn-primary" disabled>完成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI 整理建议弹窗 -->
+  <div id="organize-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body modal-wide">
+      <h3>AI 整理建议</h3>
+      <div id="organize-degraded-tip" class="organize-degraded hidden">当前为离线规则建议（未配置文本模型）</div>
+      <div id="organize-status" class="organize-status hidden">正在分析碎片…</div>
+      <div id="organize-list" class="organize-list"></div>
+      <div class="modal-actions">
+        <button id="btn-cancel-organize" class="btn-secondary">取消</button>
+        <button id="btn-apply-organize" class="btn-primary">应用所选</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 快速跳转（Quick Switcher，Ctrl+Shift+O） -->
+  <div id="quick-open-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body quick-open-body">
+      <input type="text" id="quick-open-input" placeholder="输入笔记名快速跳转…（↑↓ 选择，Enter 打开，Esc 关闭）" autocomplete="off">
+      <div id="quick-open-list" class="quick-open-list"></div>
+    </div>
+  </div>
 
   <div id="help-panel" class="help-panel hidden">
     <div class="help-panel-overlay"></div>
@@ -479,7 +1474,8 @@
       <div class="help-panel-header">
         <div class="help-panel-title">键盘快捷键</div>
         <button id="btn-close-help" class="btn-secondary btn-icon" title="关闭">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
@@ -492,8 +1488,10 @@
             <div class="help-key-row"><kbd>?</kbd><span>显示/隐藏帮助</span></div>
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>N</kbd><span>新建项目</span></div>
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>S</kbd><span>保存配置</span></div>
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>导出面板</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>导出菜单</span></div>
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>全局搜索</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd><span>聚焦速记输入框</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd><span>快速跳转笔记</span></div>
           </div>
         </div>
         <div class="help-section">
@@ -501,7 +1499,7 @@
           <div class="help-grid">
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>G</kbd><span>生成幻灯片</span></div>
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>O</kbd><span>打开预览</span></div>
-            <div class="help-key-row"><kbd>1</kbd>-<kbd>9</kbd><span>快速切换项目</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>笔记内循环任务状态</span></div>
           </div>
         </div>
         <div class="help-section">
@@ -518,6 +1516,8 @@
     </div>
   </div>
 
-  <script src="/js/web.js"></script>
+  <script src="/js/vendor/marked.umd.js"></script>
+  <script type="module" src="/js/modules/app.mjs"></script>
 </body>
+
 </html>

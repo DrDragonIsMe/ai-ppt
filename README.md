@@ -1,6 +1,22 @@
 # ai-ppt
 
-基于 HTML/CSS/JS 的轻量级幻灯片系统，支持键盘导航、全屏放映、多页预览、PDF 导出，以及通过 Web 界面从 URL 或文章内容自动生成完整 deck。附带 Claude CLI / Kimi CLI 的 skill 扩展：`/ppt-preview`、`/ppt-structure`、`/ppt-edit`、`/ppt-export`、`/ppt-list`、`/ppt-delete`。
+个人知识中枢：**速记碎片 → AI 整理与加权星图 → PPT/配图/视频表现 → 智能测验迭代** 的闭环系统。基于 HTML/CSS/JS 的轻量级幻灯片引擎（键盘导航、全屏放映、多页预览、PDF 导出）+ 内置知识库 vault（双链笔记、速记碎片、知识卡片、测验、错题集），支持从 URL、文章、笔记或星图选区自动生成完整 deck，并可用 AI 生成配图与视频。附带 Claude CLI / Kimi CLI 的 skill 扩展：`/ppt-preview`、`/ppt-structure`、`/ppt-edit`、`/ppt-export`、`/ppt-list`、`/ppt-delete`、`/ppt-design` 等 11 个（见下文「可用 skill」）。
+
+## 概念模型
+
+系统由两类实体构成，「选材」是连接两者的桥梁：
+
+- **知识库（个人资产）**：速记碎片 → AI 整理 → 笔记 / 知识卡片 → 加权星图 → 测验与错题巩固。知识库内容与任何项目无关，长期沉淀。
+- **PPT 作品（项目）**：`projects/` 下的每个项目就是一份 PPT 作品，生命周期为流水线四步：**① 选材 → ② 生成 → ③ 修改 → ④ 发布**（导出 PDF / PPTX / 单文件 HTML）。
+- **选材**：在项目工作区内从知识库勾选笔记 / 卡片 / 碎片 / 错题作为素材（持久化到 `ai-ppt.json.sourceSelection`），也可以直接粘贴文章或提供 URL；素材汇总后进入生成步骤。
+
+```
+知识库（个人资产，与项目无关）                PPT 作品（projects/<name>）
+┌───────────────────────────────┐        ┌─────────────────────────────┐
+│ 速记碎片 → AI 整理 → 笔记/卡片  │        │  ① 选材 → ② 生成 → ③ 修改    │
+│ → 加权星图 → 测验/错题巩固     │ ─选材─▶ │  → ④ 发布（PDF/PPTX/HTML）  │
+└───────────────────────────────┘        └─────────────────────────────┘
+```
 
 ## 仓库结构
 
@@ -13,23 +29,17 @@ ai-ppt/
 │   ├── theme-ref/                # 风格参考
 │   └── README.md                 # deck 级说明
 ├── projects/                     # 所有业务 deck
-│   ├── aoji-company/
+│   ├── hualong-xrs-strategy/
+│   ├── q3-sales-preview/
 │   ├── xinrenxinshi-huaxia-bank/
-│   ├── xinrenxinshi-usagestobank/
-│   ├── yellow-books/
+│   ├── xinrenxinshi-intro/
 │   └── ...
 ├── web/                          # Web 管理界面
 │   ├── index.html
 │   ├── css/web.css
-│   └── js/web.js
+│   └── js/modules/               # 无构建 ES Modules，入口 app.mjs
 ├── server.mjs                    # Web 服务入口
-├── skills/                       # CLI skills
-│   ├── ppt-preview/              # /ppt-preview
-│   ├── ppt-structure/            # /ppt-structure
-│   ├── ppt-edit/                 # /ppt-edit
-│   ├── ppt-export/               # /ppt-export
-│   ├── ppt-list/                 # /ppt-list
-│   └── ppt-delete/               # /ppt-delete
+├── skills/                       # CLI skills（11 个，见下文「可用 skill」）
 ├── scripts/                      # 升级、生成、导出、备份工具
 │   ├── upgrade-decks.mjs         # 用基座 css/js 覆盖所有项目
 │   ├── generate-deck.mjs         # 从 URL/文章生成 deck
@@ -37,6 +47,7 @@ ai-ppt/
 │   ├── export-pdf.mjs            # 导出 PDF（可选 Puppeteer）
 │   ├── backup.mjs                # 项目与技能备份
 │   └── config.mjs                # 项目配置读写
+├── tests/                        # node --test 核心测试
 ├── install-skills.js             # Node 安装脚本
 ├── install-skills.sh             # Shell 安装脚本
 ├── package.json                  # npx 支持
@@ -168,7 +179,7 @@ npm run web
 - 生成完成后自动打开预览
 - **可视化编辑**：点击预览区「编辑模式」，直接在幻灯片上修改文字，保存后写回 `index.html`
 - **AI 不覆盖手动编辑**：`ai-ppt.json` 记录 `userEdits`，后续 AI 生成/修改会把用户编辑作为约束保留
-- 按 `Ctrl+P` / `Cmd+P` 打开导出面板（PDF / PPTX）
+- 按 `Ctrl+P` / `Cmd+P` 展开项目工具栏的导出下拉（PPTX / 高清图片 PPTX / PDF / 单文件 HTML）
 
 ### 7. 命令行生成与导出
 
@@ -225,7 +236,7 @@ npm run backup
 | `Cmd + →` / `Cmd + ←` | 尾页/首页 |
 | `↑` | 多页预览 |
 | `↓` | 导出 PDF |
-| `Ctrl + P` / `Cmd + P` | 打印 / 导出面板（Web UI） |
+| `Ctrl + P` / `Cmd + P` | 打印 / 导出下拉（Web UI） |
 | `F` | 全屏 |
 | `T` | 切换主题 |
 | `s` | 缩略图侧边栏（全屏时隐藏） |
@@ -243,12 +254,13 @@ npm run backup
 |------|------|
 | `?` | 帮助面板 |
 | `Ctrl + N` | 新建项目 |
-| `Ctrl + S` | 保存配置 |
-| `Ctrl + P` | 导出面板 |
+| `Ctrl + S` | 保存笔记 / 保存项目配置（按上下文分派） |
+| `Ctrl + P` | 导出下拉 |
 | `Ctrl + G` | 生成幻灯片 |
 | `Ctrl + O` | 打开预览 |
 | `Ctrl + K` | 全局搜索 |
-| `1` - `9` | 快速切换项目 |
+| `Ctrl + Shift + O` | 快速跳转笔记 |
+| `Ctrl + Shift + N` | 全局速记 |
 | `Tab` | 切换配置标签 |
 | `ESC` | 关闭弹窗/面板 |
 
@@ -262,6 +274,20 @@ npm run backup
 | `/ppt-export [deck] [pdf\|pptx]` | 导出 PDF 或 PPTX |
 | `/ppt-list` | 列出所有 deck |
 | `/ppt-delete <deck>` | 删除指定 deck（需确认） |
+| `/ppt-design` | 幻灯片设计规范（生成/编辑/审查时遵循） |
+| `/ppt-anim` | 配置动画效果 |
+| `/ppt-data` | 数据可视化组件 |
+| `/ppt-theme` | 管理与切换主题 |
+| `/ppt-publish` | 发布 deck 与管理发布版本 |
+
+## 知识中枢工作流
+
+从速记到复习的完整闭环，均在 Web UI（`npm run web`）中完成：
+
+1. **速记**：`Ctrl+Shift+N` 随时记录碎片到 `vault/fragments/` 收件箱，正文中的 `#标签` 自动提取。
+2. **AI 整理**：碎片面板点「AI 整理」，对每条收件箱碎片给出建议（升格为卡片/笔记/错题、补标签、关联笔记、合并、暂不处理），逐条确认后执行；无可用模型时按确定性规则给出建议。
+3. **星图**：知识星图节点带 `weight`（链接度数 + 被提及次数）与 `reviews`（复习次数），可「只看高频」聚焦核心知识；选中若干节点可一键生成 PPT。
+4. **智能组卷 / 复习 PPT**：从低熟练卡片、到期复习卡片与历史错题的选题池生成测验（LLM 变式题，无模型时降级直选）；卡片/错题集可一键生成复习 PPT，配图走 AI 生图。
 
 ## 发布到 npm
 
@@ -282,81 +308,40 @@ npx ai-ppt-skills
 | Deck | 说明 |
 |------|------|
 | `ai-ppt-base/` | PPT 引擎基座模板，可复用 |
+| `projects/hualong-xrs-strategy/` | 华龙区 × 薪人薪事：产业纵深分析与数字劳动力合作路径 |
 | `projects/q3-sales-preview/` | Q3 销售队伍建设动员 |
-| `projects/test-new-css/` | 测试新 CSS/配色效果 |
 | `projects/xinrenxinshi-huaxia-bank/` | 薪人薪事 × 华夏银行 |
+| `projects/xinrenxinshi-intro/` | 薪人薪事产品介绍 |
 
 ## 更新日志
 
-### v1.8.2 — 可视化编辑、AI 约束与 Web UI 重设计（2026-07）
+### v2.6.0 — 易用性修复与信息架构收拢（2026-07）
 
-- **可视化编辑模式**：Web UI 预览区新增「编辑模式」，通过 `postMessage` 在 iframe 内开启 `contenteditable`；用户可直接点击修改幻灯片文字，保存时调用 `POST /api/projects/:name/save-edits` 持久化到 `index.html`，取消时放弃改动。
-- **用户编辑保护**：`scripts/save-edits.mjs` 在保存时记录 `ai-ppt.json.userEdits`（含每页标题与文本摘要）；`generate-deck.mjs` 与 `chat-modify.mjs` 的 prompt 中读取该记录并明确要求 AI 保留用户手动编辑过的幻灯片文字、观点与数据。
-- **Web UI 布局重设计**：采用「顶部工具栏 + 左侧可折叠项目列表 + 中间大画布预览 + 右侧属性面板」的类 Canva / Google Slides 布局，预览区更宽敞；属性面板分为内容/主题/动画/组件/版本/AI 修改标签页；顶部工具栏集成项目下拉、编辑模式、生成、导出、预览与全局搜索。
-- **导出下拉菜单**：顶部工具栏新增导出下拉（PPTX / 高清图片 PPTX / PDF / 单文件 HTML），同时保留 `Ctrl+P` 导出面板。
-- **测试覆盖**：`scripts/test-smoke.mjs` 新增 `save user edits` 用例。
-- **系统级别模型配置**：模型配置从 `ai-ppt.json` 提升到 `.ai-ppt-config.json`，Web UI「模型配置」面板对所有项目生效；`generate-deck.mjs` / `chat-modify.mjs` 通过 `scripts/global-config.mjs` 读取全局模型。
+- **笔记保存**：`Ctrl+S` 按上下文分派（保存笔记 / 保存项目配置），2 秒防抖自动保存、脏标记（●）、beforeunload 防丢、localStorage 草稿恢复。
+- **弹窗统一**：新增 `modals.mjs`（`showInputModal`/`showConfirmModal`），全站原生 prompt/confirm 清零。
+- **「生成 PPT」单入口**：`generate.mjs` 的 `#gen-modal` + `openGenerateModal(source)` 统一笔记/多选/星图/复习四个来源。
+- **导出单入口**：项目工具栏 `#export-dropdown`（PPTX / 高清图片 PPTX / 浏览器打印 PDF / 单文件 HTML），`Ctrl+P` 展开。
+- **侧边栏「学习」tab**：测验/错题集/复习训练合并；设置入口收拢到顶栏齿轮。
+- **底层**：搜索索引改为按项目自动重建；项目快照保留 20 份、vault 备份保留 200 份并自动 prune；清理 `web.js`、`build-fonts` 等死代码。
 
-### v1.8.1 — 演讲者模式、主题编辑器与组件库（2026-07）
+### v2.3.2 — AI 修改结果显示修改明细（2026-07）
 
-- **演讲者模式**：放映页按 `Shift+S` 打开演讲者窗口（当前页备注、下一页预览、计时器）；在幻灯片内用 `<div class="speaker-note">...</div>` 编写备注（放映时隐藏）。
-- **新动画**：`anim-zoom`（缩放淡入）、`anim-blur`（模糊淡入）、`anim-flip`（3D 翻转），Web UI 动画面板可选。
-- **可视化主题编辑器**：主题页新增「自定义变量」，可视化调整主色/文字色/背景色与标题/正文字体，实时注入 `<style id="theme-overrides">` 并持久化到 `ai-ppt.json`。
-- **组件库**：新增「组件」标签页，一键插入封面、大数字统计、表格、进度环、时间线、瀑布图、步骤流程、结尾页等预制组件。
-- **单文件 HTML 导出**：导出面板新增「下载单文件 HTML」（`scripts/export-single-html.mjs`，内联所有 CSS/JS，可独立分发）。
+- 笔记/PPT 的 AI 对话修改完成后，结果气泡除「修改完成」外会展示**修改明细**：优先显示 LLM 输出的逐条修改点（prompt 新增 `---修改说明---` 输出约定），缺失时自动回退为行级 diff（`-` 删除 / `+` 新增，LCS 实现，上限 40 行）。
+- 修改明细随 SSE `done.details` 下发，PPT 对话历史（chat-history.json）同步保存，刷新后仍可回顾。
 
-### v1.8 — 多后端 LLM、快照、搜索与对话式修改（2026-07）
+### v2.3.1 — 模型密钥挂钩与系统级设置入口（2026-07）
 
-- **LLM 多后端**：支持 LM Studio 本地模型（`http://localhost:1234/v1`，自动识别已加载模型）与任意 OpenAI 兼容远程端点；Web UI 模型预设可「刷新列表」拉取远程模型。
-- **对话式修改**：预览区新增「AI 修改」聊天面板，自然语言指令直接改写幻灯片（修改前自动快照）；CLI：`npm run chat-modify -- <name> "<instruction>"`，供外部 AI 驱动。
-- **快照/版本管理**：项目页新增「版本」标签，一键保存/恢复/删除快照（存储于 `.snapshots/`）；CLI：`npm run snapshot -- <create|list|restore|delete>`。
-- **全局搜索**：顶栏搜索框（`Ctrl+K`）跨项目搜索标题与幻灯片内容；CLI：`npm run search -- <关键词>`。
-- **Markdown 导入**：内容面板一键导入 `.md/.txt` 文件作为文章内容。
-- **放映体验**：新增可收起的幻灯片缩略图导航侧边栏；帮助面板分组重设计。
-- **Web UI 快捷键**：`?`/`Ctrl+N/S/P/G/O/K`、`1-9` 切换项目、`Tab` 切换标签、`Esc` 关闭面板，附帮助面板。
+- **API Key 可选持久化**：设置面板三组模型的 API Key 均可勾选「保存到本地配置」（`.ai-ppt-config.json`，已 gitignore）；后端取 key 优先级为 环境变量 > 配置文件，`GET /api/config` 只返回 `apiKeySet` 掩码绝不返回明文。勾选一次后 AI 对话修改/生成不再反复报「未配置 LLM」。
+- **系统级齿轮入口**：顶栏右侧新增 ⚙ 按钮，随时一键打开系统设置（侧边栏「设置」tab 保留）。
+- **错误提示引导**：chat/生成/AI 扩展遇到「未配置可用 LLM」时，自动追加「请到「设置」面板检查文本模型与 API Key」。
 
-### v1.7 — Web 管理、自动生成、PPTX 导出（2026-07）
+### v2.3.0 — 系统设置区与 AI 对话强化（2026-07）
 
-- **Web 管理界面**：新增 `web/` + `server.mjs`，支持浏览器中创建项目、配置 URL/文章内容、调整生成参数。
-- **自动生成管线**：`scripts/generate-deck.mjs` 支持从 URL 或文章生成 HTML 幻灯片，优先 Bailian CLI，其次 OpenAI 兼容 API，最后确定性模板兜底。
-- **流程可视化**：生成过程通过 SSE 实时推送到 Web UI，完成后自动打开预览。
-- **PPTX 导出**：新增 `/ppt-export` skill 与 `scripts/export-pptx.mjs`，使用 `pptxgenjs` 生成 `.pptx`。
-- **高清图片 PPTX 导出**：新增 `npm run export-pptx-image`，使用 Puppeteer 截取每页最终状态并嵌入 PPTX。
-- **PDF 导出**：`scripts/export-pdf.mjs` 自动查找系统 Chrome，无需手动配置 `PUPPETEER_EXECUTABLE_PATH`；同时保留浏览器打印回退。
-- **项目备份**：新增 `scripts/backup.mjs` 与 `npm run backup`。
-- **LLM 配置**：支持通过 `.env.kimi` 配置 Kimi Code 等 OpenAI 兼容 API。
+- **独立「设置」区**：文本 / 生图 / 生视频三组模型配置从项目「选材」tab 提升到系统级「设置」面板，对所有项目生效（复用 `GET/POST /api/config` 与 `POST /api/media/test` 探针，API Key 不落盘）；面板内置数据备份入口（`POST /api/backup`，返回 `{dir}`），随时一键备份。
+- **笔记 AI 对话修改**：笔记编辑器新增「AI 修改」，自然语言指令改写笔记；`POST /api/vault/notes/:name/chat` 立即返回 202，`GET .../chat/events` SSE 实时推送进度。底层 `scripts/chat-note.mjs`（NDJSON 协议）修改前自动备份原笔记到 `.snapshots/_vault/`，并要求 LLM 保留 Front Matter 与 `[[wikilink]]`，失败时不改动文件。
+- **PPT AI 对话历史持久化**：「AI 修改」聊天记录写入 `projects/<name>/chat-history.json`（最多 50 条），`GET /api/projects/:name/chat/history` 读取回填，刷新页面不丢历史。
 
-### v1.7.2 — 配色与导出修复（2026-07）
-
-- 对齐 `teal-editorial` 参考配色：ink #151A19、cream #FAFAF7、tile #EDF1F0、tile-strong #E3E9E7、teal #00B498、navy #0B1413。
-- 标题字体改为衬线、字重 400，去除渐变效果，情绪色仅用于 kicker / badge / icon / progress。
-- PDF 导出改为逐页 Puppeteer 截图后合并，输出完整多页 PDF。
-- 可编辑 PPTX 同步更新配色与字体，更接近浏览器渲染效果。
-
-### v1.7.3 — 模型配置、新 skills、配色微调（2026-07）
-
-- 新增 `modelConfig` 配置项，支持在 Web UI 选择模型预设或自定义 Base URL / Model / API Key，默认 `kimi-code`。
-- Web UI 模型配置面板从 `/api/models` 加载模型列表。
-- 新增 `/ppt-list` skill 用于列出所有 deck，新增 `/ppt-delete` skill 用于删除 deck。
-- teal 情绪色从 `#00B498` 调整为 `#439288`。
-
-### v1.4 — PDF 页眉标题 + 专业水印（2025-07）
-
-- **PDF 导出页眉**：点击 `↓` 导出前自动设置静态文档标题，浏览器打印对话框显示正确文件名。
-- **打印水印**：每页添加半透明文字水印"内部资料，请勿非法传播"，防止外泄。
-- **页边距优化**：通过 `@page` 调整上下边距，避免内容被裁剪。
-
-### v1.3 — 打印输出介质自适应（2025-07）
-
-- **物理打印**：幻灯片以 `100vw × 100vh` 渲染，A4 纸等比缩放内容，不再强制压缩到 297mm。
-- **虚拟 PDF 导出**：浏览器 PDF 渲染器使用完整页面区域，保持满屏比例。
-- **预览空白修复**：向上箭头打开多页预览时，所有页面内容可见（`.overview-card .slide-content` 强制 `opacity: 1`）。
-- 影响全部 deck：`ai-ppt-base/`, `aoji-company/`, `xinrenxinshi-huaxia-bank/`, `xinrenxinshi-usagestobank/`, `yellow-books/`
-
-### v1.2 — PDF 导出与预览修复（2025-07）
-
-- **PDF 导出尺寸修复**：打印模式下幻灯片满屏渲染，解决 A4 纸上只占中心小区域的问题。
-- **预览空白修复**：向上箭头打开多页预览时，所有页面内容可见。
+> 完整历史（v1.2 → v2.5.0）见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 许可证
 

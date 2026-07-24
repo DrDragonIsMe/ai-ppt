@@ -5,6 +5,7 @@ import { load } from 'cheerio';
 import { readConfig, writeConfig, getProjectDir } from './config.mjs';
 import { createSnapshot } from './snapshot.mjs';
 import { injectThemeOverrides } from './theme-overrides.mjs';
+import { writeFileAtomic } from './fs-utils.mjs';
 
 // Save user-edited deck HTML back to the project.
 // `html` should be the full document HTML as rendered in the editor iframe.
@@ -40,7 +41,7 @@ export function saveEditedHtml(name, html) {
     finalHtml = injectThemeOverrides(finalHtml, cfg.themeOverrides);
   }
 
-  fs.writeFileSync(htmlPath, finalHtml, 'utf8');
+  writeFileAtomic(htmlPath, finalHtml);
 
   // Record user edit metadata for AI prompts.
   const slideCount = newStage.find('section.slide').length;

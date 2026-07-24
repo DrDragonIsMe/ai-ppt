@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeJsonAtomic } from './fs-utils.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +15,14 @@ export const DEFAULT_GLOBAL_CONFIG = {
     provider: 'openai',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
     model: 'doubao-seed-2.0-lite',
+  },
+  imageModelConfig: {
+    provider: 'arkcli',
+    model: '',
+  },
+  videoModelConfig: {
+    provider: 'arkcli',
+    model: '',
   },
 };
 
@@ -62,15 +71,27 @@ export function readGlobalConfig() {
   const envCfg = envModelConfig();
   return {
     modelConfig: envCfg || fileConfig?.modelConfig || DEFAULT_GLOBAL_CONFIG.modelConfig,
+    imageModelConfig: { ...DEFAULT_GLOBAL_CONFIG.imageModelConfig, ...fileConfig?.imageModelConfig },
+    videoModelConfig: { ...DEFAULT_GLOBAL_CONFIG.videoModelConfig, ...fileConfig?.videoModelConfig },
   };
 }
 
 export function writeGlobalConfig(config) {
   const existing = readGlobalConfig();
   const safe = JSON.parse(JSON.stringify(config));
-  if (safe.modelConfig) delete safe.modelConfig.apiKey;
+  // persistApiKey === true 时允许三组配置的 apiKey 落盘；否则一律剥离（默认行为）
+  const persistApiKey = safe.persistApiKey === true;
+  delete safe.persistApiKey;
+  if (!persistApiKey) {
+    for (const key of ['modelConfig', 'imageModelConfig', 'videoModelConfig']) {
+      if (safe[key]) delete safe[key].apiKey;
+    }
+  }
   const merged = { ...existing, ...safe };
-  fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
+  for (const key of ['modelConfig', 'imageModelConfig', 'videoModelConfig']) {
+    if (safe[key]) merged[key] = { ...existing[key], ...safe[key] };
+  }
+  writeJsonAtomic(GLOBAL_CONFIG_PATH, merged);
   return merged;
 }
 
@@ -85,7 +106,24 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     const provider = process.argv[6] || 'openai';
     writeGlobalConfig({ modelConfig: { presetId, provider, baseUrl, model } });
     console.log('Global model config updated');
+  } else if (cmd === 'set-media') {
+    const kind = process.argv[3];
+    const provider = process.argv[4];
+    const model = process.argv[5];
+    const baseUrl = process.argv[6];
+    if (kind !== 'image' && kind !== 'video') {
+      console.error('kind 必须是 image 或 video');
+      process.exit(1);
+    }
+    if (!provider) {
+      console.error('缺少 provider（arkcli | bailian | openai）');
+      process.exit(1);
+    }
+    const cfg = { provider, model: model || '' };
+    if (baseUrl) cfg.baseUrl = baseUrl;
+    writeGlobalConfig({ [kind === 'image' ? 'imageModelConfig' : 'videoModelConfig']: cfg });
+    console.log(`Global ${kind} model config updated`);
   } else {
-    console.log('Usage: node scripts/global-config.mjs [show | set-model <presetId> <baseUrl> <model> [provider]]');
+    console.log('Usage: node scripts/global-config.mjs [show | set-model <presetId> <baseUrl> <model> [provider] | set-media <image|video> <provider> <model> [baseUrl]]');
   }
 }

@@ -13,6 +13,7 @@ const PROVIDER_BAILIAN = 'bailian';
 
 export async function generateSlides(prompt, options = {}) {
   const provider = options.provider || detectProvider(options);
+  const fallbackChain = [];
 
   // 1. Try configured provider first
   try {
@@ -24,8 +25,12 @@ export async function generateSlides(prompt, options = {}) {
     } else {
       result = await callOpenAI(prompt, options);
     }
-    if (result) return result;
+    if (result) {
+      return { content: result, provider, model: options.model || '', fallbackChain };
+    }
+    fallbackChain.push({ provider, status: 'empty' });
   } catch (err) {
+    fallbackChain.push({ provider, status: 'error', error: err.message });
     if (process.env.AI_PPT_DEBUG) console.error(`[llm] ${provider} failed:`, err.message);
   }
 
@@ -39,8 +44,13 @@ export async function generateSlides(prompt, options = {}) {
       } else {
         result = await callOpenAI(prompt, options);
       }
-      if (result) return result;
+      if (result) {
+        fallbackChain.push({ provider: fb, status: 'ok' });
+        return { content: result, provider: fb, model: options.model || '', fallbackChain };
+      }
+      fallbackChain.push({ provider: fb, status: 'empty' });
     } catch (err) {
+      fallbackChain.push({ provider: fb, status: 'error', error: err.message });
       if (process.env.AI_PPT_DEBUG) console.error(`[llm] fallback ${fb} failed:`, err.message);
     }
   }
@@ -211,7 +221,10 @@ function cleanLlmOutput(text) {
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   const prompt = process.argv.slice(2).join(' ') || '生成一张关于人工智能的封面幻灯片';
   generateSlides(prompt).then((out) => {
-    if (out) console.log(out);
+    if (out) {
+      console.log(`[provider: ${out.provider}]`);
+      console.log(out.content);
+    }
     else console.log('<!-- No LLM available; deterministic fallback would be used -->');
   }).catch((err) => {
     console.error(err.message);

@@ -19,9 +19,12 @@
     markerStrokes: new Map(),
   };
 
-  // Theme definitions
-  const themes = [
-    { id: 'web-ui', name: 'Web UI', color: '#0D9488' },
+  // Theme definitions — 运行时优先从 /api/themes 拉取（数据源 ai-ppt-base/themes.json）。
+  // 下面这份仅是离线兜底（如 file:// 直接打开 deck 时 fetch 失败）：
+  // 新增主题只需改 themes.json + 加一个 css/themes/<id>.css，本列表不必同步，
+  // 顶多离线打开时主题切换器里缺少新主题，不影响已应用主题的渲染。
+  let themes = [
+    { id: 'web-ui', name: 'Web UI', color: '#439288' },
     { id: 'business-blue', name: '商务蓝', color: '#2563EB' },
     { id: 'elegant-purple', name: '优雅紫', color: '#7C3AED' },
     { id: 'warm-orange', name: '温暖橙', color: '#EA580C' },
@@ -30,6 +33,16 @@
     { id: 'minimal-gray', name: '极简灰', color: '#171717' },
     { id: 'dark-mode', name: '暗黑模式', color: '#22D3EE' },
   ];
+
+  async function loadThemes() {
+    try {
+      const res = await fetch('/api/themes');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) themes = data;
+      }
+    } catch { /* keep fallback */ }
+  }
 
   const stage = document.getElementById('stage');
   const overviewEl = document.getElementById('overview');
@@ -58,7 +71,8 @@
   let markerToolbarEl = null;
   let markerCurrentPath = null;
 
-  function init() {
+  async function init() {
+    await loadThemes();
     state.slides = Array.from(document.querySelectorAll('.slide'));
     if (state.slides.length === 0) return;
 
@@ -199,9 +213,9 @@
 
   function applyTheme(themeId) {
     document.body.classList.remove(...themes.map(t => `theme-${t.id}`));
-    if (themeId !== 'web-ui') {
-      document.body.classList.add(`theme-${themeId}`);
-    }
+    // web-ui 也写显式 class（纯标记，变量与 :root 默认一致）：
+    // 让 initThemes 能区分「配置为 web-ui」和「无主题信息」，避免回退到 localStorage 的旧主题
+    document.body.classList.add(`theme-${themeId}`);
   }
 
   function buildSidebar() {
@@ -650,7 +664,7 @@
   function onKeyDown(e) {
     if (state.overview || state.transitioning) return;
     if (state.editMode) return;
-    if (e.target && (e.target.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))) return;
+    if (e.target && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName))) return;
 
     // Marker mode shortcuts take priority over navigation.
     if (state.markerMode) {
@@ -944,7 +958,7 @@ ${links}
     margin-left: auto;
     font-variant-numeric: tabular-nums;
     font-size: 20px;
-    color: var(--teal, #0D9488);
+    color: var(--teal, #439288);
   }
   .pv-main {
     flex: 1;
@@ -1194,7 +1208,7 @@ ${links}
 
   function requestFullscreen(el) {
     if (el.requestFullscreen) {
-      el.requestFullscreen().catch(() => {});
+      el.requestFullscreen().catch(() => { });
     } else if (el.webkitRequestFullscreen) {
       el.webkitRequestFullscreen();
     }
@@ -1202,7 +1216,7 @@ ${links}
 
   function exitFullscreen() {
     if (document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => { });
     } else if (document.webkitExitFullscreen) {
       document.webkitExitFullscreen();
     }
@@ -1329,7 +1343,8 @@ ${links}
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     // Use the smaller dimension as base for better coverage on ultrawide/short screens
-    const base = Math.min(vw / 1280, vh / 720, 1);
+    // Base matches the 1280×800 design canvas used by thumbnails/presenter preview.
+    const base = Math.min(vw / 1280, vh / 800, 1);
     document.documentElement.style.fontSize = `${16 * Math.max(base, 0.5)}px`;
   }
 
