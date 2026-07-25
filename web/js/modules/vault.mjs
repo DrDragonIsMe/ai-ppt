@@ -976,6 +976,130 @@ async function createNoteFromWikiLink(name) {
     } catch (e) { console.error('Failed to create note from wikilink:', e); showToast(t('创建失败')); }
 }
 
+// ===== 笔记悬停预览 =====
+let hoverPreviewTimer = null;
+let currentHoveredLink = null;
+
+function renderNoteHoverPreview(content, name) {
+    const previewEl = document.getElementById('note-hover-preview');
+    if (!previewEl) return;
+    
+    // 简单的Markdown渲染，类似于renderNotePreview的子集
+    let escaped = escapeHtml(content);
+    
+    // 渲染[[wiki-link]]
+    escaped = escaped.replace(/\[\[([^\[\]\n]+)\]\]/g, (_, rawName) => {
+        const exists = noteNameExists(decodeHtmlEntities(rawName));
+        const cls = exists ? 'wiki-link' : 'wiki-link wiki-link-dead';
+        return `<a href="#" class="${cls}" data-note="${rawName}">${rawName}</a>`;
+    });
+    
+    // 简单的Markdown处理
+    let html = marked.parse(escaped);
+    
+    previewEl.innerHTML = `
+        <div class="note-hover-preview-title" style="font-weight:600;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--tile-strong);">
+            ${escapeHtml(name)}
+        </div>
+        <div class="note-hover-preview-content">${html}</div>
+    `;
+}
+
+function showNoteHoverPreview(event, name) {
+    const previewEl = document.getElementById('note-hover-preview');
+    if (!previewEl) return;
+    
+    currentHoveredLink = event.target;
+    
+    // 显示加载状态
+    previewEl.innerHTML = `<div style="opacity:0.6;">${t('加载中…')}</div>`;
+    previewEl.classList.remove('hidden');
+    
+    // 定位
+    const rect = event.target.getBoundingClientRect();
+    previewEl.style.left = `${rect.left}px`;
+    const topSpace = rect.top;
+    const bottomSpace = window.innerHeight - rect.bottom;
+    if (bottomSpace > topSpace) {
+        previewEl.style.top = `${rect.bottom + 10}px`;
+    } else {
+        previewEl.style.top = `${rect.top - 10 - previewEl.offsetHeight}px`;
+    }
+    
+    // 加载笔记内容
+    fetch(`/api/vault/notes/${encodeURIComponent(name)}`).then(res => {
+        if (!res.ok) {
+            previewEl.innerHTML = `<div style="opacity:0.6;">${t('笔记不存在')}</div>`;
+            return;
+        }
+        return res.json();
+    }).then(data => {
+        if (data && data.content) {
+            renderNoteHoverPreview(data.content, name);
+        }
+    }).catch(e => {
+        console.error('Failed to load note for preview:', e);
+        previewEl.innerHTML = `<div style="opacity:0.6;">${t('加载失败')}</div>`;
+    });
+}
+
+function hideNoteHoverPreview() {
+    const previewEl = document.getElementById('note-hover-preview');
+    if (previewEl) previewEl.classList.add('hidden');
+    currentHoveredLink = null;
+    if (hoverPreviewTimer) {
+        clearTimeout(hoverPreviewTimer);
+        hoverPreviewTimer = null;
+    }
+}
+
+function bindNoteHoverPreviewEvents() {
+    const previewEl = document.getElementById('note-hover-preview');
+    if (!previewEl) return;
+    
+    // 监听笔记预览区域的wiki-link鼠标事件
+    document.addEventListener('mouseover', (e) => {
+        const link = e.target.closest('.wiki-link');
+        if (link && link.dataset.note) {
+            // 只有在笔记预览区域的链接才显示悬停预览
+            const inNotePreview = link.closest('.vault-note-preview');
+            if (inNotePreview) {
+                if (hoverPreviewTimer) clearTimeout(hoverPreviewTimer);
+                hoverPreviewTimer = setTimeout(() => {
+                    showNoteHoverPreview(e, link.dataset.note);
+                }, 200);
+            }
+        }
+    });
+    
+    document.addEventListener('mouseout', (e) => {
+        const link = e.target.closest('.wiki-link');
+        const toElement = e.relatedTarget;
+        if (link && !previewEl.contains(toElement)) {
+            if (hoverPreviewTimer) clearTimeout(hoverPreviewTimer);
+            hoverPreviewTimer = setTimeout(hideNoteHoverPreview, 150);
+        }
+    });
+    
+    // 鼠标进入预览区域时保持显示
+    previewEl.addEventListener('mouseenter', () => {
+        if (hoverPreviewTimer) clearTimeout(hoverPreviewTimer);
+    });
+    
+    // 鼠标离开预览区域时隐藏
+    previewEl.addEventListener('mouseleave', hideNoteHoverPreview);
+    
+    // 点击预览区域的wiki-link时打开笔记
+    previewEl.addEventListener('click', (e) => {
+        const link = e.target.closest('.wiki-link');
+        if (link && link.dataset.note) {
+            e.preventDefault();
+            hideNoteHoverPreview();
+            selectNote(link.dataset.note);
+        }
+    });
+}
+
 function getCaretPixelPos(textarea, caretIndex) {
     const style = getComputedStyle(textarea);
     const mirror = document.createElement('div');
@@ -1928,4 +2052,7 @@ export function bindVaultEvents() {
         if (e.target.closest('#wiki-suggest') || e.target === els.vaultNoteContent) return;
         hideWikiSuggest();
     });
+    
+    // 绑定笔记悬停预览事件
+    bindNoteHoverPreviewEvents();
 }
