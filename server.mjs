@@ -35,6 +35,7 @@ import { generateImage, generateVideo, probeMediaProvider } from './scripts/medi
 import { runBackup } from './scripts/backup.mjs';
 import { pruneVaultBackups } from './scripts/vault.mjs';
 import { createTaskRegistry, pushBounded, NDJSON_BUFFER_CAP } from './scripts/task-registry.mjs';
+import { cleanupOrphanTmpParts } from './scripts/multipart.mjs';
 import { randomUUID } from 'node:crypto';
 import configRoutes from './routes/config.mjs';
 import mediaRoutes from './routes/media.mjs';
@@ -47,6 +48,7 @@ const ROOT = path.resolve(__dirname);
 const WEB_DIR = path.join(ROOT, 'web');
 const PROJECTS_DIR = path.join(ROOT, 'projects');
 const PUBLISHED_DIR = path.join(ROOT, 'published');
+const BASE_DIR = path.join(ROOT, 'ai-ppt-base');
 const PORT = process.env.AI_PPT_PORT || 3456;
 // 默认只绑定回环地址，避免本机服务直接暴露到局域网；如需局域网访问设 AI_PPT_HOST=0.0.0.0
 const HOST = process.env.AI_PPT_HOST || '127.0.0.1';
@@ -82,6 +84,7 @@ const MIME = {
   '.ogg': 'audio/ogg',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf',
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -701,6 +704,12 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // Static base engine files（主题画廊 theme-showcase.html、themes.json 等）
+    const baseMatch = pathname.match(/^\/base\/(.*)$/);
+    if (baseMatch) {
+      return serveStatic(req, res, BASE_DIR, baseMatch[1] || 'index.html');
+    }
+
     // Static web assets
     return serveStatic(req, res, WEB_DIR, pathname === '/' ? 'index.html' : pathname);
   } catch (err) {
@@ -720,4 +729,9 @@ server.listen(PORT, HOST, () => {
   }
   // 启动后异步构建搜索索引
   try { buildSearchIndex(); console.log('搜索索引已构建完成'); } catch (e) { console.error('搜索索引构建失败:', e.message); }
+  // 清理 vault/assets/.tmp 下上传中断遗留的孤儿 .part 文件
+  try {
+    const removed = cleanupOrphanTmpParts(path.join(ROOT, 'vault', 'assets', '.tmp'));
+    if (removed > 0) console.log(`已清理 ${removed} 个上传临时文件`);
+  } catch (e) { console.error('清理上传临时文件失败:', e.message); }
 });

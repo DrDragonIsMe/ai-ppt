@@ -9,6 +9,7 @@ import { initGraphModule, hideAllMainPanels, bindGraphEvents, bindGraphDeckEvent
 import {
     initVaultModule, loadNotes, selectNote, openQuickOpen, openTodayNote,
     appendFragmentToToday, openAiImageModal, confirmAiImage,
+    insertAiImageIntoNote, insertAiImageIntoSlide, openAssetsModal,
     bindVaultEvents, bindQuickOpenEvents, createNewNote, saveCurrentNote,
 } from './vault.mjs';
 import {
@@ -19,6 +20,7 @@ import { showTrainingWelcome, bindTrainingEvents, loadExams, loadMistakes, bindE
 import { initFragmentsModule, loadFragments, focusFragmentInput, openOrganizeModal, bindFragmentEvents } from './fragments.mjs';
 import { bindModalEvents } from './modals.mjs';
 import { initGenerateModule, openGenerateModal, bindGenerateEvents } from './generate.mjs';
+import { t, applyStaticI18n, getLang, setLang } from './i18n.mjs';
 
 // ============================================================
 // DOM 元素缓存
@@ -75,12 +77,18 @@ function cacheEls() {
         btnConfirmCreate: document.getElementById('btn-confirm-create'),
         newProjectName: document.getElementById('new-project-name'),
         newProjectTitle: document.getElementById('new-project-title'),
+        newProjectTemplate: document.getElementById('new-project-template'),
+        themeGalleryModal: document.getElementById('theme-gallery-modal'),
+        themeGalleryFrame: document.getElementById('theme-gallery-frame'),
+        btnThemeGallery: document.getElementById('btn-theme-gallery'),
+        btnCloseThemeGallery: document.getElementById('btn-close-theme-gallery'),
         btnEditMode: document.getElementById('btn-edit-mode'),
         editStatus: document.getElementById('edit-status'),
         projectSidebar: document.getElementById('sidebar'),
         btnCollapseSidebar: document.getElementById('btn-collapse-sidebar'),
         exportDropdown: document.getElementById('export-dropdown'),
         btnExport: document.getElementById('btn-export'),
+        btnPublishQuick: document.getElementById('btn-publish-quick'),
         toast: document.getElementById('toast'),
         btnHelp: document.getElementById('btn-help'),
         btnSettings: document.getElementById('btn-settings'),
@@ -97,6 +105,7 @@ function cacheEls() {
         btnImportMd: document.getElementById('btn-import-md'),
         inputMdFile: document.getElementById('input-md-file'),
         btnToggleChat: document.getElementById('btn-toggle-chat'),
+        btnDesignLint: document.getElementById('btn-design-lint'),
         chatDock: document.getElementById('chat-dock'),
         chatMessages: document.getElementById('chat-messages'),
         chatInput: document.getElementById('chat-input'),
@@ -131,6 +140,8 @@ function cacheEls() {
 // ============================================================
 function switchSidebarTab(tab, subTab) {
     S.currentSidebarTab = tab;
+    // 移动端点 tab 后自动收起抽屉；速记 tab 例外（输入区在抽屉内，需保持展开）
+    if (tab !== 'fragments') closeSidebarDrawer();
     document.querySelectorAll('.sidebar-tab').forEach((tabEl) => {
         tabEl.classList.toggle('active', tabEl.dataset.tab === tab);
     });
@@ -192,7 +203,7 @@ function openSmartExamModal() {
     document.getElementById('smart-exam-subject').value = '';
     const btn = document.getElementById('btn-confirm-smart-exam');
     btn.disabled = false;
-    btn.textContent = '开始组卷';
+    btn.textContent = t('开始组卷');
     document.getElementById('smart-exam-modal').classList.remove('hidden');
 }
 
@@ -206,17 +217,23 @@ function showGraphPanel() {
 // ============================================================
 function bindAiImageEvents() {
     document.getElementById('btn-vault-note-image')?.addEventListener('click', () => {
-        if (!S.currentNote) { showToast('请先选择一篇笔记'); return; }
+        if (!S.currentNote) { showToast(t('请先选择一篇笔记')); return; }
         openAiImageModal('vault');
     });
     document.getElementById('btn-ai-image')?.addEventListener('click', () => {
-        if (!S.currentProject) { showToast('请先选择项目'); return; }
+        if (!S.currentProject) { showToast(t('请先选择项目')); return; }
         openAiImageModal(S.currentProject);
     });
     document.getElementById('btn-cancel-ai-image')?.addEventListener('click', () => {
         document.getElementById('ai-image-modal').classList.add('hidden');
     });
     document.getElementById('btn-confirm-ai-image')?.addEventListener('click', confirmAiImage);
+    document.getElementById('btn-ai-image-insert-note')?.addEventListener('click', insertAiImageIntoNote);
+    document.getElementById('btn-ai-image-insert-slide')?.addEventListener('click', insertAiImageIntoSlide);
+    document.getElementById('btn-vault-assets')?.addEventListener('click', openAssetsModal);
+    document.getElementById('btn-close-assets')?.addEventListener('click', () => {
+        document.getElementById('assets-modal').classList.add('hidden');
+    });
     document.getElementById('ai-image-prompt')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); confirmAiImage(); }
     });
@@ -243,8 +260,114 @@ function bindEmptyStateEvents() {
 }
 
 // ============================================================
+// 移动端侧边栏抽屉（≤768px：汉堡展开为全高抽屉，点 tab / 遮罩 / Esc 收起）
+// ============================================================
+function openSidebarDrawer() {
+    if (!window.matchMedia('(max-width: 768px)').matches) return; // 抽屉仅移动端
+    document.getElementById('sidebar')?.classList.add('drawer-open');
+    document.getElementById('sidebar-scrim')?.classList.remove('hidden');
+}
+
+function closeSidebarDrawer() {
+    document.getElementById('sidebar')?.classList.remove('drawer-open');
+    document.getElementById('sidebar-scrim')?.classList.add('hidden');
+}
+
+function bindSidebarDrawerEvents() {
+    document.getElementById('btn-sidebar-toggle')?.addEventListener('click', () => {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar?.classList.contains('drawer-open')) closeSidebarDrawer();
+        else openSidebarDrawer();
+    });
+    document.getElementById('sidebar-scrim')?.addEventListener('click', closeSidebarDrawer);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeSidebarDrawer();
+    });
+}
+
+// ============================================================
+// 首次启动向导（localStorage ai-ppt-onboarded 未设置时自动弹出；帮助面板可重新查看）
+// ============================================================
+const ONBOARDING_KEY = 'ai-ppt-onboarded';
+const ONBOARDING_STEPS = [
+    {
+        title: t('① 记录'),
+        desc: t('这里是你的知识中枢。在「速记」tab 随手记录文字、用 🎙 语音听记自动转写、粘贴图片或 PDF 附件；碎片稍后可一键整理为笔记、知识卡片或错题。'),
+        cta: t('写第一条速记'),
+        action: () => focusFragmentInput(),
+    },
+    {
+        title: t('② 生成'),
+        desc: t('从笔记、知识星图或知识卡片一键生成 PPT / 视频 / 报告。生成的作品在「PPT 作品」tab 统一管理，按 选材 → 生成 → 修改 → 发布 四步走完。'),
+        cta: t('查看 PPT 作品'),
+        action: () => switchSidebarTab('projects'),
+    },
+    {
+        title: t('③ 导出与发布'),
+        desc: t('作品支持导出 PPTX / PDF / 单文件 HTML / 视频 MP4，也可一键发布为带二维码的在线链接；「设计检查」会在生成后自动把关排版质量。'),
+        cta: t('开始使用'),
+        action: null,
+    },
+];
+let onboardingIndex = 0;
+
+function getOnboardingEls() {
+    return {
+        modal: document.getElementById('onboarding-modal'),
+        tag: document.getElementById('onboarding-step-tag'),
+        title: document.getElementById('onboarding-title'),
+        desc: document.getElementById('onboarding-desc'),
+        dots: document.getElementById('onboarding-dots'),
+        btnNext: document.getElementById('btn-onboarding-next'),
+        btnSkip: document.getElementById('btn-onboarding-skip'),
+    };
+}
+
+function renderOnboardingStep() {
+    const e = getOnboardingEls();
+    const step = ONBOARDING_STEPS[onboardingIndex];
+    e.tag.textContent = t('第 {n} 步 · 共 {total} 步', { n: onboardingIndex + 1, total: ONBOARDING_STEPS.length });
+    e.title.textContent = step.title;
+    e.desc.textContent = step.desc;
+    e.btnNext.textContent = step.cta;
+    e.dots.querySelectorAll('.onboarding-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === onboardingIndex);
+    });
+}
+
+function openOnboarding() {
+    onboardingIndex = 0;
+    renderOnboardingStep();
+    getOnboardingEls().modal.classList.remove('hidden');
+}
+
+function closeOnboarding(persist) {
+    getOnboardingEls().modal.classList.add('hidden');
+    if (persist) {
+        try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch { /* 隐私模式下忽略 */ }
+    }
+}
+
+function bindOnboardingEvents() {
+    const e = getOnboardingEls();
+    e.btnNext?.addEventListener('click', () => {
+        const step = ONBOARDING_STEPS[onboardingIndex];
+        if (onboardingIndex >= ONBOARDING_STEPS.length - 1) { closeOnboarding(true); return; }
+        onboardingIndex += 1;
+        renderOnboardingStep();
+        if (step.action) step.action();
+    });
+    e.btnSkip?.addEventListener('click', () => closeOnboarding(true));
+    document.getElementById('btn-replay-onboarding')?.addEventListener('click', () => {
+        document.getElementById('help-panel')?.classList.add('hidden');
+        openOnboarding();
+    });
+}
+
+// ============================================================
 // 初始化：注入回调 → 加载数据 → 绑定事件
 // ============================================================
+applyStaticI18n(); // 静态文案批量替换（zh 模式恒等；module script 延迟执行，DOM 已就绪）
 cacheEls();
 loadThemes();
 
@@ -255,6 +378,7 @@ const commonCbs = {
     saveCurrentNote,
     loadProjects,
     selectProject,
+    updatePreview,
     loadCards,
     selectCard,
     loadFragments,
@@ -270,6 +394,8 @@ const commonCbs = {
     openGenerateModal,
     confirmAiImage,
     appendFragmentToToday,
+    openSidebarDrawer,
+    closeSidebarDrawer,
 };
 
 initProjectsModule(commonCbs);
@@ -298,6 +424,28 @@ loadModels().then(loadGlobalConfig).then(() => {
     bindGenerateEvents();
     bindEmptyStateEvents();
     bindStudyEvents();
+    bindSidebarDrawerEvents();
+    bindOnboardingEvents();
     switchSidebarTab('vault');
+    // 首次使用：数据加载完成后弹出 3 步向导
+    let onboarded = null;
+    try { onboarded = localStorage.getItem(ONBOARDING_KEY); } catch { /* 隐私模式下忽略 */ }
+    if (!onboarded) openOnboarding();
 });
 bindProjectEvents();
+
+// 界面语言切换（设置面板 #input-ui-lang）：切换即 reload，状态在 localStorage/服务端，安全
+const uiLangSelect = document.getElementById('input-ui-lang');
+if (uiLangSelect) {
+    uiLangSelect.value = getLang();
+    uiLangSelect.addEventListener('change', () => setLang(uiLangSelect.value));
+}
+
+// PWA：注册 Service Worker（静态壳离线缓存 + 安装到桌面）。
+// 仅 https 或本机回环环境下尝试；注册/更新失败静默，不影响主流程。
+if ('serviceWorker' in navigator &&
+    (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    navigator.serviceWorker.register('/sw.js')
+        .then((reg) => { reg.update().catch(() => { /* 更新检查失败忽略 */ }); })
+        .catch(() => { /* 注册失败静默（如隐私模式） */ });
+}

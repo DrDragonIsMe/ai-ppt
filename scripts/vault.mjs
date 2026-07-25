@@ -25,6 +25,9 @@ const SNAPSHOTS_VAULT_DIR = path.join(ROOT, '.snapshots', '_vault');
 // 保留策略：.snapshots/_vault 最多保留最近 VAULT_BACKUP_KEEP 个笔记备份目录
 const VAULT_BACKUP_KEEP = 200;
 
+// 笔记列表自定义排序持久化（拖拽排序）：vault/.meta/note-order.json
+const NOTE_ORDER_FILE = path.join(META_DIR, 'note-order.json');
+
 // 笔记备份保留策略：备份目录按 ISO 时间戳命名（字典序=时间序），删除最旧的
 export function pruneVaultBackups(keep = VAULT_BACKUP_KEEP) {
   if (!fs.existsSync(SNAPSHOTS_VAULT_DIR)) return 0;
@@ -177,6 +180,58 @@ function deleteNote(name) {
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+// ---- 笔记备份（.snapshots/_vault/<ts>/<file>）查询与读取 ----
+// 备份目录名格式：new Date().toISOString().replace(/[:.]/g, '-')，如 2026-07-24T17-02-37-704Z
+const BACKUP_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/;
+export function isValidBackupTs(ts) {
+  return BACKUP_TS_RE.test(String(ts || ''));
+}
+
+// 列出某笔记的历史备份，按时间倒序返回 [{ts, preview}]（preview 取前 100 字）
+export function listNoteBackups(name, { snapshotsDir = SNAPSHOTS_VAULT_DIR } = {}) {
+  const fileName = path.basename(getNotePath(name)); // getNotePath 内含名称校验
+  if (!fs.existsSync(snapshotsDir)) return [];
+  const backups = [];
+  for (const entry of fs.readdirSync(snapshotsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !isValidBackupTs(entry.name)) continue;
+    const file = path.join(snapshotsDir, entry.name, fileName);
+    if (!fs.existsSync(file)) continue;
+    let preview = '';
+    try { preview = fs.readFileSync(file, 'utf8').slice(0, 100); } catch { continue; }
+    backups.push({ ts: entry.name, preview });
+  }
+  return backups.sort((a, b) => b.ts.localeCompare(a.ts));
+}
+
+// 读取指定时间戳的备份内容；时间戳非法或备份不存在返回 null
+export function readNoteBackup(name, ts, { snapshotsDir = SNAPSHOTS_VAULT_DIR } = {}) {
+  if (!isValidBackupTs(ts)) return null;
+  const fileName = path.basename(getNotePath(name));
+  const file = path.join(snapshotsDir, ts, fileName);
+  if (path.dirname(file) !== path.join(snapshotsDir, ts)) return null; // 防路径穿越（双保险）
+  if (!fs.existsSync(file)) return null;
+  return fs.readFileSync(file, 'utf8');
+}
+
+// ---- 笔记列表自定义排序（拖拽排序持久化）----
+export function readNoteOrder({ orderFile = NOTE_ORDER_FILE } = {}) {
+  try {
+    if (!fs.existsSync(orderFile)) return [];
+    const data = JSON.parse(fs.readFileSync(orderFile, 'utf8'));
+    return Array.isArray(data?.order) ? data.order.filter((n) => typeof n === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeNoteOrder(order, { orderFile = NOTE_ORDER_FILE } = {}) {
+  const clean = [...new Set((Array.isArray(order) ? order : []).filter((n) => typeof n === 'string'))];
+  ensureVaultDirs();
+  writeJsonAtomic(orderFile, { order: clean });
+  return clean;
+}
+
 
 // 级联替换全部笔记 / 碎片 / 卡片中的 [[oldName]] 与 [[oldName|显示文本]]（只改链接前半部分）
 function cascadeRenameLinks(oldBase, newBase) {

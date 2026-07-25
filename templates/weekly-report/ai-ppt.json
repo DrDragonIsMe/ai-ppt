@@ -1,0 +1,19 @@
+{
+  "name": "weekly-report",
+  "sourceType": "article",
+  "sourceUrl": "",
+  "articleText": "",
+  "params": {
+    "title": "每周工作周报",
+    "audience": "直属上级 / 团队",
+    "style": "工作汇报",
+    "slideCount": 6,
+    "language": "zh-CN"
+  },
+  "theme": "web-ui",
+  "animation": "slide",
+  "status": "draft",
+  "lastGeneratedAt": null,
+  "errorMessage": null,
+  "template": "weekly-report"
+}

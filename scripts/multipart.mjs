@@ -24,6 +24,21 @@ function httpError(message, statusCode = 400) {
     return err;
 }
 
+// 清理 tmpDir 中上传中断遗留的孤儿 .part 文件（服务启动时调用一次）。
+// 只删 .part 文件，不递归子目录；单个删除失败不阻断。返回删除数量。
+export function cleanupOrphanTmpParts(tmpDir) {
+    let removed = 0;
+    if (!fs.existsSync(tmpDir)) return removed;
+    for (const entry of fs.readdirSync(tmpDir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith('.part')) continue;
+        try {
+            fs.rmSync(path.join(tmpDir, entry.name), { force: true });
+            removed++;
+        } catch { /* 单个文件删除失败不影响其余清理 */ }
+    }
+    return removed;
+}
+
 // 浏览器以 UTF-8 发送文件名；header 先按 latin1 取出再还原 UTF-8 字节
 function decodeHeaderValue(v) {
     return Buffer.from(String(v || ''), 'latin1').toString('utf8');

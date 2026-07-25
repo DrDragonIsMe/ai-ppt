@@ -1,6 +1,13 @@
-// routes/projects.mjs — 项目管理路由（CRUD/配置/快照/对话/生成/导出/组件/主题/发布）
+// routes/projects.mjs — 项目管理路由（CRUD/配置/快照/对话/生成/导出/组件/主题/发布/设计检查/插入配图）
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import QRCode from 'qrcode';
+import { lintProject, summarizeIssues } from '../scripts/design-lint.mjs';
+import { captureCover } from '../scripts/deck-capture.mjs';
+import { exportSiteZip } from '../scripts/export-site.mjs';
+import { insertImageIntoDeck } from '../scripts/insert-image.mjs';
+import { writeFileAtomic } from '../scripts/fs-utils.mjs';
 
 export default function projectRoutes(ctx) {
     const {
@@ -24,8 +31,9 @@ export default function projectRoutes(ctx) {
         pptx: { script: 'export-pptx.mjs', args: [] },
         'pptx-image': { script: 'export-pptx.mjs', args: ['--image'] },
         pdf: { script: 'export-pdf.mjs', args: [] },
+        video: { script: 'export-video.mjs', args: [] },
     };
-    const PUPPETEER_EXPORT_TYPES = new Set(['pptx-image', 'pdf']);
+    const PUPPETEER_EXPORT_TYPES = new Set(['pptx-image', 'pdf', 'video']);
     const MAX_PUPPETEER_EXPORTS = 2;
 
     function exportTaskKey(name, type) { return `${name}:${type}`; }
@@ -145,11 +153,31 @@ export default function projectRoutes(ctx) {
             else fs.rmSync(latestDir, { recursive: true, force: true });
         }
         try { fs.symlinkSync(version, latestDir, 'dir'); }
-        catch { copyDirSync(versionDir, latestDir); }
-        fs.writeFileSync(path.join(latestDir, 'meta.json'), JSON.stringify({
-            ...meta, version: 'latest', url: `/published/${name}/latest/index.html`,
-        }, null, 2));
+        catch {
+            copyDirSync(versionDir, latestDir);
+            // 仅在 latest 为真实拷贝（软链失败的降级）时写 latest 版 meta；
+            // 软链场景下写入会穿透链接覆盖 vN/meta.json
+            fs.writeFileSync(path.join(latestDir, 'meta.json'), JSON.stringify({
+                ...meta, version: 'latest', url: `/published/${name}/latest/index.html`,
+            }, null, 2));
+        }
         return meta;
+    }
+
+    // 首个非回环 IPv4 地址（用于生成局域网访问链接，手机扫码访问）
+    function getLanAddress() {
+        for (const list of Object.values(os.networkInterfaces())) {
+            for (const net of list || []) {
+                if (net.family === 'IPv4' && !net.internal) return net.address;
+            }
+        }
+        return null;
+    }
+
+    // 请求 Host 头里的端口（默认 3456），拼局域网链接用
+    function portFromReq(req) {
+        const m = String(req.headers.host || '').match(/:(\d+)$/);
+        return m ? m[1] : '3456';
     }
 
     return [
@@ -169,7 +197,7 @@ export default function projectRoutes(ctx) {
         {
             method: 'POST', pattern: /^\/api\/projects$/, handler: async (req, res) => {
                 const body = await readBody(req);
-                try { send(res, 201, createProject(body.name, body.title)); invalidateSearchIndex(body.name); }
+                try { send(res, 201, createProject(body.name, body.title, body.template || null)); invalidateSearchIndex(body.name); }
                 catch (err) { send(res, err.statusCode || 400, { error: err.message }); }
             }
         },
@@ -356,7 +384,7 @@ export default function projectRoutes(ctx) {
         },
         // Export（异步任务：POST 202 → GET .../events SSE → done 事件带 downloadUrl）
         {
-            method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/(pptx|pptx-image|pdf)$/, handler: async (req, res, matches) => {
+            method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/(pptx|pptx-image|pdf|video)$/, handler: async (req, res, matches) => {
                 const name = matches[1];
                 const type = matches[2];
                 if (!validName(name, res, '非法项目名称')) return;
@@ -369,11 +397,17 @@ export default function projectRoutes(ctx) {
                 const def = EXPORT_TASK_DEFS[type];
                 const state = spawnNdjsonTask(exportTasks, key, def.script, [...def.args, name]);
                 state.exportType = type;
+                // PDF 导出完成后顺手更新项目封面（静默失败，不影响导出结果）
+                if (type === 'pdf') {
+                    state.listeners.add((event) => {
+                        if (event.type === 'done') captureCover(name);
+                    });
+                }
                 send(res, 202, { message: '导出已启动', name, type });
             }
         },
         {
-            method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/export\/(pptx|pptx-image|pdf)\/events$/, handler: async (req, res, matches) => {
+            method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/export\/(pptx|pptx-image|pdf|video)\/events$/, handler: async (req, res, matches) => {
                 const name = matches[1];
                 const type = matches[2];
                 if (!validName(name, res, '非法项目名称')) return;
@@ -396,6 +430,43 @@ export default function projectRoutes(ctx) {
                 } catch (err) { send(res, err.statusCode || 500, { error: err.message }); }
             }
         },
+        // 静态站点包（zip）：纯文件打包，保持同步返回；解压后丢任意静态托管即可放映
+        {
+            method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/site$/, handler: async (_req, res, matches) => {
+                const name = matches[1];
+                if (!validName(name, res, '非法项目名称')) return;
+                if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+                try {
+                    const file = await exportSiteZip(name);
+                    const rel = path.relative(ROOT, file);
+                    send(res, 200, { file: rel, downloadUrl: '/' + rel.replace(/\\/g, '/') });
+                } catch (err) { send(res, err.statusCode || 500, { error: err.message }); }
+            }
+        },
+        // 设计检查（同步 lint，小文件很快；POST fix 应用安全自动修复并快照）
+        {
+            method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/design-lint$/, handler: async (_req, res, matches) => {
+                const name = matches[1];
+                if (!validName(name, res, '非法项目名称')) return;
+                if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+                try {
+                    const { issues } = lintProject(name, { fix: false });
+                    send(res, 200, { issues, summary: summarizeIssues(issues) });
+                } catch (err) { send(res, err.statusCode || 500, { error: err.message }); }
+            }
+        },
+        {
+            method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/design-lint\/fix$/, handler: async (_req, res, matches) => {
+                const name = matches[1];
+                if (!validName(name, res, '非法项目名称')) return;
+                if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+                try {
+                    const { issues, fixedCount } = lintProject(name, { fix: true, snapshot: true });
+                    if (fixedCount > 0) invalidateSearchIndex(name);
+                    send(res, 200, { issues, fixedCount, summary: summarizeIssues(issues) });
+                } catch (err) { send(res, err.statusCode || 500, { error: err.message }); }
+            }
+        },
         // Component & Theme Overrides
         {
             method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/component$/, handler: async (req, res, matches) => {
@@ -407,6 +478,48 @@ export default function projectRoutes(ctx) {
                 if (!componentHtml) return send(res, 400, { error: '请提供组件 HTML' });
                 try { insertComponent(name, componentHtml); send(res, 200, { ok: true }); }
                 catch (err) { send(res, err.statusCode || 500, { error: err.message }); }
+            }
+        },
+        // 插入配图/视频（生成配图闭环）：body { asset, from?, slide?, title? }
+        // asset 为文件名；from='vault' 表示产物在 vault/assets，先复制进项目 assets。
+        // 默认在末页前新建图片页；传 slide（1-based）则把媒体追加进该页 .slide-content。
+        // 写前自动快照，writeFileAtomic 落盘，完成后重建该项目搜索索引。
+        {
+            method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/insert-image$/, handler: async (req, res, matches) => {
+                const name = matches[1];
+                if (!validName(name, res, '非法项目名称')) return;
+                if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+                const body = await readBody(req);
+                const asset = typeof body.asset === 'string' ? body.asset.trim() : '';
+                if (!validName(asset, res, '非法资产文件名')) return;
+                const projectDir = getProjectDir(name);
+                const assetsDir = path.join(projectDir, 'assets');
+                if (body.from === 'vault') {
+                    const src = path.join(ROOT, 'vault', 'assets', asset);
+                    if (!fs.existsSync(src)) return send(res, 404, { error: '资产不存在于知识库' });
+                    ensureDir(assetsDir);
+                    const dst = path.join(assetsDir, asset);
+                    if (!fs.existsSync(dst)) fs.copyFileSync(src, dst);
+                }
+                if (!fs.existsSync(path.join(assetsDir, asset))) {
+                    return send(res, 404, { error: '资产不存在，请先生成或上传配图' });
+                }
+                const htmlPath = path.join(projectDir, 'index.html');
+                if (!fs.existsSync(htmlPath)) return send(res, 400, { error: '项目尚未生成幻灯片' });
+                try {
+                    // 先在内存中完成 DOM 合并（页码非法等错误不产生任何副作用），再快照与落盘
+                    const merged = insertImageIntoDeck(fs.readFileSync(htmlPath, 'utf8'), {
+                        src: `assets/${asset}`,
+                        title: typeof body.title === 'string' ? body.title : '',
+                        slide: body.slide,
+                    });
+                    createSnapshot(name, '插入配图前自动快照');
+                    writeFileAtomic(htmlPath, merged.html);
+                    invalidateSearchIndex(name);
+                    send(res, 200, { ok: true, slide: merged.slide, mode: merged.mode, asset });
+                } catch (err) {
+                    send(res, err.statusCode || 500, { error: err.message });
+                }
             }
         },
         {
@@ -425,8 +538,36 @@ export default function projectRoutes(ctx) {
                 const name = matches[1];
                 if (!validName(name, res, '非法项目名称')) return;
                 if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-                try { send(res, 201, await publishProject(name)); }
+                try {
+                    const meta = await publishProject(name);
+                    const latestPath = `/published/${encodeURIComponent(name)}/latest/index.html`;
+                    const lanIp = getLanAddress();
+                    send(res, 201, {
+                        ...meta,
+                        latestUrl: latestPath,
+                        // 局域网完整 URL（服务需以 AI_PPT_HOST=0.0.0.0 启动才可被手机访问）
+                        lanUrl: lanIp ? `http://${lanIp}:${portFromReq(req)}${latestPath}` : null,
+                    });
+                }
                 catch (err) { send(res, err.statusCode || 500, { error: err.message }); }
+            }
+        },
+        // 发布链接二维码（qrcode 本地生成 PNG，不走外部 API；url 仅允许 http(s)）
+        {
+            method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/publish\/qr$/, handler: async (req, res, matches) => {
+                const name = matches[1];
+                if (!validName(name, res, '非法项目名称')) return;
+                if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+                const url = new URL(req.url, `http://${req.headers.host}`);
+                const target = url.searchParams.get('url') || '';
+                if (!/^https?:\/\//i.test(target) || target.length > 2048) {
+                    return send(res, 400, { error: '非法 URL（仅支持 http/https）' });
+                }
+                try {
+                    const buf = await QRCode.toBuffer(target, { type: 'png', width: 280, margin: 1 });
+                    res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': buf.length });
+                    res.end(buf);
+                } catch (err) { send(res, 500, { error: '二维码生成失败：' + err.message }); }
             }
         },
         {

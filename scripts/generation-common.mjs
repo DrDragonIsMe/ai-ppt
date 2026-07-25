@@ -265,7 +265,15 @@ export function buildSlidesPrompt({
 - 结构：slide-content, h1, h2, h3, lead, divider, section-hero。
 - 要点并列：tile-row, tile, two-col, visual-row, visual-card, icon。
 - 数据：split-visual, hero-stat, big-number, big-number-label, chart-bar, chart-bar-item, progress-ring, data-matrix, waterfall, waterfall-item, ppt-table。
+- 数据图表（SVG，声明式 data-chart）：chart-line（折线/面积）, chart-pie（饼/环）, chart-bars（分组/堆叠柱）。
 - 流程与强调：chart-steps, timeline, timeline-item, timeline-horizontal, quote-block, badge-row, badge。
+
+数据图表用法（素材中有真实序列/占比数据时优先使用，禁止编造数据）：
+- 写法：<div class="chart-line" data-chart='{...JSON...}'></div>，属性外层单引号、JSON 内双引号，内部不要写任何内容，ppt.js 会自动渲染为 SVG。
+- chart-line 折线/面积图：{"labels":["Q1","Q2","Q3","Q4"],"series":[{"name":"客户数","data":[120,180,260,320]}]}，多序列直接加 series 元素；可选 "area":true（面积填充）、"valueLabels":true（点数值）。
+- chart-pie 饼/环图：{"labels":["薪酬","考勤","其他"],"data":[45,25,30]}，可选 "donut":true（环图）、"centerLabel":"文字"；自动生成占比标签与图例，数据应为占比或数值总量。
+- chart-bars 柱状图：{"labels":["Q1","Q2","Q3","Q4"],"series":[{"name":"2024","data":[45,58,72,85]},{"name":"2025","data":[52,66,81,97]}]}，默认分组柱，"stacked":true 为堆叠柱。
+- 一页最多放 1-2 个图表；labels 不超过 8 个；series 不超过 4 个。
 
 设计原则（必须遵守，优先级高于一切）：
 - 一页只讲一个核心观点，标题即结论；每页保留 1-3 个核心词/短句，详细内容由讲演者口述，任何正文段落不超过 3 行。

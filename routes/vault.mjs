@@ -16,7 +16,7 @@ export default function vaultRoutes(ctx) {
     const learn = vaultLearnRoutes(ctx);
     const fragments = vaultFragmentsRoutes(ctx);
     // 路由顺序敏感（server.mjs 正则数组首条匹配即返回）：以下拼接与拆分前的
-    // 路由数组顺序严格一致（63 条）；域内增删路由后必须同步调整 slice 下标，
+    // 路由数组顺序严格一致（64 条）；域内增删路由后必须同步调整 slice 下标，
     // 并用「拆分前 dump vs 聚合后 dump」的 diff 重新验证。
     return [
         ...notes.slice(0, 5), // tags / notes 列表 / tasks / query / blocks
@@ -26,7 +26,7 @@ export default function vaultRoutes(ctx) {
         ...learn.slice(0, 1), // review-deck
         ...fragments.slice(0, 2), // organize / organize/apply
         ...graph.slice(4, 6), // search / index
-        ...assets.slice(5), // assets/:file 静态服务（通配，排在 parse-tasks 字面量之后）
+        ...assets.slice(5), // assets DELETE（引用保护）+ assets/:file 静态服务（通配，排在 parse-tasks 字面量之后）
         ...graph.slice(6), // graph/generate-deck + graph 读/建
         ...learn.slice(1, 8), // cards CRUD/due/review
         ...fragments.slice(2), // fragments CRUD/reparse/promote

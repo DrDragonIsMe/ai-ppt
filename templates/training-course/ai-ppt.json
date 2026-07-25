@@ -1,0 +1,19 @@
+{
+  "name": "training-course",
+  "sourceType": "article",
+  "sourceUrl": "",
+  "articleText": "",
+  "params": {
+    "title": "培训课件",
+    "audience": "内部学员",
+    "style": "培训课件",
+    "slideCount": 8,
+    "language": "zh-CN"
+  },
+  "theme": "web-ui",
+  "animation": "slide",
+  "status": "draft",
+  "lastGeneratedAt": null,
+  "errorMessage": null,
+  "template": "training-course"
+}

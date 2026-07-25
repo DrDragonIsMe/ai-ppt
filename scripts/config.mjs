@@ -16,6 +16,7 @@ const BASE_CSS = path.join(BASE_DIR, 'css', 'ppt.css');
 const BASE_JS = path.join(BASE_DIR, 'js', 'ppt.js');
 const BASE_README = path.join(BASE_DIR, 'README.md');
 const BASE_THEMES_DIR = path.join(BASE_DIR, 'css', 'themes');
+const TEMPLATES_DIR = path.join(ROOT, 'templates');
 
 export const ROOT_DIR = ROOT;
 export const PROJECTS_ROOT = PROJECTS_DIR;
@@ -154,7 +155,7 @@ export function createStarterHtml(name, title, theme = 'web-ui', animation = 'sl
   return wrapSlides(slidesHtml, title || name || 'ai-ppt', bodyClass);
 }
 
-export function createProject(name, title) {
+export function createProject(name, title, template = null) {
   ensureProjectsDir();
   if (!isSafeProjectName(name)) {
     throw new Error('项目名称只能包含字母、数字、中文、下划线和中划线');
@@ -163,13 +164,53 @@ export function createProject(name, title) {
   if (fs.existsSync(dir)) {
     throw new Error(`项目 ${name} 已存在`);
   }
+  // 模板先校验再落盘，非法/不存在的模板不残留项目目录
+  const tplDir = template ? resolveTemplateDir(template) : null;
   fs.mkdirSync(dir, { recursive: true });
   ensureBaseEngine(name);
   fs.copyFileSync(BASE_README, path.join(dir, 'README.md'));
+  if (tplDir) {
+    fs.copyFileSync(path.join(tplDir, 'index.html'), path.join(dir, 'index.html'));
+    let config;
+    const tplCfgPath = path.join(tplDir, 'ai-ppt.json');
+    if (fs.existsSync(tplCfgPath)) {
+      try {
+        config = JSON.parse(fs.readFileSync(tplCfgPath, 'utf8'));
+      } catch {
+        config = defaultConfig(name, title);
+      }
+    } else {
+      config = defaultConfig(name, title);
+    }
+    config.name = name;
+    if (title) config.params = { ...(config.params || {}), title };
+    writeConfig(name, config);
+    return config;
+  }
   const config = defaultConfig(name, title);
   writeFileAtomic(path.join(dir, 'index.html'), createStarterHtml(name, title || name, config.theme, config.animation));
   writeConfig(name, config);
   return config;
+}
+
+// 场景模板：templates/<id>/（index.html 必备，ai-ppt.json 可选）
+export function listTemplates() {
+  if (!fs.existsSync(TEMPLATES_DIR)) return [];
+  return fs.readdirSync(TEMPLATES_DIR, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && fs.existsSync(path.join(TEMPLATES_DIR, e.name, 'index.html')))
+    .map((e) => e.name)
+    .sort();
+}
+
+function resolveTemplateDir(id) {
+  if (!isSafeName(id)) {
+    throw new Error(`非法模板标识：${id}`);
+  }
+  const dir = path.join(TEMPLATES_DIR, id);
+  if (!fs.existsSync(path.join(dir, 'index.html'))) {
+    throw new Error(`模板 ${id} 不存在`);
+  }
+  return dir;
 }
 
 export function deleteProject(name) {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>主题展示 · ai-ppt</title>
+  <title>主题画廊 · ai-ppt</title>
   <link rel="stylesheet" href="css/ppt.css">
   <style>
     .showcase-container {
@@ -14,7 +14,7 @@
 
     .showcase-header {
       text-align: center;
-      margin-bottom: 48px;
+      margin-bottom: 40px;
       padding-bottom: 32px;
       border-bottom: 1px solid var(--border);
     }
@@ -44,7 +44,7 @@
 
     .themes-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
       gap: 24px;
       margin-bottom: 48px;
     }
@@ -70,41 +70,102 @@
       box-shadow: 0 0 0 3px var(--accent-light);
     }
 
-    .theme-preview {
+    /* 迷你 slide 预览：全部用探测到的主题变量内联渲染 */
+    .mini-slide {
       aspect-ratio: 16/10;
-      padding: 20px;
+      padding: 22px 24px;
       display: flex;
       flex-direction: column;
+      gap: 10px;
+    }
+
+    .mini-kicker {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .mini-title {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+
+    .mini-body {
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .mini-row {
+      display: flex;
       gap: 12px;
-    }
-
-    .theme-preview-header {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .theme-preview-accent {
-      width: 48px;
-      height: 24px;
-      border-radius: 6px;
-      flex-shrink: 0;
-    }
-
-    .theme-preview-tiles {
-      display: flex;
-      gap: 8px;
+      align-items: stretch;
       margin-top: auto;
     }
 
-    .theme-preview-tile {
+    .mini-stat {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 96px;
+    }
+
+    .mini-big-number {
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .mini-big-label {
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    .mini-tile {
       flex: 1;
-      height: 32px;
-      border-radius: 6px;
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .mini-tile-title {
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .mini-tile-text {
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    .mini-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 5px;
+      height: 44px;
+      padding: 8px 10px 6px;
+      border-radius: 8px;
+    }
+
+    .mini-chart-bar {
+      width: 12px;
+      border-radius: 3px 3px 0 0;
     }
 
     .theme-info {
       padding: 16px 20px 20px;
+    }
+
+    .theme-name-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
     }
 
     .theme-name {
@@ -112,7 +173,17 @@
       font-size: 18px;
       font-weight: 700;
       color: var(--ink);
-      margin-bottom: 6px;
+    }
+
+    .theme-mode-badge {
+      font-family: var(--font-heading);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--tile);
+      color: var(--muted);
+      border: 1px solid var(--border);
     }
 
     .theme-desc {
@@ -199,6 +270,13 @@
       height: 16px;
     }
 
+    .showcase-error {
+      padding: 40px;
+      text-align: center;
+      color: var(--muted);
+      font-family: var(--font-body);
+    }
+
     @media (max-width: 768px) {
       .showcase-container {
         padding: 24px;
@@ -216,7 +294,7 @@
 </head>
 <body>
   <div class="showcase-container">
-    <a href="index.html" class="back-link">
+    <a href="index.html" class="back-link" id="back-link">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="m15 18-6-6 6-6"></path>
       </svg>
@@ -224,15 +302,15 @@
     </a>
 
     <header class="showcase-header">
-      <h1 class="showcase-title">主题展示</h1>
-      <p class="showcase-subtitle">8 种精心设计的主题，适配不同的演示场景</p>
-      <p class="showcase-hint">提示：点击主题卡片即可预览，按 T 键循环切换</p>
+      <h1 class="showcase-title">主题画廊</h1>
+      <p class="showcase-subtitle" id="showcase-subtitle">正在加载主题…</p>
+      <p class="showcase-hint">提示：点击主题卡片即可预览并选用，按 T 键循环切换</p>
     </header>
 
     <div class="themes-grid" id="themes-grid"></div>
 
     <section class="demo-section">
-      <h2 class="demo-title">组件预览</h2>
+      <h2 class="demo-title">组件预览（当前主题）</h2>
       <div class="demo-components">
         <div class="demo-row">
           <span class="demo-label">标题</span>
@@ -269,108 +347,118 @@
     (function () {
       'use strict';
 
-      const themes = [
-        {
-          id: 'web-ui',
-          name: 'Web UI',
-          desc: '专业、克制、现代，默认主题',
-          accent: '#439288',
-          tiles: ['#EDF1F0', '#E3E9E7', '#7DD3C0'],
-        },
-        {
-          id: 'business-blue',
-          name: '商务蓝',
-          desc: '稳重、专业、可信，适合金融、咨询',
-          accent: '#2563EB',
-          tiles: ['#EFF6FF', '#DBEAFE', '#BFDBFE'],
-        },
-        {
-          id: 'elegant-purple',
-          name: '优雅紫',
-          desc: '高端、创意、有格调，适合设计、时尚',
-          accent: '#7C3AED',
-          tiles: ['#F5F3FF', '#EDE9FE', '#DDD6FE'],
-        },
-        {
-          id: 'warm-orange',
-          name: '温暖橙',
-          desc: '活力、亲切、有温度，适合消费、零售',
-          accent: '#EA580C',
-          tiles: ['#FFF7ED', '#FFEDD5', '#FED7AA'],
-        },
-        {
-          id: 'sunset-red',
-          name: '日落红',
-          desc: '热情、活力、有冲击力，适合营销活动',
-          accent: '#E11D48',
-          tiles: ['#FFF1F2', '#FFE4E6', '#FECDD3'],
-        },
-        {
-          id: 'tech-green',
-          name: '科技绿',
-          desc: '环保、可持续、科技感，适合新能源',
-          accent: '#65A30D',
-          tiles: ['#F7FEE7', '#ECFCCB', '#D9F99D'],
-        },
-        {
-          id: 'minimal-gray',
-          name: '极简灰',
-          desc: '克制、高级、无印风，适合设计工作室',
-          accent: '#171717',
-          tiles: ['#F5F5F5', '#E5E5E5', '#D4D4D4'],
-        },
-        {
-          id: 'dark-mode',
-          name: '暗黑模式',
-          desc: '高端、沉浸、护眼，适合科技产品发布',
-          accent: '#22D3EE',
-          tiles: ['#164E63', '#0E7490', '#0891B2'],
-        },
+      // 需要探测的主题变量（卡片迷你预览用）
+      const PROBE_VARS = [
+        '--accent', '--accent-light', '--accent-dark', '--teal-light',
+        '--ink', '--muted', '--cream', '--surface', '--tile', '--tile-strong',
+        '--border', '--font-heading', '--font-body',
       ];
 
-      let currentTheme = localStorage.getItem('ai-ppt-theme') || 'web-ui';
+      let themes = [];
+      let themeVars = {};
+      let currentTheme = 'web-ui';
       let themeLink = null;
+      // 嵌入 Web UI（iframe）时：点击卡片通过 postMessage 通知父页面设置项目主题
+      const embedded = window.parent !== window;
 
-      function init() {
-        themeLink = document.createElement('link');
-        themeLink.rel = 'stylesheet';
-        document.head.appendChild(themeLink);
-        applyTheme(currentTheme);
-        buildThemeCards();
-        bindKeyboard();
+      function escapeHtml(text) {
+        return String(text == null ? '' : text)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      async function loadThemes() {
+        try {
+          const res = await fetch('themes.json');
+          const data = await res.json();
+          if (Array.isArray(data) && data.length) return data;
+        } catch { /* file:// 或静态服务不可用时走兜底 */ }
+        // 兜底：与 ai-ppt-base/themes.json 保持一致的最小集合
+        return [
+          { id: 'web-ui', name: 'Web UI', desc: '专业克制的默认主题', color: '#439288', mode: 'light' },
+        ];
+      }
+
+      // 同步切换 body 主题类并读取计算后的变量值。
+      // JS 执行期间不会触发渲染，因此整批探测不会造成页面闪烁。
+      function probeThemeVars(ids) {
+        const probe = {};
+        const originalClass = document.body.className;
+        for (const id of ids) {
+          document.body.className = id === 'web-ui' ? '' : `theme-${id}`;
+          const cs = getComputedStyle(document.body);
+          const vars = {};
+          for (const name of PROBE_VARS) vars[name] = cs.getPropertyValue(name).trim();
+          probe[id] = vars;
+        }
+        document.body.className = originalClass;
+        return probe;
+      }
+
+      function loadAllThemeLinks(ids) {
+        // 返回加载 Promise：探测变量前必须确保样式表已生效
+        return ids.filter((id) => id !== 'web-ui').map((themeId) => new Promise((resolve) => {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = `css/themes/${themeId}.css`;
+          link.onload = resolve;
+          link.onerror = resolve; // 单个主题加载失败不阻塞画廊
+          document.head.appendChild(link);
+        }));
+      }
+
+      function isDark(vars) {
+        const hex = (vars['--cream'] || '').match(/^#([0-9a-f]{6})$/i);
+        if (!hex) return false;
+        const n = parseInt(hex[1], 16);
+        const lum = (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 0xff) + 0.0722 * (n & 0xff)) / 255;
+        return lum < 0.35;
+      }
+
+      function miniSlideHtml(vars) {
+        const v = (name) => vars[name] || '';
+        const bars = [0.55, 0.8, 0.45, 0.95, 0.7];
+        const barColors = [v('--accent'), v('--teal-light') || v('--accent'), v('--accent-dark') || v('--accent'), v('--accent'), v('--muted')];
+        return `
+          <div class="mini-slide" style="background:${v('--cream')};">
+            <div class="mini-kicker" style="color:${v('--accent')};font-family:${v('--font-heading')};">Quarterly Review</div>
+            <div class="mini-title" style="color:${v('--ink')};font-family:${v('--font-heading')};">关键指标全面超预期</div>
+            <div class="mini-body" style="color:${v('--muted')};font-family:${v('--font-body')};">正文排版效果预览：层级清晰、易读，适合讲演场景。</div>
+            <div class="mini-row">
+              <div class="mini-stat">
+                <div class="mini-big-number" style="color:${v('--accent')};font-family:${v('--font-heading')};">98%</div>
+                <div class="mini-big-label" style="color:${v('--muted')};font-family:${v('--font-body')};">目标完成率</div>
+              </div>
+              <div class="mini-tile" style="background:${v('--surface')};border:1px solid ${v('--border')};">
+                <div class="mini-tile-title" style="color:${v('--ink')};font-family:${v('--font-heading')};">卡片组件</div>
+                <div class="mini-tile-text" style="color:${v('--muted')};font-family:${v('--font-body')};">tile / 表面色</div>
+                <div class="mini-chart" style="background:${v('--tile')};">
+                  ${bars.map((h, i) => `<div class="mini-chart-bar" style="height:${Math.round(h * 100)}%;background:${barColors[i]};"></div>`).join('')}
+                </div>
+              </div>
+            </div>
+          </div>`;
       }
 
       function buildThemeCards() {
         const grid = document.getElementById('themes-grid');
         if (!grid) return;
+        grid.innerHTML = '';
 
         themes.forEach((theme) => {
+          const vars = themeVars[theme.id] || {};
+          const dark = theme.mode ? theme.mode === 'dark' : isDark(vars);
           const card = document.createElement('div');
           card.className = 'theme-card' + (theme.id === currentTheme ? ' active' : '');
           card.dataset.themeId = theme.id;
           card.innerHTML = `
-            <div class="theme-preview" style="background: ${theme.id === 'dark-mode' ? '#020617' : 'var(--cream)'};">
-              <div class="theme-preview-header">
-                <div class="theme-preview-accent" style="background: ${theme.accent};"></div>
-                <div style="height: 8px; width: 80px; background: ${theme.id === 'dark-mode' ? '#334155' : 'var(--tile-strong)'}; border-radius: 4px;"></div>
-              </div>
-              <div style="height: 6px; width: 60%; background: ${theme.id === 'dark-mode' ? '#1E293B' : 'var(--tile)'}; border-radius: 3px;"></div>
-              <div style="height: 6px; width: 40%; background: ${theme.id === 'dark-mode' ? '#1E293B' : 'var(--tile)'}; border-radius: 3px;"></div>
-              <div class="theme-preview-tiles">
-                ${theme.tiles.map((color) => `<div class="theme-preview-tile" style="background: ${color};"></div>`).join('')}
-              </div>
-            </div>
+            ${miniSlideHtml(vars)}
             <div class="theme-info">
-              <div class="theme-name">${theme.name}</div>
-              <div class="theme-desc">${theme.desc}</div>
-              ${theme.id === currentTheme ? `
-                <div class="theme-active-badge">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                  当前使用
-                </div>
-              ` : ''}
+              <div class="theme-name-row">
+                <span class="theme-name">${escapeHtml(theme.name)}</span>
+                <span class="theme-mode-badge">${dark ? '深色' : '浅色'}</span>
+              </div>
+              <div class="theme-desc">${escapeHtml(theme.desc || '')}</div>
+              ${theme.id === currentTheme ? activeBadgeHtml() : ''}
             </div>
           `;
           card.addEventListener('click', () => selectTheme(theme.id));
@@ -378,43 +466,49 @@
         });
       }
 
-      function selectTheme(themeId) {
+      function activeBadgeHtml() {
+        return `
+          <div class="theme-active-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            当前使用
+          </div>`;
+      }
+
+      function selectTheme(themeId, { notify = true } = {}) {
         currentTheme = themeId;
         applyTheme(themeId);
         localStorage.setItem('ai-ppt-theme', themeId);
 
-        const cards = document.querySelectorAll('.theme-card');
-        cards.forEach((card) => {
+        document.querySelectorAll('.theme-card').forEach((card) => {
           const isActive = card.dataset.themeId === themeId;
           card.classList.toggle('active', isActive);
-
           const badge = card.querySelector('.theme-active-badge');
           if (isActive && !badge) {
-            const info = card.querySelector('.theme-info');
-            const newBadge = document.createElement('div');
-            newBadge.className = 'theme-active-badge';
-            newBadge.innerHTML = `
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              当前使用
-            `;
-            info.appendChild(newBadge);
+            card.querySelector('.theme-info').insertAdjacentHTML('beforeend', activeBadgeHtml());
           } else if (!isActive && badge) {
             badge.remove();
           }
         });
+
+        if (notify && embedded) {
+          window.parent.postMessage({ type: 'ai-ppt:select-theme', theme: themeId }, window.location.origin);
+        }
       }
 
       function applyTheme(themeId) {
         if (themeId === 'web-ui') {
           themeLink.href = '';
+          document.body.className = '';
         } else {
           themeLink.href = `css/themes/${themeId}.css`;
+          document.body.className = `theme-${themeId}`;
         }
       }
 
       function cycleTheme() {
+        if (!themes.length) return;
         const currentIndex = themes.findIndex((t) => t.id === currentTheme);
         const nextIndex = (currentIndex + 1) % themes.length;
         selectTheme(themes[nextIndex].id);
@@ -427,6 +521,36 @@
             cycleTheme();
           }
         });
+      }
+
+      async function init() {
+        // 预览用主题 <link>（点卡片时切换 href）
+        themeLink = document.createElement('link');
+        themeLink.rel = 'stylesheet';
+        document.head.appendChild(themeLink);
+
+        themes = await loadThemes();
+        await Promise.all(loadAllThemeLinks(themes.map((t) => t.id)));
+
+        // 初始主题：URL ?current= > localStorage > web-ui
+        const fromQuery = new URLSearchParams(window.location.search).get('current');
+        const initial = themes.some((t) => t.id === fromQuery)
+          ? fromQuery
+          : (localStorage.getItem('ai-ppt-theme') || 'web-ui');
+        currentTheme = themes.some((t) => t.id === initial) ? initial : 'web-ui';
+
+        // 等待样式表生效后探测各主题变量（不触发绘制，无闪烁）
+        await document.fonts.ready.catch(() => {});
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        themeVars = probeThemeVars(themes.map((t) => t.id));
+
+        document.getElementById('showcase-subtitle').textContent =
+          `${themes.length} 种精心设计的主题，适配不同的演示场景`;
+        if (embedded) document.getElementById('back-link').style.display = 'none';
+
+        buildThemeCards();
+        applyTheme(currentTheme);
+        bindKeyboard();
       }
 
       if (document.readyState === 'loading') {

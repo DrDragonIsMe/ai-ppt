@@ -1,5 +1,6 @@
 // web/js/modules/state.mjs — 共享状态、常量与工具函数
 // 所有模块通过 import { S } from './state.mjs' 访问共享可变状态
+import { t } from './i18n.mjs';
 
 // ============================================================
 // 共享可变状态（所有模块通过 S.xxx 访问/修改）
@@ -184,17 +185,17 @@ export function escapeHtml(text) {
 }
 
 export function withLlmSettingsHint(message) {
-    const text = String(message || '未知错误');
+    const text = String(message || t('未知错误'));
     if (text.includes('\uD83D\uDCA1')) return text;
     for (const { pattern, hint } of ERROR_DIAGNOSES) {
-        if (pattern.test(text)) return `${text}\n💡 ${hint}`;
+        if (pattern.test(text)) return `${text}\n💡 ${t(hint)}`;
     }
     return text;
 }
 
 export function statusLabel(status) {
     const map = { draft: '草稿', generating: '生成中', ready: '就绪', error: '错误' };
-    return map[status] || status;
+    return t(map[status] || status);
 }
 
 export function escapeHtmlAttr(str) {

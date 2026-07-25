@@ -1281,3 +1281,731 @@ describe('parseMultipartForm', () => {
         );
     });
 });
+
+// ==================== 笔记历史备份（scripts/vault.mjs） ====================
+import {
+    isValidBackupTs,
+    listNoteBackups,
+    readNoteBackup,
+    readNoteOrder,
+    writeNoteOrder,
+} from '../scripts/vault.mjs';
+
+describe('isValidBackupTs', () => {
+    it('接受标准备份时间戳格式', () => {
+        assert.equal(isValidBackupTs('2026-07-24T17-02-37-704Z'), true);
+    });
+    it('拒绝非法/路径穿越时间戳', () => {
+        assert.equal(isValidBackupTs(''), false);
+        assert.equal(isValidBackupTs('../etc'), false);
+        assert.equal(isValidBackupTs('2026-07-24'), false);
+        assert.equal(isValidBackupTs('2026-07-24T17:02:37.704Z'), false); // 未替换冒号的 ISO
+        assert.equal(isValidBackupTs(null), false);
+        assert.equal(isValidBackupTs('2026-07-24T17-02-37-704Z/..'), false);
+    });
+});
+
+describe('listNoteBackups / readNoteBackup', () => {
+    const TS_OLD = '2026-07-01T10-00-00-000Z';
+    const TS_NEW = '2026-07-02T10-00-00-000Z';
+
+    function makeSnapshotsDir() {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-ppt-bk-'));
+        fs.mkdirSync(path.join(dir, TS_OLD), { recursive: true });
+        fs.mkdirSync(path.join(dir, TS_NEW), { recursive: true });
+        fs.writeFileSync(path.join(dir, TS_OLD, 'demo.md'), '旧版本内容');
+        fs.writeFileSync(path.join(dir, TS_NEW, 'demo.md'), '新版本内容'.repeat(30)); // 超过 100 字验证截断
+        fs.writeFileSync(path.join(dir, TS_NEW, 'other.md'), '别的笔记');
+        return dir;
+    }
+
+    it('按时间倒序返回该笔记的备份，preview 截断 100 字', () => {
+        const dir = makeSnapshotsDir();
+        try {
+            const backups = listNoteBackups('demo', { snapshotsDir: dir });
+            assert.deepEqual(backups.map((b) => b.ts), [TS_NEW, TS_OLD]);
+            assert.equal(backups[0].preview.length, 100);
+            assert.equal(backups[1].preview, '旧版本内容');
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('没有备份 / 目录不存在时返回空数组', () => {
+        const dir = makeSnapshotsDir();
+        try {
+            assert.deepEqual(listNoteBackups('nonexistent', { snapshotsDir: dir }), []);
+            assert.deepEqual(listNoteBackups('demo', { snapshotsDir: path.join(dir, 'nope') }), []);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('readNoteBackup 读取指定时间戳内容；非法 ts 或不存在的备份返回 null', () => {
+        const dir = makeSnapshotsDir();
+        try {
+            assert.equal(readNoteBackup('demo', TS_OLD, { snapshotsDir: dir }), '旧版本内容');
+            assert.equal(readNoteBackup('demo', '../..', { snapshotsDir: dir }), null);
+            assert.equal(readNoteBackup('demo', '2026-07-03T10-00-00-000Z', { snapshotsDir: dir }), null);
+            assert.equal(readNoteBackup('nonexistent', TS_OLD, { snapshotsDir: dir }), null);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('readNoteOrder / writeNoteOrder', () => {
+    it('写入后读回；去重并过滤非字符串项', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-ppt-order-'));
+        try {
+            const file = path.join(dir, 'note-order.json');
+            const clean = writeNoteOrder(['b', 'a', 'b', 42, null, 'c'], { orderFile: file });
+            assert.deepEqual(clean, ['b', 'a', 'c']);
+            assert.deepEqual(readNoteOrder({ orderFile: file }), ['b', 'a', 'c']);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('文件缺失或损坏时返回空数组', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-ppt-order-'));
+        try {
+            const file = path.join(dir, 'note-order.json');
+            assert.deepEqual(readNoteOrder({ orderFile: file }), []);
+            fs.writeFileSync(file, 'not json');
+            assert.deepEqual(readNoteOrder({ orderFile: file }), []);
+            fs.writeFileSync(file, '{"order":"x"}');
+            assert.deepEqual(readNoteOrder({ orderFile: file }), []);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+});
+
+// ---- design-lint 规则（scripts/design-lint.mjs） ----
+import {
+    lintHtml,
+    selectSlides,
+    slideLayoutFingerprint,
+    ruleHeroStatOverflow,
+    ruleHeadingIssues,
+    ruleGradientText,
+    ruleEmptySlide,
+    ruleKickerOveruse,
+    ruleSuspectData,
+    ruleLayoutMonotony,
+    ruleDenseTable,
+    ruleMissingImage,
+} from '../scripts/design-lint.mjs';
+import { load as cheerioLoad } from 'cheerio';
+
+function lintRule(rule, slidesHtml, ctx = {}) {
+    const $ = cheerioLoad(`<main class="stage">${slidesHtml}</main>`);
+    return rule($, selectSlides($), ctx);
+}
+
+const slide = (inner, cls = '') =>
+    `<section class="slide${cls ? ' ' + cls : ''}"><div class="slide-content">${inner}</div></section>`;
+
+describe('design-lint: ruleHeroStatOverflow', () => {
+    it('一行 5 个 hero-stat 命中', () => {
+        const stats = Array.from({ length: 5 }, (_, i) =>
+            `<div class="hero-stat"><div class="big-number">${i}</div><div class="big-number-label">指标${i}</div></div>`).join('');
+        const issues = lintRule(ruleHeroStatOverflow, slide(`<h2>数据</h2><div class="split-visual">${stats}</div>`));
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'hero-stat-overflow');
+        assert.equal(issues[0].severity, 'warning');
+        assert.equal(issues[0].page, 1);
+    });
+
+    it('一行 4 个 hero-stat 不命中', () => {
+        const stats = Array.from({ length: 4 }, (_, i) =>
+            `<div class="hero-stat"><div class="big-number">${i}</div></div>`).join('');
+        const issues = lintRule(ruleHeroStatOverflow, slide(`<h2>数据</h2><div class="split-visual">${stats}</div>`));
+        assert.equal(issues.length, 0);
+    });
+});
+
+describe('design-lint: ruleHeadingIssues', () => {
+    it('缺少 h1/h2 命中 missing-heading', () => {
+        const issues = lintRule(ruleHeadingIssues, slide('<p>只有正文没有标题的一段内容</p>'));
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'missing-heading');
+    });
+
+    it('h2 超过 30 字命中 long-heading', () => {
+        const issues = lintRule(ruleHeadingIssues, slide(`<h2>${'很长的标题'.repeat(7)}</h2>`));
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'long-heading');
+    });
+
+    it('正常长度标题不命中', () => {
+        const issues = lintRule(ruleHeadingIssues, slide('<h2>季度销售回顾</h2><p>内容</p>'));
+        assert.equal(issues.length, 0);
+    });
+});
+
+describe('design-lint: ruleGradientText', () => {
+    it('gradient-text 类命中', () => {
+        const issues = lintRule(ruleGradientText, slide('<h1 class="gradient-text">标题</h1>'));
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'gradient-text');
+    });
+
+    it('无 gradient-text 不命中', () => {
+        const issues = lintRule(ruleGradientText, slide('<h1>标题</h1>'));
+        assert.equal(issues.length, 0);
+    });
+
+    it('lintHtml fix=true 自动移除该类并标记 autoFixed', () => {
+        const html = `<main class="stage">${slide('<h1 class="gradient-text">标题</h1>')}</main>`;
+        const { issues, html: fixed, fixedCount } = lintHtml(html, { fix: true });
+        assert.equal(fixedCount, 1);
+        assert.equal(issues.find((i) => i.rule === 'gradient-text').autoFixed, true);
+        assert.ok(!fixed.includes('gradient-text'));
+        assert.ok(fixed.includes('<h1>标题</h1>'));
+    });
+
+    it('lintHtml fix=false 时不修改 html', () => {
+        const html = `<main class="stage">${slide('<h1 class="gradient-text">标题</h1>')}</main>`;
+        const { html: fixed, fixedCount } = lintHtml(html, { fix: false });
+        assert.equal(fixedCount, 0);
+        assert.equal(fixed, html);
+    });
+});
+
+describe('design-lint: ruleEmptySlide', () => {
+    it('空 slide 命中（error）', () => {
+        const issues = lintRule(ruleEmptySlide, slide(''));
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'empty-slide');
+        assert.equal(issues[0].severity, 'error');
+    });
+
+    it('有内容的 slide 不命中', () => {
+        const issues = lintRule(ruleEmptySlide, slide('<h2>标题</h2><p>这是一段有实质内容的正文文字</p>'));
+        assert.equal(issues.length, 0);
+    });
+});
+
+describe('design-lint: ruleKickerOveruse', () => {
+    it('一页 2 个 kicker/section-title 命中', () => {
+        const issues = lintRule(ruleKickerOveruse,
+            slide('<div class="kicker">A</div><div class="section-title">B</div><h2>标题</h2>'));
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'kicker-overuse');
+    });
+
+    it('一页 1 个 kicker 不命中', () => {
+        const issues = lintRule(ruleKickerOveruse, slide('<div class="kicker">A</div><h2>标题</h2>'));
+        assert.equal(issues.length, 0);
+    });
+});
+
+describe('design-lint: ruleSuspectData', () => {
+    it('lorem / XX% 占位命中（info）', () => {
+        const issues = lintRule(ruleSuspectData, slide('<h2>标题</h2><p>lorem ipsum 增长约 XX%，收入 XXX 万</p>'));
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'suspect-data');
+        assert.equal(issues[0].severity, 'info');
+    });
+
+    it('真实数据文案不命中', () => {
+        const issues = lintRule(ruleSuspectData, slide('<h2>标题</h2><p>三季度销售额增长 23.5%，达到 1.2 亿元</p>'));
+        assert.equal(issues.length, 0);
+    });
+});
+
+describe('design-lint: ruleLayoutMonotony', () => {
+    it('连续 3 页同一版式命中（info）', () => {
+        const same = () => slide('<div class="section-title">T</div><h2>标题</h2><p>正文内容</p>');
+        const issues = lintRule(ruleLayoutMonotony, same() + same() + same());
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'layout-monotony');
+        assert.equal(issues[0].severity, 'info');
+    });
+
+    it('版式轮换不命中', () => {
+        const a = slide('<h2>标题一</h2><p>正文</p>');
+        const b = slide('<h2>标题二</h2><div class="tile-row"><div class="tile">卡</div></div>');
+        const c = slide('<h2>标题三</h2><table class="ppt-table"><tbody><tr><td>1</td></tr></tbody></table>');
+        const issues = lintRule(ruleLayoutMonotony, a + b + c);
+        assert.equal(issues.length, 0);
+    });
+
+    it('slideLayoutFingerprint 忽略 active 类差异', () => {
+        const $ = cheerioLoad(`<main class="stage">${slide('<h2>标题</h2>', 'active')}${slide('<h2>标题</h2>')}</main>`);
+        const slides = selectSlides($);
+        assert.equal(slideLayoutFingerprint($, slides[0]), slideLayoutFingerprint($, slides[1]));
+    });
+});
+
+describe('design-lint: ruleDenseTable', () => {
+    it('7 行表格命中', () => {
+        const rows = Array.from({ length: 7 }, () => '<tr><td>a</td><td>b</td></tr>').join('');
+        const issues = lintRule(ruleDenseTable,
+            slide(`<h2>表</h2><table class="ppt-table"><thead><tr><th>h1</th><th>h2</th></tr></thead><tbody>${rows}</tbody></table>`));
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'dense-table');
+    });
+
+    it('5 列表格命中', () => {
+        const issues = lintRule(ruleDenseTable,
+            slide('<h2>表</h2><table class="ppt-table"><tbody><tr><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td></tr></tbody></table>'));
+        assert.equal(issues.length, 1);
+    });
+
+    it('6 行 4 列表格不命中', () => {
+        const rows = Array.from({ length: 6 }, () => '<tr><td>a</td><td>b</td><td>c</td><td>d</td></tr>').join('');
+        const issues = lintRule(ruleDenseTable, slide(`<h2>表</h2><table class="ppt-table"><tbody>${rows}</tbody></table>`));
+        assert.equal(issues.length, 0);
+    });
+});
+
+describe('design-lint: ruleMissingImage', () => {
+    it('引用不存在的本地图片命中（error）', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-ppt-lint-'));
+        try {
+            const issues = lintRule(ruleMissingImage,
+                slide('<h2>图</h2><img src="assets/nope.png">'), { projectDir: dir });
+            assert.equal(issues.length, 1);
+            assert.equal(issues[0].rule, 'missing-image');
+            assert.equal(issues[0].severity, 'error');
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('存在的本地图片与远程图片不命中', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-ppt-lint-'));
+        try {
+            fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
+            fs.writeFileSync(path.join(dir, 'assets', 'ok.png'), 'x');
+            const issues = lintRule(ruleMissingImage,
+                slide('<h2>图</h2><img src="assets/ok.png"><img src="https://example.com/a.png"><img src="data:image/png;base64,xx">'),
+                { projectDir: dir });
+            assert.equal(issues.length, 0);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+});
+
+// ---- SVG 图表渲染器（ai-ppt-base/js/ppt.js 纯函数，浏览器 IIFE + Node module.exports 双模式）----
+import charts from '../ai-ppt-base/js/ppt.js';
+const { renderChart, renderLineChart, renderPieChart, renderBarsChart } = charts;
+
+describe('renderLineChart（折线/面积图）', () => {
+    const cfg = {
+        labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+        series: [
+            { name: '客户数', data: [120, 180, 260, 320] },
+            { name: '活跃数', data: [80, 110, 150, 200] },
+        ],
+    };
+
+    it('生成静态 SVG：每序列一条折线 + 坐标网格 + 标签', () => {
+        const svg = renderLineChart(cfg);
+        assert.ok(svg.startsWith('<svg class="chart-svg chart-svg-line"'));
+        assert.ok(svg.endsWith('</svg>'));
+        assert.ok(svg.includes('viewBox="0 0 640 360"'));
+        // 2 条折线 path（无 area）
+        assert.equal((svg.match(/<path /g) || []).length, 2);
+        // 网格线 5 条 + 基线 1 条
+        assert.ok((svg.match(/class="chart-grid"/g) || []).length >= 5);
+        // x 轴标签齐全
+        for (const l of cfg.labels) assert.ok(svg.includes(`>${l}<`));
+        // 无 NaN/undefined 坐标
+        assert.ok(!/NaN|undefined/.test(svg));
+    });
+
+    it('多序列自动生成图例，单序列不出图例', () => {
+        const multi = renderLineChart(cfg);
+        assert.ok((multi.match(/chart-legend-text/g) || []).length >= 2);
+        const single = renderLineChart({ labels: cfg.labels, series: [cfg.series[0]] });
+        assert.ok(!single.includes('chart-legend-text'));
+    });
+
+    it('area/valueLabels/points 选项生效', () => {
+        const svg = renderLineChart({ ...cfg, area: true, valueLabels: true });
+        assert.ok(svg.includes('fill-opacity:0.12'));
+        assert.ok(svg.includes('>320<'));
+        const noPoints = renderLineChart({ ...cfg, points: false });
+        assert.ok(!noPoints.includes('<circle'));
+    });
+
+    it('数据为空或非法时返回空字符串', () => {
+        assert.equal(renderLineChart({}), '');
+        assert.equal(renderLineChart({ labels: [], series: [{ name: 'a', data: [1] }] }), '');
+        assert.equal(renderLineChart({ labels: ['Q1'], series: [{ name: 'a', data: [] }] }), '');
+    });
+});
+
+describe('renderPieChart（饼/环图）', () => {
+    const cfg = { labels: ['薪酬', '考勤', '招聘', '其他'], data: [45, 25, 20, 10] };
+
+    it('生成切片 + 占比标签 + 图例，占比总和 100%', () => {
+        const svg = renderPieChart(cfg);
+        assert.ok(svg.startsWith('<svg class="chart-svg chart-svg-pie"'));
+        assert.equal((svg.match(/<path /g) || []).length, 4);
+        const pcts = [...svg.matchAll(/class="chart-pct">(\d+)%</g)].map((m) => Number(m[1]));
+        assert.equal(pcts.length, 4);
+        assert.equal(pcts.reduce((a, b) => a + b, 0), 100);
+        for (const l of cfg.labels) assert.ok(svg.includes(`>${l}<`));
+        assert.ok(!/NaN|undefined/.test(svg));
+    });
+
+    it('donut 渲染内圈路径，centerLabel 输出环心文字', () => {
+        const svg = renderPieChart({ ...cfg, donut: true, centerLabel: '构成' });
+        assert.ok(svg.includes('>构成<'));
+        // 环图切片路径含内圈反向弧（A innerR innerR ... 0）
+        assert.ok(/A 66 66 0 \d 0/.test(svg));
+    });
+
+    it('接受 series[0].data 形式，过滤非正数值', () => {
+        const svg = renderPieChart({ labels: ['a', 'b', 'c'], series: [{ name: 'x', data: [10, 0, 30] }] });
+        assert.equal((svg.match(/<path /g) || []).length, 2);
+        assert.ok(!/NaN|undefined/.test(svg));
+    });
+
+    it('数据为空时返回空字符串', () => {
+        assert.equal(renderPieChart({}), '');
+        assert.equal(renderPieChart({ labels: ['a'], data: [0] }), '');
+    });
+});
+
+describe('renderBarsChart（分组/堆叠柱状图）', () => {
+    const cfg = {
+        labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+        series: [
+            { name: '2024', data: [45, 58, 72, 85] },
+            { name: '2025', data: [52, 66, 81, 97] },
+        ],
+    };
+
+    it('分组柱：labels × series 根柱 + 柱顶数值 + 图例', () => {
+        const svg = renderBarsChart(cfg);
+        assert.ok(svg.startsWith('<svg class="chart-svg chart-svg-bars"'));
+        // 8 根柱 + 2 个图例色块
+        assert.equal((svg.match(/<rect /g) || []).length, 8 + 2);
+        assert.ok(svg.includes('>97<'));
+        assert.ok(!/NaN|undefined/.test(svg));
+    });
+
+    it('堆叠柱：每标签一根多段柱，柱顶显示合计', () => {
+        const svg = renderBarsChart({ ...cfg, stacked: true });
+        // 8 段 + 2 个图例色块
+        assert.equal((svg.match(/<rect /g) || []).length, 8 + 2);
+        // Q4 合计 85+97=182
+        assert.ok(svg.includes('>182<'));
+    });
+
+    it('valueLabels:false 关闭柱顶数值', () => {
+        const svg = renderBarsChart({ labels: ['Q1'], series: [{ name: 'a', data: [42] }], valueLabels: false });
+        // 柱顶数值用 chart-value 类；关闭后应一个都没有（y 轴刻度是 chart-tick）
+        assert.ok(!svg.includes('chart-value'));
+    });
+
+    it('数据为空时返回空字符串', () => {
+        assert.equal(renderBarsChart({}), '');
+        assert.equal(renderBarsChart({ labels: ['Q1'], series: [] }), '');
+    });
+});
+
+describe('renderChart（类型分发）', () => {
+    it('按类型分发，未知类型返回空字符串', () => {
+        const cfg = { labels: ['Q1', 'Q2'], series: [{ name: 'a', data: [1, 2] }] };
+        assert.ok(renderChart('line', cfg).includes('chart-svg-line'));
+        assert.ok(renderChart('bars', cfg).includes('chart-svg-bars'));
+        assert.ok(renderChart('pie', { labels: ['a'], data: [1] }).includes('chart-svg-pie'));
+        assert.equal(renderChart('unknown', cfg), '');
+    });
+});
+
+
+// ---- export-video.mjs 纯函数 ----
+import {
+    extractSlideTexts,
+    computeDurations,
+    buildConcatList,
+    buildFfmpegArgs,
+    DEFAULT_SLIDE_DURATION,
+} from '../scripts/export-video.mjs';
+
+describe('extractSlideTexts（视频旁白文本提取）', () => {
+    const html = `<main class="stage">
+        <section class="slide"><div class="slide-content"><h1>标题一</h1><ul><li>要点A</li><li>要点B</li></ul></div></section>
+        <section class="slide"><div class="slide-content"><h2>标题二</h2><div class="speaker-note">这是演讲备注</div><ul><li>要点C</li></ul></div></section>
+        <section class="slide"><div class="slide-content"><p>没有标题也没有备注</p></div></section>
+    </main>`;
+
+    it('.speaker-note 优先于标题与要点', () => {
+        const texts = extractSlideTexts(html);
+        assert.equal(texts.length, 3);
+        assert.equal(texts[1], '这是演讲备注');
+    });
+
+    it('无备注时取标题 + 要点', () => {
+        const texts = extractSlideTexts(html);
+        assert.equal(texts[0], '标题一。要点A。要点B');
+    });
+
+    it('无标题无备注返回空串；无幻灯片返回空数组', () => {
+        assert.equal(extractSlideTexts(html)[2], '');
+        assert.deepEqual(extractSlideTexts('<main class="stage"></main>'), []);
+    });
+});
+
+describe('computeDurations（每页时长）', () => {
+    it('标量填充 count 项', () => {
+        assert.deepEqual(computeDurations(3, 5), [5, 5, 5]);
+    });
+
+    it('默认 4 秒；非法值回退默认', () => {
+        assert.deepEqual(computeDurations(2), [DEFAULT_SLIDE_DURATION, DEFAULT_SLIDE_DURATION]);
+        assert.deepEqual(computeDurations(2, -1), [DEFAULT_SLIDE_DURATION, DEFAULT_SLIDE_DURATION]);
+        assert.deepEqual(computeDurations(2, NaN), [DEFAULT_SLIDE_DURATION, DEFAULT_SLIDE_DURATION]);
+    });
+
+    it('数组按 count 截断 / 以末值补齐', () => {
+        assert.deepEqual(computeDurations(2, [3, 6, 9]), [3, 6]);
+        assert.deepEqual(computeDurations(4, [3, 6]), [3, 6, 6, 6]);
+    });
+
+    it('count <= 0 返回空数组', () => {
+        assert.deepEqual(computeDurations(0, 4), []);
+    });
+});
+
+describe('buildConcatList（ffmpeg concat 清单）', () => {
+    it('每帧 file + duration，末帧追加无 duration 的 file', () => {
+        const list = buildConcatList(['/tmp/a.png', '/tmp/b.png'], [4, 6]);
+        const lines = list.trim().split('\n');
+        assert.deepEqual(lines, [
+            "file '/tmp/a.png'", 'duration 4',
+            "file '/tmp/b.png'", 'duration 6',
+            "file '/tmp/b.png'",
+        ]);
+    });
+
+    it('空帧列表只有结尾换行', () => {
+        assert.equal(buildConcatList([], []), '\n');
+    });
+});
+
+describe('buildFfmpegArgs（ffmpeg 参数构造）', () => {
+    it('concat 输入 + fps/yuv420p + libx264 + 输出文件结尾', () => {
+        const args = buildFfmpegArgs({ concatFile: '/tmp/concat.txt', fps: 24, outFile: '/tmp/out.mp4' });
+        assert.deepEqual(args.slice(0, 6), ['-y', '-f', 'concat', '-safe', '0', '-i']);
+        assert.equal(args[6], '/tmp/concat.txt');
+        assert.ok(args.includes('fps=24,format=yuv420p'));
+        assert.ok(args.includes('libx264'));
+        assert.equal(args[args.length - 1], '/tmp/out.mp4');
+    });
+
+    it('默认 30fps', () => {
+        const args = buildFfmpegArgs({ concatFile: 'c.txt', outFile: 'o.mp4' });
+        assert.ok(args.includes('fps=30,format=yuv420p'));
+    });
+
+    it('seconds 追加 -t 裁剪末帧重复条目多出的时长，缺省/非法值不加', () => {
+        const withT = buildFfmpegArgs({ concatFile: 'c.txt', outFile: 'o.mp4', seconds: 52 });
+        const tIdx = withT.indexOf('-t');
+        assert.ok(tIdx > 0);
+        assert.equal(withT[tIdx + 1], '52');
+        assert.equal(withT[withT.length - 1], 'o.mp4');
+        assert.ok(!buildFfmpegArgs({ concatFile: 'c.txt', outFile: 'o.mp4' }).includes('-t'));
+        assert.ok(!buildFfmpegArgs({ concatFile: 'c.txt', outFile: 'o.mp4', seconds: NaN }).includes('-t'));
+        assert.ok(!buildFfmpegArgs({ concatFile: 'c.txt', outFile: 'o.mp4', seconds: -1 }).includes('-t'));
+    });
+});
+
+// ---- insertImageIntoDeck / isVideoAsset（POST /api/projects/:name/insert-image 的 DOM 合并纯函数） ----
+import { insertImageIntoDeck, isVideoAsset } from '../scripts/insert-image.mjs';
+
+describe('isVideoAsset', () => {
+    it('按扩展名识别视频资产', () => {
+        assert.ok(isVideoAsset('a.mp4'));
+        assert.ok(isVideoAsset('B.WEBM'));
+        assert.ok(!isVideoAsset('a.png'));
+        assert.ok(!isVideoAsset('noext'));
+        assert.ok(!isVideoAsset(''));
+    });
+});
+
+describe('insertImageIntoDeck', () => {
+    const deckHtml = `<!doctype html><html><body><main class="stage">
+<section class="slide active"><div class="slide-content"><h2>封面</h2></div></section>
+<section class="slide"><div class="slide-content"><h2>内容页</h2></div></section>
+<section class="slide"><div class="slide-content"><h2>结尾</h2></div></section>
+</main></body></html>`;
+
+    it('默认在末页前新建图片页（new-slide），标题取传入 title', () => {
+        const r = insertImageIntoDeck(deckHtml, { src: 'assets/pic.png', title: '扁平风格增长曲线插图' });
+        assert.equal(r.mode, 'new-slide');
+        assert.equal(r.slide, 3); // 新页成为第 3 页（原末页之前）
+        const $ = cheerioLoad(r.html);
+        const slides = $('main.stage section.slide');
+        assert.equal(slides.length, 4);
+        const inserted = $(slides[2]);
+        assert.equal(inserted.find('h2').text(), '扁平风格增长曲线插图');
+        assert.equal(inserted.find('img').attr('src'), 'assets/pic.png');
+        assert.equal($(slides[3]).find('h2').text(), '结尾');
+        // 单 active：合并后仅首页 active
+        assert.equal($('main.stage section.slide.active').length, 1);
+        assert.ok($(slides[0]).hasClass('active'));
+    });
+
+    it('无 title 时使用默认标题「AI 配图」', () => {
+        const r = insertImageIntoDeck(deckHtml, { src: 'assets/pic.png' });
+        const $ = cheerioLoad(r.html);
+        assert.equal($('main.stage section.slide').eq(2).find('h2').text(), 'AI 配图');
+    });
+
+    it('指定页（1-based）把 img 追加进该页 .slide-content（append）', () => {
+        const r = insertImageIntoDeck(deckHtml, { src: 'assets/pic.png', title: 't', slide: 2 });
+        assert.equal(r.mode, 'append');
+        assert.equal(r.slide, 2);
+        const $ = cheerioLoad(r.html);
+        assert.equal($('main.stage section.slide').length, 3); // 不新增页
+        const second = $('main.stage section.slide').eq(1);
+        assert.equal(second.find('.slide-content img').attr('src'), 'assets/pic.png');
+        assert.ok(second.find('.slide-content .visual-card').length > 0);
+    });
+
+    it('视频资产生成 <video> 标签', () => {
+        const r = insertImageIntoDeck(deckHtml, { src: 'assets/clip.mp4', title: 'v' });
+        const $ = cheerioLoad(r.html);
+        assert.equal($('main.stage section.slide').eq(2).find('video').attr('src'), 'assets/clip.mp4');
+    });
+
+    it('页码越界 / 缺 src / 无幻灯片结构时抛错', () => {
+        assert.throws(() => insertImageIntoDeck(deckHtml, { src: 'a.png', slide: 0 }), /页码超出范围/);
+        assert.throws(() => insertImageIntoDeck(deckHtml, { src: 'a.png', slide: 4 }), /页码超出范围/);
+        assert.throws(() => insertImageIntoDeck(deckHtml, {}), /缺少媒体地址/);
+        assert.throws(() => insertImageIntoDeck('<html><body></body></html>', { src: 'a.png' }), /未找到幻灯片结构/);
+    });
+
+    it('title 中的 HTML 特殊字符被转义', () => {
+        const r = insertImageIntoDeck(deckHtml, { src: 'assets/pic.png', title: '<b>x</b>' });
+        const $ = cheerioLoad(r.html);
+        assert.equal($('main.stage section.slide').eq(2).find('h2').text(), '<b>x</b>');
+        assert.ok(!r.html.includes('<h2><b>x</b></h2>'));
+    });
+});
+
+// ---- findAssetReferences（DELETE /api/vault/assets/:name 的 409 引用保护核心） ----
+import { contentReferencesAsset, findAssetReferences } from '../scripts/asset-refs.mjs';
+
+describe('contentReferencesAsset', () => {
+    it('正文含 ![[name]] 视为引用', () => {
+        assert.ok(contentReferencesAsset('文字\n![[a.png]]\n更多', 'a.png'));
+        assert.ok(!contentReferencesAsset('![[a.png]]', 'b.png'));
+        assert.ok(!contentReferencesAsset(null, 'a.png'));
+    });
+
+    it('普通 wikilink [[name]] 不算引用', () => {
+        assert.ok(!contentReferencesAsset('[[a.png]]', 'a.png'));
+    });
+});
+
+describe('findAssetReferences', () => {
+    it('分别汇总笔记与碎片引用方', () => {
+        const refs = findAssetReferences('a.png', {
+            notes: [{ name: '笔记一', content: '![[a.png]]' }, { name: '笔记二', content: '无引用' }],
+            fragments: [{ id: 'f-1', content: 'x ![[a.png]]' }, { id: 'f-2', content: null }],
+        });
+        assert.deepEqual(refs, { notes: ['笔记一'], fragments: ['f-1'] });
+    });
+
+    it('无引用时返回空列表（删除应直接 204）', () => {
+        const refs = findAssetReferences('a.png', { notes: [{ name: 'n', content: 'text' }] });
+        assert.deepEqual(refs, { notes: [], fragments: [] });
+    });
+});
+
+// ---- cleanupOrphanTmpParts（服务启动清理 vault/assets/.tmp 孤儿 .part） ----
+import { cleanupOrphanTmpParts } from '../scripts/multipart.mjs';
+
+describe('cleanupOrphanTmpParts', () => {
+    it('只删除 .part 文件并返回数量', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-ppt-tmp-clean-'));
+        try {
+            fs.writeFileSync(path.join(dir, 'upload-a.part'), 'x');
+            fs.writeFileSync(path.join(dir, 'upload-b.part'), 'x');
+            fs.writeFileSync(path.join(dir, 'keep.png'), 'x');
+            const removed = cleanupOrphanTmpParts(dir);
+            assert.equal(removed, 2);
+            assert.deepEqual(fs.readdirSync(dir), ['keep.png']);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('目录不存在时返回 0 不抛错', () => {
+        assert.equal(cleanupOrphanTmpParts(path.join(os.tmpdir(), 'ai-ppt-no-such-dir-xyz')), 0);
+    });
+});
+
+// ---- createProject 场景模板（templates/<id>/ → projects/<name>/） ----
+import { createProject, deleteProject, listTemplates, readConfig, getProjectDir } from '../scripts/config.mjs';
+
+describe('listTemplates', () => {
+    it('返回仓库内置的 4 个场景模板', () => {
+        const tpls = listTemplates();
+        for (const id of ['weekly-report', 'training-course', 'pitch', 'review-lesson']) {
+            assert.ok(tpls.includes(id), `缺少模板 ${id}`);
+        }
+    });
+});
+
+describe('createProject(template)', () => {
+    const name = `test-tpl-${Date.now().toString(36)}`;
+
+    it('从模板创建：复制模板 index.html 与 ai-ppt.json，并注入基座引擎', () => {
+        try {
+            const cfg = createProject(name, '我的周报', 'weekly-report');
+            const dir = getProjectDir(name);
+            const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+            assert.ok(html.includes('本周进展'), '模板幻灯片内容应保留');
+            assert.ok(fs.existsSync(path.join(dir, 'css', 'ppt.css')), '基座引擎 css 应已注入');
+            assert.ok(fs.existsSync(path.join(dir, 'js', 'ppt.js')), '基座引擎 js 应已注入');
+            assert.equal(cfg.name, name, '配置 name 应改为新项目名');
+            assert.equal(cfg.params.title, '我的周报', '传入 title 应覆盖模板默认标题');
+            assert.equal(cfg.template, 'weekly-report');
+            // readConfig 回读一致
+            assert.equal(readConfig(name).name, name);
+        } finally {
+            deleteProject(name);
+        }
+    });
+
+    it('不传 title 时保留模板默认标题', () => {
+        const n2 = `${name}-b`;
+        try {
+            const cfg = createProject(n2, '', 'pitch');
+            assert.equal(cfg.params.title, '项目路演');
+        } finally {
+            deleteProject(n2);
+        }
+    });
+
+    it('非法或不存在的模板 id 抛错，且不残留项目目录', () => {
+        for (const bad of ['../etc', 'no-such-template', 'a/b']) {
+            const n3 = `${name}-c`;
+            assert.throws(() => createProject(n3, '', bad));
+            assert.ok(!fs.existsSync(getProjectDir(n3)), `模板 ${bad} 不应残留目录`);
+        }
+    });
+
+    it('不传 template 时行为不变（ starter 三页）', () => {
+        const n4 = `${name}-d`;
+        try {
+            createProject(n4, '空白项目');
+            const html = fs.readFileSync(path.join(getProjectDir(n4), 'index.html'), 'utf8');
+            assert.ok(html.includes('关于本项目'), '应为默认 starter 内容');
+        } finally {
+            deleteProject(n4);
+        }
+    });
+});

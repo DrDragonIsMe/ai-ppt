@@ -1,5 +1,17 @@
 // routes/vault-notes.mjs — 笔记域路由（标签聚合/笔记 CRUD/重命名/chat/任务列表/查询/块引用）
 // 路由顺序敏感：本数组顺序即合并后的相对顺序，由 routes/vault.mjs 按拆分前总顺序拼接
+import { listNoteBackups, readNoteBackup, isValidBackupTs, readNoteOrder, writeNoteOrder } from '../scripts/vault.mjs';
+
+// 按 note-order.json 中的自定义顺序排列：已记录的排前（按记录序），未记录的保持 mtime 倒序在后
+function applyNoteOrder(notes) {
+    const order = readNoteOrder();
+    if (!order.length) return notes;
+    const rank = new Map(order.map((n, i) => [n, i]));
+    const bound = order.length;
+    // V8 sort 稳定：同 rank（未记录）保持 listNotes 的 mtime 倒序
+    return notes.sort((a, b) => (rank.get(a.name) ?? bound) - (rank.get(b.name) ?? bound));
+}
+
 export default function vaultNotesRoutes(ctx) {
     const {
         send, readBody, validName,
@@ -27,7 +39,7 @@ export default function vaultNotesRoutes(ctx) {
                 const url = new URL(req.url, `http://${req.headers.host}`);
                 const limitParam = url.searchParams.get('limit');
                 const offsetParam = url.searchParams.get('offset');
-                const notes = api.listNotes();
+                const notes = applyNoteOrder(api.listNotes());
                 // 不传分页参数时保持原有数组响应（前端零改动兼容）
                 if (limitParam === null && offsetParam === null) {
                     return send(res, 200, notes);
@@ -259,6 +271,93 @@ export default function vaultNotesRoutes(ctx) {
                     ...(includeLinked ? ['--include-linked'] : []),
                 ], body.apiKey);
                 send(res, 202, { message: '生成已启动', name: projectName });
+            }
+        },
+        // ---- 笔记列表自定义排序（拖拽排序持久化，存 vault/.meta/note-order.json） ----
+        {
+            method: 'GET', pattern: /^\/api\/vault\/note-order$/, handler: async (_req, res) => {
+                send(res, 200, { order: readNoteOrder() });
+            }
+        },
+        {
+            method: 'PUT', pattern: /^\/api\/vault\/note-order$/, handler: async (req, res) => {
+                const body = await readBody(req);
+                const order = Array.isArray(body.order) ? body.order : null;
+                if (!order) return send(res, 400, { error: '请提供 order 数组' });
+                if (order.length > 5000) return send(res, 400, { error: 'order 数组过长' });
+                for (const name of order) {
+                    if (typeof name !== 'string' || !validName(name, res, '非法笔记名称')) return;
+                }
+                send(res, 200, { ok: true, order: writeNoteOrder(order) });
+            }
+        },
+        // ---- 笔记历史备份（.snapshots/_vault/<ts>/<file>）：列表 / 恢复 ----
+        {
+            method: 'GET', pattern: /^\/api\/vault\/notes\/([^/]+)\/backups$/, handler: async (_req, res, matches) => {
+                const name = matches[1];
+                if (!validName(name, res, '非法笔记名称')) return;
+                try {
+                    send(res, 200, { backups: listNoteBackups(name) });
+                } catch (err) {
+                    send(res, err.statusCode || 500, { error: err.message });
+                }
+            }
+        },
+        {
+            method: 'POST', pattern: /^\/api\/vault\/notes\/([^/]+)\/restore-backup$/, handler: async (req, res, matches) => {
+                const api = await ensureVaultApi();
+                const name = matches[1];
+                if (!validName(name, res, '非法笔记名称')) return;
+                const body = await readBody(req);
+                const ts = typeof body.ts === 'string' ? body.ts : '';
+                if (!isValidBackupTs(ts)) return send(res, 400, { error: '非法备份时间戳' });
+                let content;
+                try {
+                    content = readNoteBackup(name, ts);
+                } catch (err) {
+                    return send(res, err.statusCode || 500, { error: err.message });
+                }
+                if (content === null) return send(res, 404, { error: '备份不存在' });
+                try {
+                    backupVaultNote(api, name); // 恢复前先把当前版本备份（笔记不存在时静默跳过）
+                    api.writeNote(name, content);
+                    api.rebuildIndex();
+                    send(res, 200, { ok: true });
+                } catch (err) {
+                    send(res, err.statusCode || 500, { error: err.message });
+                }
+            }
+        },
+        // ---- 批量打标签：向笔记 Front Matter tags 追加（去重），用统一 FM 解析器保持格式 ----
+        {
+            method: 'POST', pattern: /^\/api\/vault\/notes\/([^/]+)\/add-tags$/, handler: async (req, res, matches) => {
+                const api = await ensureVaultApi();
+                const name = matches[1];
+                if (!validName(name, res, '非法笔记名称')) return;
+                const body = await readBody(req);
+                const tags = (Array.isArray(body.tags) ? body.tags : []).map((t) => String(t).trim()).filter(Boolean);
+                if (!tags.length) return send(res, 400, { error: '请提供标签' });
+                if (tags.length > 50) return send(res, 400, { error: '一次最多追加 50 个标签' });
+                const content = api.readNote(name);
+                if (content === null) return send(res, 404, { error: '笔记不存在' });
+                try {
+                    const { frontMatter, content: bodyText } = api.parseFrontMatter(content);
+                    const existing = Array.isArray(frontMatter.tags)
+                        ? frontMatter.tags.map(String)
+                        : (frontMatter.tags ? [String(frontMatter.tags)] : []);
+                    const merged = [...existing];
+                    for (const t of tags) if (!merged.includes(t)) merged.push(t);
+                    if (merged.length === existing.length) {
+                        return send(res, 200, { ok: true, tags: merged, changed: false });
+                    }
+                    frontMatter.tags = merged;
+                    backupVaultNote(api, name);
+                    api.writeNote(name, api.stringifyFrontMatter(frontMatter) + bodyText);
+                    api.rebuildIndex();
+                    send(res, 200, { ok: true, tags: merged, changed: true });
+                } catch (err) {
+                    send(res, err.statusCode || 500, { error: err.message });
+                }
             }
         },
     ];

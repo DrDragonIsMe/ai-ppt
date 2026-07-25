@@ -14,6 +14,8 @@ import {
   buildFallbackSlides,
   generateSlidesHtml,
 } from './generation-common.mjs';
+import { lintAfterGenerate } from './design-lint.mjs';
+import { captureCover } from './deck-capture.mjs';
 
 function setStatus(name, status, errorMessage = null) {
   const cfg = readConfig(name);
@@ -172,6 +174,8 @@ async function main() {
     });
 
     setStatus(name, 'ready');
+    lintAfterGenerate(name, emit);
+    await captureCover(name); // 顺手更新封面（静默失败，不阻断生成）
     emit('ready', '生成完成');
     emitDone();
   } catch (err) {

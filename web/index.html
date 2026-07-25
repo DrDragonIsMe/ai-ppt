@@ -5,6 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ai-ppt Workspace</title>
+  <meta name="theme-color" content="#0D9488">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="stylesheet" href="/css/web.css">
 </head>
 
@@ -12,16 +16,24 @@
   <div id="app">
     <header class="topbar">
       <div class="topbar-left">
+        <button id="btn-sidebar-toggle" class="btn-secondary btn-icon" title="打开侧边栏" aria-label="打开侧边栏" data-i18n-title="打开侧边栏" data-i18n-aria="打开侧边栏">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
         <div class="brand">
           <div class="logo">ai-ppt</div>
         </div>
       </div>
       <div class="topbar-right">
         <div class="topbar-search">
-          <input type="search" id="input-global-search" placeholder="搜索项目或内容… (Ctrl+K)">
+          <input type="search" id="input-global-search" placeholder="搜索项目或内容… (Ctrl+K)" data-i18n-placeholder="搜索项目或内容… (Ctrl+K)">
           <div id="search-results" class="search-results hidden"></div>
         </div>
-        <button id="btn-settings" class="btn-secondary btn-icon" title="系统设置">
+        <button id="btn-settings" class="btn-secondary btn-icon" title="系统设置" data-i18n-title="系统设置">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -30,7 +42,7 @@
             </path>
           </svg>
         </button>
-        <button id="btn-help" class="btn-secondary btn-icon" title="快捷键 (?)">
+        <button id="btn-help" class="btn-secondary btn-icon" title="快捷键 (?)" data-i18n-title="快捷键 (?)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
@@ -42,43 +54,45 @@
     </header>
 
     <div class="layout">
+      <div id="sidebar-scrim" class="sidebar-scrim hidden"></div>
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-tabs">
-          <button class="sidebar-tab active" data-tab="fragments">速记</button>
-          <button class="sidebar-tab" data-tab="vault">知识库</button>
-          <button class="sidebar-tab" data-tab="cards">知识卡片</button>
-          <button class="sidebar-tab" data-tab="study">学习</button>
-          <button class="sidebar-tab" data-tab="projects">PPT 作品</button>
+          <button class="sidebar-tab active" data-tab="fragments" data-i18n="速记">速记</button>
+          <button class="sidebar-tab" data-tab="vault" data-i18n="知识库">知识库</button>
+          <button class="sidebar-tab" data-tab="cards" data-i18n="知识卡片">知识卡片</button>
+          <button class="sidebar-tab" data-tab="study" data-i18n="学习">学习</button>
+          <button class="sidebar-tab" data-tab="projects" data-i18n="PPT 作品">PPT 作品</button>
         </div>
 
         <div id="fragments-sidebar-content" class="sidebar-content">
           <div class="sidebar-header">
-            <div class="sidebar-title">速记</div>
+            <div class="sidebar-title" data-i18n="速记">速记</div>
           </div>
           <div class="fragment-input-area" id="fragment-input-area">
-            <textarea id="fragment-input" rows="3" placeholder="记录一个知识点、一道题、一个想法… #标签，可直接粘贴/拖入图片、音视频、PDF"></textarea>
+            <textarea id="fragment-input" rows="3" placeholder="记录一个知识点、一道题、一个想法… #标签，可直接粘贴/拖入图片、音视频、PDF" data-i18n-placeholder="记录一个知识点、一道题、一个想法… #标签，可直接粘贴/拖入图片、音视频、PDF"></textarea>
             <div id="fragment-attachments" class="fragment-attachments hidden"></div>
             <div class="fragment-input-footer">
-              <div class="fragment-input-hint">#标签 会自动识别 · Enter 提交，Shift+Enter 换行</div>
-              <button id="btn-fragment-voice" class="btn-secondary fragment-voice-btn" title="语音听记（录音后自动转写为文字）">🎙</button>
-              <button id="btn-fragment-attach" class="btn-secondary fragment-attach-btn" title="添加附件（图片/音视频/PDF/docx）">📎</button>
+              <div class="fragment-input-hint" data-i18n="#标签 会自动识别 · Enter 提交，Shift+Enter 换行">#标签 会自动识别 · Enter 提交，Shift+Enter 换行</div>
+              <button id="btn-fragment-voice" class="btn-secondary fragment-voice-btn" title="语音听记（录音后自动转写为文字）" data-i18n-title="语音听记（录音后自动转写为文字）">🎙</button>
+              <button id="btn-fragment-attach" class="btn-secondary fragment-attach-btn" title="添加附件（图片/音视频/PDF/docx）" data-i18n-title="添加附件（图片/音视频/PDF/docx）">📎</button>
               <button id="btn-organize" class="btn-secondary fragment-organize-btn" disabled>AI 整理</button>
+              <button id="btn-fragment-submit" class="btn-primary fragment-submit-btn" title="提交速记（Enter）" data-i18n-title="提交速记（Enter）" data-i18n="提交">提交</button>
             </div>
             <input type="file" id="fragment-file-input" multiple accept="image/*,video/*,audio/*,.pdf,.docx" style="display:none;">
           </div>
           <div class="fragment-filters">
-            <button class="fragment-filter active" data-filter="all">全部</button>
-            <button class="fragment-filter" data-filter="inbox">待整理</button>
+            <button class="fragment-filter active" data-filter="all" data-i18n="全部">全部</button>
+            <button class="fragment-filter" data-filter="inbox" data-i18n="待整理">待整理</button>
           </div>
           <div id="fragment-list" class="vault-note-list"></div>
         </div>
 
         <div id="project-sidebar-content" class="sidebar-content hidden">
           <div class="sidebar-header">
-            <div class="sidebar-title">PPT 作品</div>
+            <div class="sidebar-title" data-i18n="PPT 作品">PPT 作品</div>
             <div style="display:flex;gap:6px;">
-              <button id="btn-create-project-side" class="btn-icon" title="新建项目 (Ctrl+N)">+</button>
-              <button id="btn-collapse-sidebar" class="btn-icon sidebar-collapse" title="折叠/展开">
+              <button id="btn-create-project-side" class="btn-icon" title="新建项目 (Ctrl+N)" data-i18n-title="新建项目 (Ctrl+N)">+</button>
+              <button id="btn-collapse-sidebar" class="btn-icon sidebar-collapse" title="折叠/展开" data-i18n-title="折叠/展开">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
                   <path d="M15 18l-6-6 6-6"></path>
@@ -91,12 +105,12 @@
 
         <div id="vault-sidebar-content" class="sidebar-content hidden">
           <div class="sidebar-header">
-            <div class="sidebar-title">知识库笔记</div>
+            <div class="sidebar-title" data-i18n="知识库笔记">知识库笔记</div>
             <div style="display:flex;gap:6px;">
-              <button id="btn-vault-tasks" class="btn-icon" title="任务面板">☑</button>
-              <button id="btn-vault-tags" class="btn-icon" title="标签浏览">#</button>
-              <button id="btn-vault-journal" class="btn-icon" title="今日笔记（每日笔记）">📅</button>
-              <button id="btn-vault-graph" class="btn-icon" title="知识星图">
+              <button id="btn-vault-tasks" class="btn-icon" title="任务面板" data-i18n-title="任务面板">☑</button>
+              <button id="btn-vault-tags" class="btn-icon" title="标签浏览" data-i18n-title="标签浏览">#</button>
+              <button id="btn-vault-journal" class="btn-icon" title="今日笔记（每日笔记）" data-i18n-title="今日笔记（每日笔记）">📅</button>
+              <button id="btn-vault-graph" class="btn-icon" title="知识星图" data-i18n-title="知识星图">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="5" cy="11" r="3"></circle>
@@ -106,7 +120,7 @@
                   <path d="M16 9l-5 2"></path>
                 </svg>
               </button>
-              <button id="btn-vault-refresh" class="btn-icon" title="刷新列表">
+              <button id="btn-vault-refresh" class="btn-icon" title="刷新列表" data-i18n-title="刷新列表">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21.5 2v6h-6"></path>
@@ -114,7 +128,7 @@
                   <path d="M22 12a10 10 0 0 0-20 0"></path>
                 </svg>
               </button>
-              <button id="btn-vault-new" class="btn-icon" title="新建笔记">
+              <button id="btn-vault-new" class="btn-icon" title="新建笔记" data-i18n-title="新建笔记">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -124,21 +138,23 @@
             </div>
           </div>
           <div class="vault-search">
-            <input type="search" id="vault-search-input" placeholder="搜索笔记…">
+            <input type="search" id="vault-search-input" placeholder="搜索笔记…" data-i18n-placeholder="搜索笔记…">
           </div>
           <div id="vault-note-select-bar" class="vault-note-select-bar hidden">
             <span id="vault-note-select-count">已选 0 篇</span>
-            <button id="btn-note-gen-open" class="btn-primary" style="padding:4px 10px;font-size:12px;">生成媒体</button>
-            <button id="btn-note-select-clear" class="btn-secondary" style="padding:4px 10px;font-size:12px;">清空</button>
+            <button id="btn-note-gen-open" class="btn-primary" style="padding:4px 10px;font-size:12px;" data-i18n="生成媒体">生成媒体</button>
+            <button id="btn-note-batch-tag" class="btn-secondary" style="padding:4px 10px;font-size:12px;" data-i18n="打标签">打标签</button>
+            <button id="btn-note-batch-delete" class="btn-secondary" style="padding:4px 10px;font-size:12px;color:var(--danger);" data-i18n="删除">删除</button>
+            <button id="btn-note-select-clear" class="btn-secondary" style="padding:4px 10px;font-size:12px;" data-i18n="清空">清空</button>
           </div>
           <div id="vault-note-list" class="vault-note-list"></div>
         </div>
 
         <div id="cards-sidebar-content" class="sidebar-content hidden">
           <div class="sidebar-header">
-            <div class="sidebar-title">知识卡片</div>
+            <div class="sidebar-title" data-i18n="知识卡片">知识卡片</div>
             <div style="display:flex;gap:6px;">
-              <button id="btn-cards-due" class="btn-icon" title="待复习">
+              <button id="btn-cards-due" class="btn-icon" title="待复习" data-i18n-title="待复习">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 2v4"></path>
@@ -152,7 +168,7 @@
                   <path d="M6 12a6 6 0 1 0 12 0 6 6 0 0 0-12 0"></path>
                 </svg>
               </button>
-              <button id="btn-cards-refresh" class="btn-icon" title="刷新列表">
+              <button id="btn-cards-refresh" class="btn-icon" title="刷新列表" data-i18n-title="刷新列表">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21.5 2v6h-6"></path>
@@ -160,7 +176,7 @@
                   <path d="M22 12a10 10 0 0 0-20 0"></path>
                 </svg>
               </button>
-              <button id="btn-cards-new" class="btn-icon" title="新建卡片">
+              <button id="btn-cards-new" class="btn-icon" title="新建卡片" data-i18n-title="新建卡片">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -175,53 +191,53 @@
 
       <main class="workspace">
         <div id="empty-state" class="empty-state hidden">
-          <h2>从速记开始，或打开一篇笔记</h2>
-          <p>这里是你的知识中枢：随手记录速记，沉淀为笔记后可一键生成 PPT、视频或报告</p>
+          <h2 data-i18n="从速记开始，或打开一篇笔记">从速记开始，或打开一篇笔记</h2>
+          <p data-i18n="这里是你的知识中枢：随手记录速记，沉淀为笔记后可一键生成 PPT、视频或报告">这里是你的知识中枢：随手记录速记，沉淀为笔记后可一键生成 PPT、视频或报告</p>
           <div style="display:flex;gap:10px;justify-content:center;">
-            <button id="btn-empty-new-note" class="btn-primary">+ 新建笔记</button>
-            <button id="btn-empty-fragment" class="btn-secondary">写速记</button>
+            <button id="btn-empty-new-note" class="btn-primary" data-i18n="+ 新建笔记">+ 新建笔记</button>
+            <button id="btn-empty-fragment" class="btn-secondary" data-i18n="写速记">写速记</button>
           </div>
         </div>
 
         <!-- Dashboard：未选项目时的默认主区 -->
         <div id="dashboard-panel" class="dashboard-panel hidden">
           <div class="dashboard-header">
-            <div class="dashboard-title">工作台</div>
-            <div class="dashboard-sub">今日概览与快捷入口</div>
+            <div class="dashboard-title" data-i18n="工作台">工作台</div>
+            <div class="dashboard-sub" data-i18n="今日概览与快捷入口">今日概览与快捷入口</div>
           </div>
           <div class="dashboard-stats">
             <div class="dashboard-stat-card">
               <div class="dashboard-stat-value" id="dash-stat-today">-</div>
-              <div class="dashboard-stat-label">今日速记</div>
+              <div class="dashboard-stat-label" data-i18n="今日速记">今日速记</div>
             </div>
             <div class="dashboard-stat-card">
               <div class="dashboard-stat-value" id="dash-stat-inbox">-</div>
-              <div class="dashboard-stat-label">待整理</div>
+              <div class="dashboard-stat-label" data-i18n="待整理">待整理</div>
             </div>
             <div class="dashboard-stat-card">
               <div class="dashboard-stat-value" id="dash-stat-due">-</div>
-              <div class="dashboard-stat-label">待复习卡片</div>
+              <div class="dashboard-stat-label" data-i18n="待复习卡片">待复习卡片</div>
             </div>
             <div class="dashboard-stat-card">
               <div class="dashboard-stat-value" id="dash-stat-mistakes">-</div>
-              <div class="dashboard-stat-label">待巩固错题</div>
+              <div class="dashboard-stat-label" data-i18n="待巩固错题">待巩固错题</div>
             </div>
           </div>
           <div class="dashboard-body">
             <section class="card dashboard-recent">
-              <div class="card-title">最近碎片</div>
+              <div class="card-title" data-i18n="最近碎片">最近碎片</div>
               <div id="dashboard-recent-list" class="dashboard-recent-list"></div>
             </section>
             <section class="card dashboard-side">
-              <div class="card-title">快捷操作</div>
+              <div class="card-title" data-i18n="快捷操作">快捷操作</div>
               <div class="dashboard-actions">
-                <button id="btn-dash-journal" class="btn-secondary">今日笔记</button>
-                <button id="btn-dash-write" class="btn-secondary">写速记</button>
-                <button id="btn-dash-organize" class="btn-secondary">AI 整理</button>
-                <button id="btn-dash-smart-exam" class="btn-secondary">智能组卷</button>
-                <button id="btn-dash-graph" class="btn-secondary">知识星图</button>
+                <button id="btn-dash-journal" class="btn-secondary" data-i18n="今日笔记">今日笔记</button>
+                <button id="btn-dash-write" class="btn-secondary" data-i18n="写速记">写速记</button>
+                <button id="btn-dash-organize" class="btn-secondary" data-i18n="AI 整理">AI 整理</button>
+                <button id="btn-dash-smart-exam" class="btn-secondary" data-i18n="智能组卷">智能组卷</button>
+                <button id="btn-dash-graph" class="btn-secondary" data-i18n="知识星图">知识星图</button>
               </div>
-              <div class="card-title" style="margin-top:20px;">内容概览</div>
+              <div class="card-title" style="margin-top:20px;" data-i18n="内容概览">内容概览</div>
               <div id="dashboard-counts" class="dashboard-counts"></div>
             </section>
           </div>
@@ -229,26 +245,26 @@
 
         <div id="graph-panel" class="graph-panel hidden">
           <div class="graph-header">
-            <div class="graph-title">知识星图</div>
+            <div class="graph-title" data-i18n="知识星图">知识星图</div>
             <div class="graph-actions">
-              <span class="graph-hint">Shift+点击可多选节点</span>
+              <span class="graph-hint" data-i18n="Shift+点击可多选节点">Shift+点击可多选节点</span>
               <button id="btn-graph-generate-deck" class="btn-primary" style="padding:6px 12px;font-size:12px;"
                 disabled>生成 PPT</button>
-              <label class="graph-toggle" title="只显示权重前 20 的节点及其间连线">
-                <input type="checkbox" id="graph-highfreq-toggle"> 只看高频
+              <label class="graph-toggle" title="只显示权重前 20 的节点及其间连线" data-i18n-title="只显示权重前 20 的节点及其间连线">
+                <input type="checkbox" id="graph-highfreq-toggle"> <span data-i18n="只看高频">只看高频</span>
               </label>
-              <button id="btn-graph-refresh" class="btn-secondary" style="padding:6px 12px;font-size:12px;">刷新</button>
-              <button id="btn-graph-fit" class="btn-secondary" style="padding:6px 12px;font-size:12px;">适应</button>
+              <button id="btn-graph-refresh" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="刷新">刷新</button>
+              <button id="btn-graph-fit" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="适应">适应</button>
             </div>
           </div>
           <div class="graph-body">
             <div id="graph-container" class="graph-container">
               <canvas id="graph-canvas"></canvas>
               <div class="graph-legend">
-                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#00B498"></i>笔记</span>
-                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#d97706"></i>卡片</span>
-                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#8b5cf6"></i>碎片</span>
-                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#5f9ea0"></i>标签</span>
+                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#00B498"></i><span data-i18n="笔记">笔记</span></span>
+                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#d97706"></i><span data-i18n="卡片">卡片</span></span>
+                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#8b5cf6"></i><span data-i18n="碎片">碎片</span></span>
+                <span class="graph-legend-item"><i class="graph-legend-dot" style="background:#5f9ea0"></i><span data-i18n="标签">标签</span></span>
               </div>
             </div>
             <div id="graph-sidebar" class="graph-sidebar">
@@ -258,8 +274,8 @@
                   点击节点查看详细信息
                 </div>
                 <div class="graph-info-actions" id="graph-actions" style="margin-top:12px;display:none;">
-                  <button id="btn-open-note" class="btn-primary" style="width:100%;padding:8px 12px;">打开笔记</button>
-                  <button id="btn-generate-ppt" class="btn-secondary"
+                  <button id="btn-open-note" class="btn-primary" style="width:100%;padding:8px 12px;" data-i18n="打开笔记">打开笔记</button>
+                  <button id="btn-generate-ppt" class="btn-secondary" data-i18n="生成PPT"
                     style="width:100%;padding:8px 12px;margin-top:8px;">生成PPT</button>
                 </div>
               </div>
@@ -270,9 +286,8 @@
         <div id="cards-panel" class="cards-panel hidden">
           <div id="cards-list-view" class="cards-list-view">
             <div class="cards-list-header">
-              <span>卡片列表</span>
-              <button id="btn-cards-review-deck" class="btn-secondary" style="padding:6px 12px;font-size:12px;">生成复习
-                PPT</button>
+              <span data-i18n="卡片列表">卡片列表</span>
+              <button id="btn-cards-review-deck" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="生成复习 PPT">生成复习 PPT</button>
             </div>
             <div class="cards-list-container"></div>
           </div>
@@ -283,82 +298,82 @@
                 <div id="card-mastery" style="font-size:12px;opacity:0.65;margin-top:4px;"></div>
               </div>
               <div style="display:flex;gap:8px;align-items:center;">
-                <button id="btn-card-prev" class="btn-secondary" style="padding:6px 12px;font-size:12px;">← 上一张</button>
-                <button id="btn-card-next" class="btn-secondary" style="padding:6px 12px;font-size:12px;">下一张 →</button>
-                <button id="btn-card-edit" class="btn-secondary" style="padding:6px 12px;font-size:12px;">编辑</button>
-                <button id="btn-card-save" class="btn-primary"
+                <button id="btn-card-prev" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="← 上一张">← 上一张</button>
+                <button id="btn-card-next" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="下一张 →">下一张 →</button>
+                <button id="btn-card-edit" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="编辑">编辑</button>
+                <button id="btn-card-save" class="btn-primary" data-i18n="保存"
                   style="padding:6px 12px;font-size:12px;display:none;">保存</button>
-                <button id="btn-card-delete" class="btn-secondary"
+                <button id="btn-card-delete" class="btn-secondary" data-i18n="删除"
                   style="padding:6px 12px;font-size:12px;display:none;">删除</button>
               </div>
             </div>
             <div id="card-view-mode" class="card-view-mode">
               <div class="card-question-section">
-                <div class="card-section-title">问题</div>
+                <div class="card-section-title" data-i18n="问题">问题</div>
                 <div id="card-question" class="card-content"></div>
               </div>
               <div class="card-divider">
-                <button id="btn-show-answer" class="btn-secondary">显示答案</button>
-                <button id="btn-ai-expand" class="btn-secondary" style="margin-left:8px;">✨ AI 扩展知识</button>
+                <button id="btn-show-answer" class="btn-secondary" data-i18n="显示答案">显示答案</button>
+                <button id="btn-ai-expand" class="btn-secondary" style="margin-left:8px;" data-i18n="✨ AI 扩展知识">✨ AI 扩展知识</button>
               </div>
               <div id="card-answer-section" class="card-answer-section hidden">
-                <div class="card-section-title">答案</div>
+                <div class="card-section-title" data-i18n="答案">答案</div>
                 <div id="card-answer" class="card-content"></div>
-                <div class="card-section-title">解析</div>
+                <div class="card-section-title" data-i18n="解析">解析</div>
                 <div id="card-explanation" class="card-content"></div>
                 <div class="card-rating-section">
-                  <div class="card-section-title">熟练程度</div>
+                  <div class="card-section-title" data-i18n="熟练程度">熟练程度</div>
                   <div class="card-rating-buttons">
-                    <button class="card-rating-btn" data-rating="1">不记得</button>
-                    <button class="card-rating-btn" data-rating="2">有点印象</button>
-                    <button class="card-rating-btn" data-rating="3">基本掌握</button>
-                    <button class="card-rating-btn" data-rating="4">掌握得好</button>
-                    <button class="card-rating-btn" data-rating="5">完全掌握</button>
+                    <button class="card-rating-btn" data-rating="1" data-i18n="不记得">不记得</button>
+                    <button class="card-rating-btn" data-rating="2" data-i18n="有点印象">有点印象</button>
+                    <button class="card-rating-btn" data-rating="3" data-i18n="基本掌握">基本掌握</button>
+                    <button class="card-rating-btn" data-rating="4" data-i18n="掌握得好">掌握得好</button>
+                    <button class="card-rating-btn" data-rating="5" data-i18n="完全掌握">完全掌握</button>
                   </div>
                 </div>
               </div>
               <div id="ai-expand-section" class="ai-expand-section hidden">
-                <div class="card-section-title">AI 知识扩展</div>
+                <div class="card-section-title" data-i18n="AI 知识扩展">AI 知识扩展</div>
                 <div id="ai-expand-result" class="ai-expand-result"></div>
                 <div id="ai-expand-actions" class="ai-expand-actions hidden">
-                  <button id="btn-create-cards-from-expand" class="btn-primary">创建知识卡片</button>
+                  <button id="btn-create-cards-from-expand" class="btn-primary" data-i18n="创建知识卡片">创建知识卡片</button>
                 </div>
               </div>
             </div>
             <div id="card-edit-mode" class="card-edit-mode hidden">
               <div class="field">
-                <label>标题</label>
-                <input type="text" id="card-edit-title" placeholder="卡片标题">
+                <label data-i18n="标题">标题</label>
+                <input type="text" id="card-edit-title" placeholder="卡片标题" data-i18n-placeholder="卡片标题">
               </div>
               <div class="field">
-                <label>分类</label>
-                <input type="text" id="card-edit-subject" placeholder="例如：产品知识">
+                <label data-i18n="分类">分类</label>
+                <input type="text" id="card-edit-subject" placeholder="例如：产品知识" data-i18n-placeholder="例如：产品知识">
               </div>
               <div class="field">
-                <label>标签</label>
-                <input type="text" id="card-edit-tags" placeholder="用逗号分隔，例如：数学,函数,代数">
+                <label data-i18n="标签">标签</label>
+                <input type="text" id="card-edit-tags" placeholder="用逗号分隔，例如：数学,函数,代数" data-i18n-placeholder="用逗号分隔，例如：数学,函数,代数">
               </div>
               <div class="field">
-                <label>难度</label>
+                <label data-i18n="难度">难度</label>
                 <select id="card-edit-difficulty">
-                  <option value="1">1 - 简单</option>
-                  <option value="2">2 - 普通</option>
-                  <option value="3">3 - 中等</option>
-                  <option value="4">4 - 较难</option>
-                  <option value="5">5 - 困难</option>
+                  <option value="1" data-i18n="1 - 简单">1 - 简单</option>
+                  <option value="2" data-i18n="2 - 普通">2 - 普通</option>
+                  <option value="3" data-i18n="3 - 中等">3 - 中等</option>
+                  <option value="4" data-i18n="4 - 较难">4 - 较难</option>
+                  <option value="5" data-i18n="5 - 困难">5 - 困难</option>
                 </select>
               </div>
               <div class="field">
-                <label>问题</label>
-                <textarea id="card-edit-question" rows="4" placeholder="问题内容"></textarea>
+                <label data-i18n="问题">问题</label>
+                <textarea id="card-edit-question" rows="4" placeholder="问题内容" data-i18n-placeholder="问题内容"></textarea>
               </div>
               <div class="field">
-                <label>答案</label>
-                <textarea id="card-edit-answer" rows="4" placeholder="答案内容"></textarea>
+                <label data-i18n="答案">答案</label>
+                <textarea id="card-edit-answer" rows="4" placeholder="答案内容" data-i18n-placeholder="答案内容"></textarea>
               </div>
               <div class="field">
-                <label>解析</label>
-                <textarea id="card-edit-explanation" rows="4" placeholder="解析内容"></textarea>
+                <label data-i18n="解析">解析</label>
+                <textarea id="card-edit-explanation" rows="4" placeholder="解析内容" data-i18n-placeholder="解析内容"></textarea>
               </div>
             </div>
           </div>
@@ -367,9 +382,9 @@
         <!-- Study Panel：学习（测验 / 错题集 / 复习训练 三合一） -->
         <div id="study-panel" class="study-panel hidden">
           <div class="study-subtabs">
-            <button class="study-subtab active" data-subtab="exams">测验</button>
-            <button class="study-subtab" data-subtab="mistakes">错题集</button>
-            <button class="study-subtab" data-subtab="training">复习训练</button>
+            <button class="study-subtab active" data-subtab="exams" data-i18n="测验">测验</button>
+            <button class="study-subtab" data-subtab="mistakes" data-i18n="错题集">错题集</button>
+            <button class="study-subtab" data-subtab="training" data-i18n="复习训练">复习训练</button>
           </div>
 
         <!-- Exam Papers Panel -->
@@ -378,17 +393,17 @@
             <!-- 左侧测验列表 -->
             <div style="width:38%;min-width:280px;max-width:380px;flex-shrink:0;border-right:1px solid var(--tile-strong);display:flex;flex-direction:column;">
               <div style="padding:16px;border-bottom:1px solid var(--tile-strong);">
-                <div style="font-size:18px;font-weight:700;margin-bottom:12px;">测验管理</div>
+                <div style="font-size:18px;font-weight:700;margin-bottom:12px;" data-i18n="测验管理">测验管理</div>
                 <div style="display:flex;gap:8px;">
-                  <button id="btn-new-exam" class="btn-primary" style="flex:1;">+ 新建测验</button>
-                  <button id="btn-smart-exam" class="btn-secondary" style="flex:1;">智能组卷</button>
+                  <button id="btn-new-exam" class="btn-primary" style="flex:1;" data-i18n="+ 新建测验">+ 新建测验</button>
+                  <button id="btn-smart-exam" class="btn-secondary" style="flex:1;" data-i18n="智能组卷">智能组卷</button>
                 </div>
               </div>
               <!-- 统计卡片 -->
               <div style="padding:12px 16px;background:var(--tile);">
                 <div id="exams-stats" style="display:flex;gap:16px;font-size:13px;">
-                  <div><strong id="stat-exam-count">0</strong> 份测验</div>
-                  <div><strong id="stat-question-count">0</strong> 道题目</div>
+                  <div><strong id="stat-exam-count">0</strong> <span data-i18n="份测验">份测验</span></div>
+                  <div><strong id="stat-question-count">0</strong> <span data-i18n="道题目">道题目</span></div>
                 </div>
               </div>
               <div id="exams-list" style="flex:1;overflow-y:auto;padding:16px;"></div>
@@ -402,8 +417,8 @@
                   <div id="exam-detail-meta" style="font-size:13px;opacity:0.7;"></div>
                 </div>
                 <div style="display:flex;gap:8px;">
-                  <button id="btn-edit-exam" class="btn-secondary">编辑</button>
-                  <button id="btn-delete-exam" class="btn-secondary" style="color:var(--danger);">删除</button>
+                  <button id="btn-edit-exam" class="btn-secondary" data-i18n="编辑">编辑</button>
+                  <button id="btn-delete-exam" class="btn-secondary" style="color:var(--danger);" data-i18n="删除">删除</button>
                 </div>
               </div>
               <div id="exam-detail-content" style="flex:1;overflow-y:auto;padding:16px;"></div>
@@ -412,7 +427,7 @@
             <div id="exam-empty" style="flex:1;display:flex;align-items:center;justify-content:center;">
               <div style="text-align:center;opacity:0.7;">
                 <div style="font-size:48px;margin-bottom:12px;">📝</div>
-                <div>选择一份测验或创建新测验</div>
+                <div data-i18n="选择一份测验或创建新测验">选择一份测验或创建新测验</div>
               </div>
             </div>
           </div>
@@ -424,10 +439,10 @@
             <!-- 左侧错题列表 -->
             <div style="width:38%;min-width:280px;max-width:380px;flex-shrink:0;border-right:1px solid var(--tile-strong);display:flex;flex-direction:column;">
               <div style="padding:16px;border-bottom:1px solid var(--tile-strong);">
-                <div style="font-size:18px;font-weight:700;margin-bottom:12px;">错题集</div>
+                <div style="font-size:18px;font-weight:700;margin-bottom:12px;" data-i18n="错题集">错题集</div>
                 <div style="display:flex;gap:8px;">
-                  <button id="btn-new-mistake" class="btn-primary" style="flex:1;">+ 记录错题</button>
-                  <button id="btn-mistakes-review-deck" class="btn-secondary" style="flex:1;">生成复习 PPT</button>
+                  <button id="btn-new-mistake" class="btn-primary" style="flex:1;" data-i18n="+ 记录错题">+ 记录错题</button>
+                  <button id="btn-mistakes-review-deck" class="btn-secondary" style="flex:1;" data-i18n="生成复习 PPT">生成复习 PPT</button>
                 </div>
               </div>
               <!-- 筛选和统计 -->
@@ -435,20 +450,20 @@
                 <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
                   <select id="mistake-filter-subject"
                     style="flex:1;min-width:100px;padding:8px;border:1px solid var(--tile-strong);border-radius:8px;font-size:13px;">
-                    <option value="">全部分类</option>
+                    <option value="" data-i18n="全部分类">全部分类</option>
                   </select>
                   <select id="mistake-filter-mastery"
                     style="flex:1;min-width:100px;padding:8px;border:1px solid var(--tile-strong);border-radius:8px;font-size:13px;">
-                    <option value="">全部熟练度</option>
-                    <option value="0-1">需要复习</option>
-                    <option value="2-3">基本掌握</option>
-                    <option value="4-5">完全掌握</option>
+                    <option value="" data-i18n="全部熟练度">全部熟练度</option>
+                    <option value="0-1" data-i18n="需要复习">需要复习</option>
+                    <option value="2-3" data-i18n="基本掌握">基本掌握</option>
+                    <option value="4-5" data-i18n="完全掌握">完全掌握</option>
                   </select>
                 </div>
                 <div id="mistakes-stats" style="display:flex;gap:16px;font-size:13px;">
-                  <div><strong id="stat-mistake-count">0</strong> 道错题</div>
-                  <div><strong id="stat-review-count">0</strong> 次复习</div>
-                  <div><strong id="stat-mastered-count">0</strong> 道已掌握</div>
+                  <div><strong id="stat-mistake-count">0</strong> <span data-i18n="道错题">道错题</span></div>
+                  <div><strong id="stat-review-count">0</strong> <span data-i18n="次复习">次复习</span></div>
+                  <div><strong id="stat-mastered-count">0</strong> <span data-i18n="道已掌握">道已掌握</span></div>
                 </div>
               </div>
               <div id="mistakes-list" style="flex:1;overflow-y:auto;padding:16px;"></div>
@@ -462,9 +477,9 @@
                   <div id="mistake-detail-meta" style="font-size:13px;opacity:0.7;"></div>
                 </div>
                 <div style="display:flex;gap:8px;">
-                  <button id="btn-mark-mastered" class="btn-secondary">✅ 标记已掌握</button>
-                  <button id="btn-edit-mistake" class="btn-secondary">编辑</button>
-                  <button id="btn-delete-mistake" class="btn-secondary" style="color:var(--danger);">删除</button>
+                  <button id="btn-mark-mastered" class="btn-secondary" data-i18n="✅ 标记已掌握">✅ 标记已掌握</button>
+                  <button id="btn-edit-mistake" class="btn-secondary" data-i18n="编辑">编辑</button>
+                  <button id="btn-delete-mistake" class="btn-secondary" style="color:var(--danger);" data-i18n="删除">删除</button>
                 </div>
               </div>
               <div id="mistake-detail-content" style="flex:1;overflow-y:auto;padding:16px;"></div>
@@ -473,7 +488,7 @@
             <div id="mistake-empty" style="flex:1;display:flex;align-items:center;justify-content:center;">
               <div style="text-align:center;opacity:0.7;">
                 <div style="font-size:48px;margin-bottom:12px;">❌</div>
-                <div>选择一道错题或记录新错题</div>
+                <div data-i18n="选择一道错题或记录新错题">选择一道错题或记录新错题</div>
               </div>
             </div>
           </div>
@@ -484,18 +499,16 @@
           <div style="flex:1;display:flex;flex-direction:column;height:100%;">
             <div
               style="padding:16px;border-bottom:1px solid var(--tile-strong);display:flex;align-items:center;justify-content:space-between;">
-              <div style="font-size:18px;font-weight:700;">复习训练</div>
+              <div style="font-size:18px;font-weight:700;" data-i18n="复习训练">复习训练</div>
             </div>
             <div id="training-content"
               style="flex:1;overflow-y:auto;padding:32px;display:flex;justify-content:center;align-items:center;">
               <div id="training-welcome" style="text-align:center;">
-                <div style="font-size:24px;font-weight:700;margin-bottom:16px;">开始你的复习！</div>
-                <div style="opacity:0.7;margin-bottom:24px;">选择要复习的内容类型</div>
+                <div style="font-size:24px;font-weight:700;margin-bottom:16px;" data-i18n="开始你的复习！">开始你的复习！</div>
+                <div style="opacity:0.7;margin-bottom:24px;" data-i18n="选择要复习的内容类型">选择要复习的内容类型</div>
                 <div style="display:flex;gap:16px;justify-content:center;">
-                  <button id="btn-train-cards" class="btn-primary" style="padding:16px 32px;font-size:16px;">📚
-                    复习知识卡片</button>
-                  <button id="btn-train-mistakes" class="btn-secondary" style="padding:16px 32px;font-size:16px;">❌
-                    攻克易错题</button>
+                  <button id="btn-train-cards" class="btn-primary" style="padding:16px 32px;font-size:16px;" data-i18n="📚 复习知识卡片">📚 复习知识卡片</button>
+                  <button id="btn-train-mistakes" class="btn-secondary" style="padding:16px 32px;font-size:16px;" data-i18n="❌ 攻克易错题">❌ 攻克易错题</button>
                 </div>
               </div>
               <div id="training-session" class="hidden" style="width:100%;max-width:700px;">
@@ -507,35 +520,35 @@
                   <div id="training-question" style="font-size:20px;font-weight:600;margin-bottom:16px;"></div>
                   <div id="training-answer-section" class="hidden">
                     <div style="margin-bottom:16px;">
-                      <div style="font-size:14px;opacity:0.7;margin-bottom:4px;">答案</div>
+                      <div style="font-size:14px;opacity:0.7;margin-bottom:4px;" data-i18n="答案">答案</div>
                       <div id="training-answer" style="font-size:16px;"></div>
                     </div>
                     <div id="training-analysis-section" class="hidden">
-                      <div style="font-size:14px;opacity:0.7;margin-bottom:4px;">解析</div>
+                      <div style="font-size:14px;opacity:0.7;margin-bottom:4px;" data-i18n="解析">解析</div>
                       <div id="training-analysis" style="font-size:16px;"></div>
                     </div>
                     <div style="margin-top:24px;">
-                      <div style="font-size:14px;opacity:0.7;margin-bottom:12px;">你掌握得如何？</div>
+                      <div style="font-size:14px;opacity:0.7;margin-bottom:12px;" data-i18n="你掌握得如何？">你掌握得如何？</div>
                       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                        <button class="btn-secondary training-rate-btn" data-rate="1">😵 完全忘记</button>
-                        <button class="btn-secondary training-rate-btn" data-rate="2">🤔 有点印象</button>
-                        <button class="btn-secondary training-rate-btn" data-rate="3">😐 基本掌握</button>
-                        <button class="btn-secondary training-rate-btn" data-rate="4">😊 掌握得不错</button>
-                        <button class="btn-secondary training-rate-btn" data-rate="5">🎉 完全掌握</button>
+                        <button class="btn-secondary training-rate-btn" data-rate="1" data-i18n="😵 完全忘记">😵 完全忘记</button>
+                        <button class="btn-secondary training-rate-btn" data-rate="2" data-i18n="🤔 有点印象">🤔 有点印象</button>
+                        <button class="btn-secondary training-rate-btn" data-rate="3" data-i18n="😐 基本掌握">😐 基本掌握</button>
+                        <button class="btn-secondary training-rate-btn" data-rate="4" data-i18n="😊 掌握得不错">😊 掌握得不错</button>
+                        <button class="btn-secondary training-rate-btn" data-rate="5" data-i18n="🎉 完全掌握">🎉 完全掌握</button>
                       </div>
                     </div>
                   </div>
                 </div>
                 <div style="text-align:center;margin-top:24px;">
-                  <button id="btn-show-training-answer" class="btn-primary"
+                  <button id="btn-show-training-answer" class="btn-primary" data-i18n="显示答案"
                     style="padding:12px 32px;font-size:16px;">显示答案</button>
-                  <button id="btn-end-training" class="btn-secondary"
+                  <button id="btn-end-training" class="btn-secondary" data-i18n="结束复习"
                     style="padding:12px 32px;font-size:16px;margin-left:8px;">结束复习</button>
                 </div>
                 <div id="training-complete" class="hidden" style="text-align:center;">
-                  <div style="font-size:28px;font-weight:700;margin-bottom:16px;">🎉 复习完成！</div>
-                  <div style="opacity:0.7;margin-bottom:24px;">太棒了，你完成了本次复习！</div>
-                  <button id="btn-back-to-welcome" class="btn-primary"
+                  <div style="font-size:28px;font-weight:700;margin-bottom:16px;" data-i18n="🎉 复习完成！">🎉 复习完成！</div>
+                  <div style="opacity:0.7;margin-bottom:24px;" data-i18n="太棒了，你完成了本次复习！">太棒了，你完成了本次复习！</div>
+                  <button id="btn-back-to-welcome" class="btn-primary" data-i18n="返回"
                     style="padding:12px 32px;font-size:16px;">返回</button>
                 </div>
               </div>
@@ -547,8 +560,8 @@
         <!-- 知识库笔记编辑器（不依赖项目选择） -->
         <div id="vault-panel" class="vault-panel hidden">
           <div id="vault-no-note-selected" class="empty-state" style="padding:40px 20px;">
-            <h3 style="font-size:16px;">选择一篇笔记</h3>
-            <p style="opacity:0.65;">从左侧知识库列表选择一篇笔记，或点击「新建笔记」创建</p>
+            <h3 style="font-size:16px;" data-i18n="选择一篇笔记">选择一篇笔记</h3>
+            <p style="opacity:0.65;" data-i18n="从左侧知识库列表选择一篇笔记，或点击「新建笔记」创建">从左侧知识库列表选择一篇笔记，或点击「新建笔记」创建</p>
           </div>
 
           <div id="vault-note-panel" class="hidden">
@@ -558,30 +571,31 @@
                 <div style="display:flex;gap:8px;align-items:center;">
                   <div id="vault-journal-nav" class="journal-nav hidden">
                     <button id="btn-journal-prev" class="btn-secondary" style="padding:6px 10px;font-size:12px;"
-                      title="前一天">←</button>
+                      title="前一天" data-i18n-title="前一天">←</button>
                     <div class="journal-list-wrap">
-                      <button id="btn-journal-list" class="btn-secondary"
+                      <button id="btn-journal-list" class="btn-secondary" data-i18n="日记列表"
                         style="padding:6px 12px;font-size:12px;">日记列表</button>
                       <div id="journal-list-dropdown" class="journal-list-dropdown hidden"></div>
                     </div>
                     <button id="btn-journal-next" class="btn-secondary" style="padding:6px 10px;font-size:12px;"
-                      title="后一天">→</button>
+                      title="后一天" data-i18n-title="后一天">→</button>
                   </div>
                   <button id="btn-vault-note-save" class="btn-secondary"
                     style="padding:6px 12px;font-size:12px;">保存</button>
-                  <button id="btn-vault-note-generate" class="btn-primary" style="padding:6px 12px;font-size:12px;">生成
-                    PPT</button>
+                  <button id="btn-vault-note-generate" class="btn-primary" style="padding:6px 12px;font-size:12px;" data-i18n="生成 PPT">生成 PPT</button>
                   <div class="dropdown" id="vault-note-more-dropdown">
-                    <button id="btn-vault-note-more" class="btn-secondary"
+                    <button id="btn-vault-note-more" class="btn-secondary" data-i18n="⋯ 更多"
                       style="padding:6px 12px;font-size:12px;">⋯ 更多</button>
                     <div class="dropdown-menu hidden">
-                      <button id="btn-vault-note-rename">重命名</button>
+                      <button id="btn-vault-note-rename" data-i18n="重命名">重命名</button>
+                      <button id="btn-vault-note-history" data-i18n="历史版本">历史版本</button>
                       <button id="btn-vault-note-preview">预览</button>
                       <button id="btn-vault-outline-toggle">大纲</button>
-                      <button id="btn-vault-note-image">生成配图</button>
-                      <button id="btn-vault-note-pdf" title="插入图片/音视频/PDF/docx 附件">附件</button>
-                      <button id="btn-vault-note-chat">AI 修改</button>
-                      <button id="btn-vault-note-delete" style="color:var(--danger);">删除</button>
+                      <button id="btn-vault-note-image" data-i18n="生成配图">生成配图</button>
+                      <button id="btn-vault-note-pdf" title="插入图片/音视频/PDF/docx 附件" data-i18n-title="插入图片/音视频/PDF/docx 附件" data-i18n="附件">附件</button>
+                      <button id="btn-vault-assets" title="管理知识库附件与生成产物" data-i18n-title="管理知识库附件与生成产物" data-i18n="资产库">资产库</button>
+                      <button id="btn-vault-note-chat" data-i18n="AI 修改">AI 修改</button>
+                      <button id="btn-vault-note-delete" style="color:var(--danger);" data-i18n="删除">删除</button>
                     </div>
                   </div>
                   <input type="file" id="input-vault-pdf" accept="image/*,video/*,audio/*,.pdf,.docx" style="display:none;">
@@ -591,14 +605,14 @@
                 <div class="vault-note-editor-main">
                   <div id="vault-note-edit-area">
                     <div class="field" style="margin-bottom:8px;">
-                      <label>Front Matter (可选)</label>
+                      <label data-i18n="Front Matter (可选)">Front Matter (可选)</label>
                       <textarea id="vault-note-frontmatter" rows="6"
                         style="font-family:var(--font-mono);font-size:12px;"></textarea>
                     </div>
                     <div class="field">
-                      <label>笔记内容 (支持 Markdown 与 [[Wiki链接]])</label>
+                      <label data-i18n="笔记内容 (支持 Markdown 与 [[Wiki链接]])">笔记内容 (支持 Markdown 与 [[Wiki链接]])</label>
                       <div class="vault-note-content-wrap">
-                        <textarea id="vault-note-content" rows="16" placeholder="在此编写笔记内容..."></textarea>
+                        <textarea id="vault-note-content" rows="16" placeholder="在此编写笔记内容..." data-i18n-placeholder="在此编写笔记内容..."></textarea>
                         <div id="wiki-suggest" class="wiki-suggest hidden"></div>
                       </div>
                     </div>
@@ -606,7 +620,7 @@
                   <div id="vault-note-preview" class="vault-note-preview hidden"></div>
                 </div>
                 <aside id="vault-note-outline" class="vault-note-outline">
-                  <div class="vault-note-outline-title">大纲</div>
+                  <div class="vault-note-outline-title" data-i18n="大纲">大纲</div>
                   <div id="vault-note-outline-list" class="vault-note-outline-list"></div>
                 </aside>
               </div>
@@ -615,25 +629,25 @@
             <div id="note-chat-dock" class="chat-dock note-chat-dock hidden">
               <div id="note-chat-messages" class="chat-messages"></div>
               <div class="chat-input-row">
-                <input type="text" id="note-chat-input" placeholder="例如：把第二段精简为三条要点 / 补充一个例子…">
-                <button id="btn-note-chat-send" class="btn-primary" style="white-space:nowrap;">发送</button>
+                <input type="text" id="note-chat-input" placeholder="例如：把第二段精简为三条要点 / 补充一个例子…" data-i18n-placeholder="例如：把第二段精简为三条要点 / 补充一个例子…">
+                <button id="btn-note-chat-send" class="btn-primary" style="white-space:nowrap;" data-i18n="发送">发送</button>
               </div>
             </div>
 
             <section class="card" id="vault-links-card" style="margin-top:12px;">
-              <div class="card-title">链接信息</div>
+              <div class="card-title" data-i18n="链接信息">链接信息</div>
               <div class="vault-links">
                 <div>
-                  <div class="vault-links-title">出链 (该笔记链接到)</div>
+                  <div class="vault-links-title" data-i18n="出链 (该笔记链接到)">出链 (该笔记链接到)</div>
                   <div id="vault-outlinks" class="vault-links-list">暂无</div>
                 </div>
                 <div>
-                  <div class="vault-links-title">入链 (链接到该笔记)</div>
+                  <div class="vault-links-title" data-i18n="入链 (链接到该笔记)">入链 (链接到该笔记)</div>
                   <div id="vault-backlinks" class="vault-links-list">暂无</div>
                 </div>
               </div>
               <div style="margin-top:16px;">
-                <div class="vault-links-title">提及（未链接的出现）</div>
+                <div class="vault-links-title" data-i18n="提及（未链接的出现）">提及（未链接的出现）</div>
                 <div id="vault-mentions" class="vault-links-list">暂无</div>
               </div>
             </section>
@@ -643,10 +657,10 @@
         <!-- 标签浏览（不依赖项目选择） -->
         <div id="tags-panel" class="tags-panel hidden">
           <div class="tags-header">
-            <div class="tags-title">标签浏览</div>
+            <div class="tags-title" data-i18n="标签浏览">标签浏览</div>
             <div class="tags-actions">
-              <span class="graph-hint">点击标签查看关联的笔记 / 卡片 / 碎片</span>
-              <button id="btn-tags-close" class="btn-secondary" style="padding:6px 12px;font-size:12px;">返回</button>
+              <span class="graph-hint" data-i18n="点击标签查看关联的笔记 / 卡片 / 碎片">点击标签查看关联的笔记 / 卡片 / 碎片</span>
+              <button id="btn-tags-close" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="返回">返回</button>
             </div>
           </div>
           <div class="tags-body">
@@ -655,15 +669,15 @@
               <div class="tags-detail-title">#<span id="tags-detail-name"></span></div>
               <div class="tags-columns">
                 <div class="tags-column">
-                  <div class="tags-column-title">笔记</div>
+                  <div class="tags-column-title" data-i18n="笔记">笔记</div>
                   <div id="tags-detail-notes" class="tags-column-list"></div>
                 </div>
                 <div class="tags-column">
-                  <div class="tags-column-title">知识卡片</div>
+                  <div class="tags-column-title" data-i18n="知识卡片">知识卡片</div>
                   <div id="tags-detail-cards" class="tags-column-list"></div>
                 </div>
                 <div class="tags-column">
-                  <div class="tags-column-title">速记碎片</div>
+                  <div class="tags-column-title" data-i18n="速记碎片">速记碎片</div>
                   <div id="tags-detail-fragments" class="tags-column-list"></div>
                 </div>
               </div>
@@ -674,10 +688,10 @@
         <!-- 任务面板（不依赖项目选择） -->
         <div id="tasks-panel" class="tags-panel hidden">
           <div class="tags-header">
-            <div class="tags-title">任务</div>
+            <div class="tags-title" data-i18n="任务">任务</div>
             <div class="tags-actions">
-              <span class="graph-hint">来自全部笔记的 TODO / DOING / DONE，点击跳来源笔记</span>
-              <button id="btn-tasks-close" class="btn-secondary" style="padding:6px 12px;font-size:12px;">返回</button>
+              <span class="graph-hint" data-i18n="来自全部笔记的 TODO / DOING / DONE，点击跳来源笔记">来自全部笔记的 TODO / DOING / DONE，点击跳来源笔记</span>
+              <button id="btn-tasks-close" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="返回">返回</button>
             </div>
           </div>
           <div class="tags-body" id="tasks-body"></div>
@@ -691,46 +705,50 @@
             </div>
             <div class="project-toolbar-actions">
               <button id="btn-edit-mode" class="btn-secondary" disabled>编辑模式</button>
-              <button id="btn-generate" class="btn-primary" disabled>生成 PPT</button>
+              <button id="btn-generate" class="btn-primary" disabled data-i18n="生成 PPT">生成 PPT</button>
               <div class="dropdown" id="export-dropdown">
-                <button id="btn-export" class="btn-secondary" disabled>导出 ▾</button>
+                <button id="btn-export" class="btn-secondary" disabled data-i18n="导出 ▾">导出 ▾</button>
                 <div class="dropdown-menu hidden">
-                  <button id="dropdown-export-pptx">PPTX（可编辑文字）</button>
-                  <button id="dropdown-export-pptx-image">高清图片 PPTX</button>
-                  <button id="dropdown-export-pdf">浏览器打印 / PDF</button>
-                  <button id="dropdown-export-html">单文件 HTML</button>
+                  <button id="dropdown-export-pptx" data-i18n="PPTX（可编辑文字）">PPTX（可编辑文字）</button>
+                  <button id="dropdown-export-pptx-image" data-i18n="高清图片 PPTX">高清图片 PPTX</button>
+                  <button id="dropdown-export-pdf" data-i18n="浏览器打印 / PDF">浏览器打印 / PDF</button>
+                  <button id="dropdown-export-html" data-i18n="单文件 HTML">单文件 HTML</button>
+                  <button id="dropdown-export-video" data-i18n="视频 MP4">视频 MP4</button>
+                  <button id="dropdown-export-site" data-i18n="静态站点包 ZIP">静态站点包 ZIP</button>
                 </div>
               </div>
-              <button id="btn-open-preview" class="btn-secondary" disabled>新窗口预览</button>
+              <button id="btn-publish-quick" class="btn-secondary" disabled data-i18n="发布">发布</button>
+              <button id="btn-open-preview" class="btn-secondary" disabled data-i18n="新窗口预览">新窗口预览</button>
             </div>
           </div>
           <div class="pipeline-bar" id="pipeline-bar">
-            <button class="pipeline-step" data-stage="select" title="从知识库或外部来源选材">
-              <span class="pipeline-dot">1</span><span class="pipeline-label">选材</span>
+            <button class="pipeline-step" data-stage="select" title="从知识库或外部来源选材" data-i18n-title="从知识库或外部来源选材">
+              <span class="pipeline-dot">1</span><span class="pipeline-label" data-i18n="选材">选材</span>
             </button>
             <span class="pipeline-line"></span>
-            <button class="pipeline-step" data-stage="generate" title="生成幻灯片">
-              <span class="pipeline-dot">2</span><span class="pipeline-label">生成</span>
+            <button class="pipeline-step" data-stage="generate" title="生成幻灯片" data-i18n-title="生成幻灯片">
+              <span class="pipeline-dot">2</span><span class="pipeline-label" data-i18n="生成">生成</span>
             </button>
             <span class="pipeline-line"></span>
-            <button class="pipeline-step" data-stage="modify" title="编辑模式 / AI 修改">
-              <span class="pipeline-dot">3</span><span class="pipeline-label">修改</span>
+            <button class="pipeline-step" data-stage="modify" title="编辑模式 / AI 修改" data-i18n-title="编辑模式 / AI 修改">
+              <span class="pipeline-dot">3</span><span class="pipeline-label" data-i18n="修改">修改</span>
             </button>
             <span class="pipeline-line"></span>
-            <button class="pipeline-step" data-stage="publish" title="发布当前版本">
-              <span class="pipeline-dot">4</span><span class="pipeline-label">发布</span>
+            <button class="pipeline-step" data-stage="publish" title="发布当前版本" data-i18n-title="发布当前版本">
+              <span class="pipeline-dot">4</span><span class="pipeline-label" data-i18n="发布">发布</span>
             </button>
           </div>
           <div class="workspace-canvas">
             <div class="workspace-preview-header">
-              <div class="workspace-preview-title">实时预览</div>
+              <div class="workspace-preview-title" data-i18n="实时预览">实时预览</div>
               <div class="workspace-preview-status" id="edit-status"></div>
               <div class="workspace-preview-actions">
-                <button id="btn-ai-image" class="btn-secondary"
+                <button id="btn-design-lint" class="btn-secondary" data-i18n="设计检查"
+                  style="padding: 6px 12px; font-size: 12px;">设计检查</button>
+                <button id="btn-ai-image" class="btn-secondary" data-i18n="生成配图"
                   style="padding: 6px 12px; font-size: 12px;">生成配图</button>
-                <button id="btn-toggle-chat" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">AI
-                  修改</button>
-                <button id="btn-open-preview-header" class="btn-secondary"
+                <button id="btn-toggle-chat" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" data-i18n="AI 修改">AI 修改</button>
+                <button id="btn-open-preview-header" class="btn-secondary" data-i18n="在新窗口打开"
                   style="padding: 6px 12px; font-size: 12px;">在新窗口打开</button>
               </div>
             </div>
@@ -740,8 +758,8 @@
             <div id="chat-dock" class="chat-dock hidden">
               <div id="chat-messages" class="chat-messages"></div>
               <div class="chat-input-row">
-                <input type="text" id="chat-input" placeholder="例如：把第二页标题改为… / 给第三页加一条要点…">
-                <button id="btn-chat-send" class="btn-primary" style="white-space:nowrap;">发送</button>
+                <input type="text" id="chat-input" placeholder="例如：把第二页标题改为… / 给第三页加一条要点…" data-i18n-placeholder="例如：把第二页标题改为… / 给第三页加一条要点…">
+                <button id="btn-chat-send" class="btn-primary" style="white-space:nowrap;" data-i18n="发送">发送</button>
               </div>
             </div>
           </div>
@@ -749,104 +767,103 @@
           <div class="workspace-config">
             <div class="workspace-config-scroll">
               <div class="config-tabs">
-                <button class="config-tab active" data-tab="content">选材</button>
-                <button class="config-tab" data-tab="style">主题</button>
-                <button class="config-tab" data-tab="animation">动画</button>
-                <button class="config-tab" data-tab="publish">发布</button>
-                <button class="config-tab" data-tab="versions">版本</button>
-                <button class="config-tab" data-tab="components">组件</button>
+                <button class="config-tab active" data-tab="content" data-i18n="选材">选材</button>
+                <button class="config-tab" data-tab="style" data-i18n="主题">主题</button>
+                <button class="config-tab" data-tab="animation" data-i18n="动画">动画</button>
+                <button class="config-tab" data-tab="publish" data-i18n="发布">发布</button>
+                <button class="config-tab" data-tab="versions" data-i18n="版本">版本</button>
+                <button class="config-tab" data-tab="components" data-i18n="组件">组件</button>
               </div>
 
               <div class="config-panel active" data-panel="content">
                 <section class="card">
-                  <div class="card-title">内容来源</div>
+                  <div class="card-title" data-i18n="内容来源">内容来源</div>
                   <div class="tabs">
-                    <button class="tab active" data-source="article">文章内容</button>
-                    <button class="tab" data-source="url">网页 URL</button>
-                    <button class="tab" data-source="vault">知识库选材</button>
+                    <button class="tab active" data-source="article" data-i18n="文章内容">文章内容</button>
+                    <button class="tab" data-source="url" data-i18n="网页 URL">网页 URL</button>
+                    <button class="tab" data-source="vault" data-i18n="知识库选材">知识库选材</button>
                   </div>
                   <div class="field hidden" id="field-url">
-                    <label>网页 URL</label>
+                    <label data-i18n="网页 URL">网页 URL</label>
                     <input type="url" id="input-url" placeholder="https://example.com/article">
                   </div>
                   <div class="field" id="field-article">
                     <label style="display:flex;justify-content:space-between;align-items:center;">
-                      <span>文章内容</span>
-                      <button id="btn-import-md" class="btn-secondary" style="padding:4px 10px;font-size:12px;">从
-                        Markdown 导入</button>
+                      <span data-i18n="文章内容">文章内容</span>
+                      <button id="btn-import-md" class="btn-secondary" style="padding:4px 10px;font-size:12px;" data-i18n="从 Markdown 导入">从 Markdown 导入</button>
                     </label>
-                    <textarea id="input-article" rows="6" placeholder="粘贴文章或内容，支持 Markdown 格式…"></textarea>
+                    <textarea id="input-article" rows="6" placeholder="粘贴文章或内容，支持 Markdown 格式…" data-i18n-placeholder="粘贴文章或内容，支持 Markdown 格式…"></textarea>
                     <input type="file" id="input-md-file" accept=".md,.markdown,.txt" style="display:none;">
                   </div>
                   <div class="field hidden" id="field-vault-source">
-                    <label>从知识库勾选素材，「汇总为素材」后可在「文章内容」中预览编辑</label>
+                    <label data-i18n="从知识库勾选素材，「汇总为素材」后可在「文章内容」中预览编辑">从知识库勾选素材，「汇总为素材」后可在「文章内容」中预览编辑</label>
                     <div class="vault-source-groups">
                       <div class="vault-source-group">
                         <div class="vault-source-group-header">
-                          <span class="vault-source-group-title">笔记</span>
-                          <input type="search" class="vault-source-filter" data-group="notes" placeholder="过滤笔记…">
+                          <span class="vault-source-group-title" data-i18n="笔记">笔记</span>
+                          <input type="search" class="vault-source-filter" data-group="notes" placeholder="过滤笔记…" data-i18n-placeholder="过滤笔记…">
                         </div>
                         <div class="vault-source-list" id="vault-source-notes"></div>
                       </div>
                       <div class="vault-source-group">
                         <div class="vault-source-group-header">
-                          <span class="vault-source-group-title">知识卡片</span>
-                          <input type="search" class="vault-source-filter" data-group="cards" placeholder="过滤卡片…">
+                          <span class="vault-source-group-title" data-i18n="知识卡片">知识卡片</span>
+                          <input type="search" class="vault-source-filter" data-group="cards" placeholder="过滤卡片…" data-i18n-placeholder="过滤卡片…">
                         </div>
                         <div class="vault-source-list" id="vault-source-cards"></div>
                       </div>
                       <div class="vault-source-group">
                         <div class="vault-source-group-header">
-                          <span class="vault-source-group-title">碎片</span>
-                          <input type="search" class="vault-source-filter" data-group="fragments" placeholder="过滤碎片…">
+                          <span class="vault-source-group-title" data-i18n="碎片">碎片</span>
+                          <input type="search" class="vault-source-filter" data-group="fragments" placeholder="过滤碎片…" data-i18n-placeholder="过滤碎片…">
                         </div>
                         <div class="vault-source-list" id="vault-source-fragments"></div>
                       </div>
                       <div class="vault-source-group">
                         <div class="vault-source-group-header">
-                          <span class="vault-source-group-title">错题</span>
-                          <input type="search" class="vault-source-filter" data-group="mistakes" placeholder="过滤错题…">
+                          <span class="vault-source-group-title" data-i18n="错题">错题</span>
+                          <input type="search" class="vault-source-filter" data-group="mistakes" placeholder="过滤错题…" data-i18n-placeholder="过滤错题…">
                         </div>
                         <div class="vault-source-list" id="vault-source-mistakes"></div>
                       </div>
                     </div>
                     <div class="vault-source-actions">
-                      <button id="btn-vault-source-collect" class="btn-primary" style="flex:1;">汇总为素材</button>
-                      <button id="btn-vault-source-review-deck" class="btn-secondary" style="flex:1;"
+                      <button id="btn-vault-source-collect" class="btn-primary" style="flex:1;" data-i18n="汇总为素材">汇总为素材</button>
+                      <button id="btn-vault-source-review-deck" class="btn-secondary" style="flex:1;" data-i18n="生成 PPT"
                         disabled>生成 PPT</button>
                     </div>
                   </div>
                 </section>
 
                 <section class="card">
-                  <div class="card-title">生成参数</div>
+                  <div class="card-title" data-i18n="生成参数">生成参数</div>
                   <div class="fields-grid">
                     <div class="field">
-                      <label>演示标题</label>
+                      <label data-i18n="演示标题">演示标题</label>
                       <input type="text" id="input-title">
                     </div>
                     <div class="field">
-                      <label>目标受众</label>
+                      <label data-i18n="目标受众">目标受众</label>
                       <input type="text" id="input-audience">
                     </div>
                     <div class="field">
-                      <label>风格</label>
+                      <label data-i18n="风格">风格</label>
                       <select id="input-style">
-                        <option>商业汇报</option>
-                        <option>学术演讲</option>
-                        <option>产品发布</option>
-                        <option>培训课件</option>
-                        <option>极简 keynote</option>
+                        <option value="商业汇报" data-i18n="商业汇报">商业汇报</option>
+                        <option value="学术演讲" data-i18n="学术演讲">学术演讲</option>
+                        <option value="产品发布" data-i18n="产品发布">产品发布</option>
+                        <option value="培训课件" data-i18n="培训课件">培训课件</option>
+                        <option value="极简 keynote" data-i18n="极简 keynote">极简 keynote</option>
                       </select>
                     </div>
                     <div class="field">
-                      <label>页数</label>
+                      <label data-i18n="页数">页数</label>
                       <input type="number" id="input-slide-count" min="3" max="30">
                     </div>
                     <div class="field">
-                      <label>语言</label>
+                      <label data-i18n="语言">语言</label>
                       <select id="input-language">
-                        <option value="zh-CN">中文</option>
+                        <option value="zh-CN" data-i18n="中文">中文</option>
                         <option value="en">English</option>
                       </select>
                     </div>
@@ -854,13 +871,13 @@
                 </section>
 
                 <div class="actions-bar">
-                  <button id="btn-save" class="btn-secondary">保存配置</button>
-                  <button id="btn-generate-content" class="btn-primary">生成 PPT</button>
-                  <button id="btn-preview" class="btn-secondary" disabled>预览</button>
+                  <button id="btn-save" class="btn-secondary" data-i18n="保存配置">保存配置</button>
+                  <button id="btn-generate-content" class="btn-primary" data-i18n="生成 PPT">生成 PPT</button>
+                  <button id="btn-preview" class="btn-secondary" disabled data-i18n="预览">预览</button>
                 </div>
 
                 <section id="progress-card" class="card progress-card hidden">
-                  <div class="card-title">生成流程</div>
+                  <div class="card-title" data-i18n="生成流程">生成流程</div>
                   <div id="progress-steps" class="progress-steps"></div>
                   <div id="progress-log" class="progress-log"></div>
                 </section>
@@ -868,87 +885,86 @@
 
               <div class="config-panel" data-panel="style">
                 <section class="card">
-                  <div class="card-title">选择主题</div>
+                  <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span data-i18n="选择主题">选择主题</span>
+                    <button id="btn-theme-gallery" class="btn-secondary" style="font-size:12px;padding:4px 12px;" data-i18n="主题画廊">主题画廊</button>
+                  </div>
                   <div class="theme-grid" id="theme-grid"></div>
                 </section>
 
                 <section class="card">
-                  <div class="card-title">自定义变量</div>
+                  <div class="card-title" data-i18n="自定义变量">自定义变量</div>
                   <div class="fields-grid">
                     <div class="field">
-                      <label>主色（--teal）</label>
+                      <label data-i18n="主色（--teal）">主色（--teal）</label>
                       <input type="color" id="input-var-teal" value="#439288">
                     </div>
                     <div class="field">
-                      <label>文字色（--ink）</label>
+                      <label data-i18n="文字色（--ink）">文字色（--ink）</label>
                       <input type="color" id="input-var-ink" value="#1A2332">
                     </div>
                     <div class="field">
-                      <label>背景色（--cream）</label>
+                      <label data-i18n="背景色（--cream）">背景色（--cream）</label>
                       <input type="color" id="input-var-cream" value="#F7F8FA">
                     </div>
                     <div class="field field-wide">
-                      <label>标题字体（--font-heading）</label>
+                      <label data-i18n="标题字体（--font-heading）">标题字体（--font-heading）</label>
                       <select id="input-var-font-heading">
-                        <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
-                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif'>无衬线 · PingFang SC / Microsoft YaHei
-                        </option>
-                        <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
+                        <option value="Georgia, 'Noto Serif SC', serif" data-i18n="衬线 · Georgia / Noto Serif SC">衬线 · Georgia / Noto Serif SC</option>
+                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif' data-i18n="无衬线 · PingFang SC / Microsoft YaHei">无衬线 · PingFang SC / Microsoft YaHei</option>
+                        <option value='"SF Mono", Menlo, monospace' data-i18n="等宽 · SF Mono / Menlo">等宽 · SF Mono / Menlo</option>
                       </select>
                     </div>
                     <div class="field field-wide">
-                      <label>正文字体（--font-body）</label>
+                      <label data-i18n="正文字体（--font-body）">正文字体（--font-body）</label>
                       <select id="input-var-font-body">
-                        <option value="Georgia, 'Noto Serif SC', serif">衬线 · Georgia / Noto Serif SC</option>
-                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif' selected>无衬线 · PingFang SC /
-                          Microsoft YaHei</option>
-                        <option value='"SF Mono", Menlo, monospace'>等宽 · SF Mono / Menlo</option>
+                        <option value="Georgia, 'Noto Serif SC', serif" data-i18n="衬线 · Georgia / Noto Serif SC">衬线 · Georgia / Noto Serif SC</option>
+                        <option value='"PingFang SC", "Microsoft YaHei", sans-serif' selected data-i18n="无衬线 · PingFang SC / Microsoft YaHei">无衬线 · PingFang SC / Microsoft YaHei</option>
+                        <option value='"SF Mono", Menlo, monospace' data-i18n="等宽 · SF Mono / Menlo">等宽 · SF Mono / Menlo</option>
                       </select>
                     </div>
                   </div>
                   <div class="actions-bar" style="margin-bottom: 0;">
-                    <button id="btn-apply-theme-vars" class="btn-primary">应用变量</button>
-                    <button id="btn-clear-theme-vars" class="btn-secondary">清除变量</button>
+                    <button id="btn-apply-theme-vars" class="btn-primary" data-i18n="应用变量">应用变量</button>
+                    <button id="btn-clear-theme-vars" class="btn-secondary" data-i18n="清除变量">清除变量</button>
                   </div>
                 </section>
 
                 <section class="card">
-                  <div class="card-title">主题说明</div>
-                  <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7;">
-                    选择主题后，点击「保存配置」应用更改。主题会立即在右侧预览窗口中显示效果。
-                  </p>
+                  <div class="card-title" data-i18n="主题说明">主题说明</div>
+                  <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7;" data-i18n="选择主题后，点击「保存配置」应用更改。主题会立即在右侧预览窗口中显示效果。">选择主题后，点击「保存配置」应用更改。主题会立即在右侧预览窗口中显示效果。</p>
                 </section>
 
                 <div class="actions-bar">
-                  <button id="btn-save-theme" class="btn-primary">保存配置</button>
+                  <button id="btn-save-theme" class="btn-primary" data-i18n="保存配置">保存配置</button>
                 </div>
               </div>
 
               <div class="config-panel" data-panel="animation">
                 <section class="card">
-                  <div class="card-title">动画类型</div>
+                  <div class="card-title" data-i18n="动画类型">动画类型</div>
                   <div class="animation-options" id="animation-options"></div>
                 </section>
 
                 <section class="card">
-                  <div class="card-title">动画速度</div>
+                  <div class="card-title" data-i18n="动画速度">动画速度</div>
                   <div class="field">
                     <div class="speed-slider">
-                      <label>快速</label>
+                      <label data-i18n="快速">快速</label>
                       <input type="range" id="animation-speed" min="1" max="3" value="2">
-                      <label>缓慢</label>
+                      <label data-i18n="缓慢">缓慢</label>
                     </div>
                   </div>
                 </section>
 
                 <div class="actions-bar">
-                  <button id="btn-save-animation" class="btn-primary">保存配置</button>
+                  <button id="btn-save-animation" class="btn-primary" data-i18n="保存配置">保存配置</button>
                 </div>
               </div>
 
               <div class="config-panel" data-panel="publish">
                 <section class="card">
-                  <div class="card-title">发布状态</div>
+                  <div class="card-title" data-i18n="发布状态">发布状态</div>
                   <div class="publish-status">
                     <div class="publish-status-icon">📝</div>
                     <div class="publish-status-info">
@@ -957,13 +973,13 @@
                     </div>
                   </div>
 
-                  <button id="btn-publish" class="btn-primary" style="width: 100%; margin-top: 12px;">发布当前版本</button>
+                  <button id="btn-publish" class="btn-primary" style="width: 100%; margin-top: 12px;" data-i18n="发布当前版本">发布当前版本</button>
                 </section>
 
                 <section class="card">
-                  <div class="card-title">访问链接</div>
+                  <div class="card-title" data-i18n="访问链接">访问链接</div>
                   <div class="publish-history">
-                    <div class="publish-history-title">最新版本</div>
+                    <div class="publish-history-title" data-i18n="最新版本">最新版本</div>
                     <div id="publish-latest"
                       style="padding: 12px; background: var(--tile); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; word-break: break-all; color: var(--ink); opacity: 0.6;">
                       暂未发布
@@ -972,7 +988,7 @@
                 </section>
 
                 <section class="card">
-                  <div class="card-title">发布历史</div>
+                  <div class="card-title" data-i18n="发布历史">发布历史</div>
                   <div class="publish-list" id="publish-list">
                     <div style="padding: 40px 20px; text-align: center; opacity: 0.5; font-size: 13px;">
                       暂无发布历史
@@ -983,17 +999,17 @@
 
               <div class="config-panel" data-panel="versions">
                 <section class="card">
-                  <div class="card-title">创建快照</div>
+                  <div class="card-title" data-i18n="创建快照">创建快照</div>
                   <div class="field">
-                    <label>快照说明（可选）</label>
-                    <input type="text" id="snapshot-description" placeholder="例如：修改封面标题之前">
+                    <label data-i18n="快照说明（可选）">快照说明（可选）</label>
+                    <input type="text" id="snapshot-description" placeholder="例如：修改封面标题之前" data-i18n-placeholder="例如：修改封面标题之前">
                   </div>
-                  <button id="btn-create-snapshot" class="btn-primary"
+                  <button id="btn-create-snapshot" class="btn-primary" data-i18n="保存当前版本为快照"
                     style="width: 100%; margin-top: 4px;">保存当前版本为快照</button>
                 </section>
 
                 <section class="card">
-                  <div class="card-title">快照历史</div>
+                  <div class="card-title" data-i18n="快照历史">快照历史</div>
                   <div id="snapshot-list" class="publish-list">
                     <div style="padding: 40px 20px; text-align: center; opacity: 0.5; font-size: 13px;">
                       暂无快照
@@ -1004,10 +1020,8 @@
 
               <div class="config-panel" data-panel="components">
                 <section class="card">
-                  <div class="card-title">组件库</div>
-                  <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 16px;">
-                    点击「插入」将组件页添加到倒数第二页（结尾页之前），插入后可在预览中查看并用「AI 修改」调整内容。
-                  </p>
+                  <div class="card-title" data-i18n="组件库">组件库</div>
+                  <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 16px;" data-i18n="点击「插入」将组件页添加到倒数第二页（结尾页之前），插入后可在预览中查看并用「AI 修改」调整内容。">点击「插入」将组件页添加到倒数第二页（结尾页之前），插入后可在预览中查看并用「AI 修改」调整内容。</p>
                   <div class="component-grid" id="component-grid"></div>
                 </section>
               </div>
@@ -1018,36 +1032,35 @@
         <!-- 系统设置（不依赖项目选择） -->
         <div id="settings-panel" class="settings-panel hidden">
           <div class="settings-header">
-            <div class="settings-title">系统设置 · 对所有项目生效</div>
+            <div class="settings-title" data-i18n="系统设置 · 对所有项目生效">系统设置 · 对所有项目生效</div>
           </div>
           <div class="settings-body">
             <section class="card model-config-card">
-              <div class="card-title">模型配置 <span class="hint-inline">系统级别 · 对所有项目生效</span></div>
-              <div class="model-config-section">文本模型</div>
+              <div class="card-title"><span data-i18n="模型配置">模型配置</span> <span class="hint-inline" data-i18n="系统级别 · 对所有项目生效">系统级别 · 对所有项目生效</span></div>
+              <div class="model-config-section" data-i18n="文本模型">文本模型</div>
               <div class="fields-grid">
                 <div class="field field-wide">
-                  <label>模型预设</label>
+                  <label data-i18n="模型预设">模型预设</label>
                   <select id="input-model-preset">
                     <option value="">加载中…</option>
                   </select>
                 </div>
                 <div id="lmstudio-hint" class="field field-wide hidden">
                   <div
-                    style="font-size: 13px; color: #0D9488; background: #F0FDFA; padding: 10px 12px; border-radius: 8px;">
-                    💡 需要先启动 LM Studio，然后在 LM Studio 中开启 "Local Server"
-                  </div>
+                    style="font-size: 13px; color: #0D9488; background: #F0FDFA; padding: 10px 12px; border-radius: 8px;"
+                    data-i18n="💡 需要先启动 LM Studio，然后在 LM Studio 中开启 &quot;Local Server&quot;">💡 需要先启动 LM Studio，然后在 LM Studio 中开启 "Local Server"</div>
                 </div>
                 <div class="field">
                   <label>Provider</label>
                   <input type="text" id="input-model-provider" placeholder="kimi / openai / lmstudio">
                 </div>
                 <div class="field field-wide" style="display: flex; gap: 8px;">
-                  <label style="flex: 1;">模型名称</label>
+                  <label style="flex: 1;" data-i18n="模型名称">模型名称</label>
                   <div style="flex: 1; display: flex; gap: 8px;">
                     <select id="input-model-name" style="flex: 1;">
                       <option value="">选择或输入模型…</option>
                     </select>
-                    <button id="btn-refresh-models" class="btn-secondary"
+                    <button id="btn-refresh-models" class="btn-secondary" data-i18n="刷新列表"
                       style="padding: 8px 12px; white-space: nowrap;">刷新列表</button>
                   </div>
                 </div>
@@ -1056,14 +1069,14 @@
                   <input type="url" id="input-model-base-url" placeholder="https://api.kimi.com/coding/v1">
                 </div>
                 <div class="field field-wide">
-                  <label>API Key <span class="hint-inline">留空则用环境变量或已保存的配置</span></label>
+                  <label>API Key <span class="hint-inline" data-i18n="留空则用环境变量或已保存的配置">留空则用环境变量或已保存的配置</span></label>
                   <input type="password" id="input-model-api-key" placeholder="sk-...">
                   <label class="checkbox-inline"><input type="checkbox" id="input-model-persist-api-key">
-                    保存到本地配置（.ai-ppt-config.json，已 gitignore）</label>
+                    <span data-i18n="保存到本地配置（.ai-ppt-config.json，已 gitignore）">保存到本地配置（.ai-ppt-config.json，已 gitignore）</span></label>
                 </div>
               </div>
 
-              <div class="model-config-section">生图模型</div>
+              <div class="model-config-section" data-i18n="生图模型">生图模型</div>
               <div class="fields-grid">
                 <div class="field">
                   <label>Provider</label>
@@ -1074,7 +1087,7 @@
                   </select>
                 </div>
                 <div class="field">
-                  <label>模型名称 <span class="hint-inline">留空使用 CLI 默认模型</span></label>
+                  <label><span data-i18n="模型名称">模型名称</span> <span class="hint-inline" data-i18n="留空使用 CLI 默认模型">留空使用 CLI 默认模型</span></label>
                   <input type="text" id="input-image-model-name" placeholder="doubao-seedream-4-5">
                 </div>
                 <div id="image-model-openai-fields" class="field-wide hidden" style="display: contents;">
@@ -1083,18 +1096,18 @@
                     <input type="url" id="input-image-model-base-url" placeholder="https://api.openai.com/v1">
                   </div>
                   <div class="field">
-                    <label>API Key <span class="hint-inline">留空则用环境变量或已保存的配置</span></label>
+                    <label>API Key <span class="hint-inline" data-i18n="留空则用环境变量或已保存的配置">留空则用环境变量或已保存的配置</span></label>
                     <input type="password" id="input-image-model-api-key" placeholder="sk-...">
                     <label class="checkbox-inline"><input type="checkbox" id="input-image-model-persist-api-key">
-                      保存到本地配置（.ai-ppt-config.json，已 gitignore）</label>
+                      <span data-i18n="保存到本地配置（.ai-ppt-config.json，已 gitignore）">保存到本地配置（.ai-ppt-config.json，已 gitignore）</span></label>
                   </div>
                 </div>
                 <div class="field field-wide">
-                  <button id="btn-test-image-model" class="btn-secondary" style="padding: 8px 16px;">测试</button>
+                  <button id="btn-test-image-model" class="btn-secondary" style="padding: 8px 16px;" data-i18n="测试">测试</button>
                 </div>
               </div>
 
-              <div class="model-config-section">生视频模型</div>
+              <div class="model-config-section" data-i18n="生视频模型">生视频模型</div>
               <div class="fields-grid">
                 <div class="field">
                   <label>Provider</label>
@@ -1105,7 +1118,7 @@
                   </select>
                 </div>
                 <div class="field">
-                  <label>模型名称 <span class="hint-inline">留空使用 CLI 默认模型</span></label>
+                  <label><span data-i18n="模型名称">模型名称</span> <span class="hint-inline" data-i18n="留空使用 CLI 默认模型">留空使用 CLI 默认模型</span></label>
                   <input type="text" id="input-video-model-name" placeholder="doubao-seedance-1-0-pro">
                 </div>
                 <div id="video-model-openai-fields" class="field-wide hidden" style="display: contents;">
@@ -1114,28 +1127,38 @@
                     <input type="url" id="input-video-model-base-url" placeholder="https://api.openai.com/v1">
                   </div>
                   <div class="field">
-                    <label>API Key <span class="hint-inline">留空则用环境变量或已保存的配置</span></label>
+                    <label>API Key <span class="hint-inline" data-i18n="留空则用环境变量或已保存的配置">留空则用环境变量或已保存的配置</span></label>
                     <input type="password" id="input-video-model-api-key" placeholder="sk-...">
                     <label class="checkbox-inline"><input type="checkbox" id="input-video-model-persist-api-key">
-                      保存到本地配置（.ai-ppt-config.json，已 gitignore）</label>
+                      <span data-i18n="保存到本地配置（.ai-ppt-config.json，已 gitignore）">保存到本地配置（.ai-ppt-config.json，已 gitignore）</span></label>
                   </div>
                 </div>
                 <div class="field field-wide">
-                  <button id="btn-test-video-model" class="btn-secondary" style="padding: 8px 16px;">测试</button>
+                  <button id="btn-test-video-model" class="btn-secondary" style="padding: 8px 16px;" data-i18n="测试">测试</button>
                 </div>
               </div>
 
               <div class="actions-bar" style="margin-bottom: 0;">
-                <button id="btn-save-model-config" class="btn-primary">保存模型配置</button>
+                <button id="btn-save-model-config" class="btn-primary" data-i18n="保存模型配置">保存模型配置</button>
               </div>
             </section>
 
             <section class="card">
-              <div class="card-title">数据与备份</div>
-              <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 12px;">
-                所有数据保存在本地目录：projects/ 存放 PPT 作品，vault/ 存放知识库（速记、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。
-              </p>
-              <button id="btn-backup-now" class="btn-primary" style="padding: 8px 16px;">立即备份</button>
+              <div class="card-title" data-i18n="数据与备份">数据与备份</div>
+              <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 12px;" data-i18n="所有数据保存在本地目录：projects/ 存放 PPT 作品，vault/ 存放知识库（速记、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。">所有数据保存在本地目录：projects/ 存放 PPT 作品，vault/ 存放知识库（速记、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。</p>
+              <button id="btn-backup-now" class="btn-primary" style="padding: 8px 16px;" data-i18n="立即备份">立即备份</button>
+            </section>
+
+            <section class="card">
+              <div class="card-title" data-i18n="界面语言">界面语言</div>
+              <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 12px;" data-i18n="切换界面语言，立即生效（页面会刷新，笔记草稿等本地数据不会丢失）。">切换界面语言，立即生效（页面会刷新，笔记草稿等本地数据不会丢失）。</p>
+              <div class="field" style="max-width: 240px;">
+                <label data-i18n="语言 / Language">语言 / Language</label>
+                <select id="input-ui-lang">
+                  <option value="zh">中文</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
             </section>
           </div>
         </div>
@@ -1146,19 +1169,42 @@
   <div id="create-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-body">
-      <h3>新建项目</h3>
+      <h3 data-i18n="新建项目">新建项目</h3>
       <div class="field">
-        <label>项目标识（英文/数字/中划线）</label>
+        <label data-i18n="项目标识（英文/数字/中划线）">项目标识（英文/数字/中划线）</label>
         <input type="text" id="new-project-name" placeholder="q3-report">
       </div>
       <div class="field">
-        <label>演示标题</label>
-        <input type="text" id="new-project-title" placeholder="Q3 业务复盘">
+        <label data-i18n="演示标题">演示标题</label>
+        <input type="text" id="new-project-title" placeholder="Q3 业务复盘" data-i18n-placeholder="Q3 业务复盘">
+      </div>
+      <div class="field">
+        <label data-i18n="场景模板">场景模板</label>
+        <select id="new-project-template">
+          <option value="" data-i18n="空白">空白</option>
+          <option value="weekly-report" data-i18n="周报">周报</option>
+          <option value="training-course" data-i18n="培训课件">培训课件</option>
+          <option value="pitch" data-i18n="路演">路演</option>
+          <option value="review-lesson" data-i18n="复习课件">复习课件</option>
+        </select>
       </div>
       <div class="modal-actions">
-        <button id="btn-cancel-create" class="btn-secondary">取消</button>
-        <button id="btn-confirm-create" class="btn-primary">创建</button>
+        <button id="btn-cancel-create" class="btn-secondary" data-i18n="取消">取消</button>
+        <button id="btn-confirm-create" class="btn-primary" data-i18n="创建">创建</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 主题画廊弹窗：iframe 加载基座 theme-showcase.html，点选主题经 postMessage 回传 -->
+  <div id="theme-gallery-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body" style="max-width:1080px;width:92vw;max-height:86vh;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="margin:0;" data-i18n="主题画廊">主题画廊</h3>
+        <button id="btn-close-theme-gallery" class="btn-secondary" style="font-size:12px;padding:4px 12px;" data-i18n="关闭">关闭</button>
+      </div>
+      <iframe id="theme-gallery-frame" title="主题画廊" data-i18n-title="主题画廊"
+        style="flex:1;min-height:0;height:100%;border:1px solid var(--border);border-radius:12px;background:var(--surface);"></iframe>
     </div>
   </div>
 
@@ -1172,7 +1218,7 @@
         <input type="text" id="input-modal-input">
       </div>
       <div class="modal-actions">
-        <button id="btn-cancel-input-modal" class="btn-secondary">取消</button>
+        <button id="btn-cancel-input-modal" class="btn-secondary" data-i18n="取消">取消</button>
         <button id="btn-confirm-input-modal" class="btn-primary">确定</button>
       </div>
     </div>
@@ -1185,7 +1231,7 @@
       <h3 id="confirm-modal-title">确认操作</h3>
       <p class="hint" id="confirm-modal-message"></p>
       <div class="modal-actions">
-        <button id="btn-cancel-confirm-modal" class="btn-secondary">取消</button>
+        <button id="btn-cancel-confirm-modal" class="btn-secondary" data-i18n="取消">取消</button>
         <button id="btn-confirm-confirm-modal" class="btn-primary">确定</button>
       </div>
     </div>
@@ -1194,19 +1240,48 @@
   <div id="rename-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-body">
-      <h3>重命名笔记</h3>
+      <h3 data-i18n="重命名笔记">重命名笔记</h3>
       <div class="field">
-        <label>新名称（正文中的 [[双链]] 引用会同步更新）</label>
-        <input type="text" id="rename-note-input" placeholder="新的笔记名称">
+        <label data-i18n="新名称（正文中的 [[双链]] 引用会同步更新）">新名称（正文中的 [[双链]] 引用会同步更新）</label>
+        <input type="text" id="rename-note-input" placeholder="新的笔记名称" data-i18n-placeholder="新的笔记名称">
       </div>
       <div class="modal-actions">
-        <button id="btn-cancel-rename" class="btn-secondary">取消</button>
-        <button id="btn-confirm-rename" class="btn-primary">重命名</button>
+        <button id="btn-cancel-rename" class="btn-secondary" data-i18n="取消">取消</button>
+        <button id="btn-confirm-rename" class="btn-primary" data-i18n="重命名">重命名</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 发布结果弹窗：访问链接 + 复制 + 二维码 -->
+  <div id="publish-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body">
+      <h3 data-i18n="发布成功">发布成功</h3>
+      <div class="publish-modal-link-row">
+        <input type="text" id="publish-modal-url" readonly>
+        <button id="btn-copy-publish-url" class="btn-secondary" data-i18n="复制链接">复制链接</button>
+      </div>
+      <p class="hint" id="publish-modal-hint"></p>
+      <div class="publish-modal-qr"><img id="publish-modal-qr-img" alt="访问二维码"></div>
+      <div class="modal-actions">
+        <button id="btn-close-publish-modal" class="btn-primary" data-i18n="完成">完成</button>
       </div>
     </div>
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <!-- 笔记历史版本弹窗 -->
+  <div id="note-history-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body modal-wide">
+      <h3 data-i18n="历史版本">历史版本</h3>
+      <div id="note-history-list" class="note-history-list"></div>
+      <div class="modal-actions">
+        <button id="btn-close-note-history" class="btn-secondary" data-i18n="关闭">关闭</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 测验表单弹窗（新建/编辑共用） -->
   <div id="exam-modal" class="modal hidden">
@@ -1215,45 +1290,44 @@
       <h3 id="exam-modal-title">新建测验</h3>
       <div class="fields-grid">
         <div class="field">
-          <label>标题</label>
-          <input type="text" id="exam-form-title" placeholder="测验标题">
+          <label data-i18n="标题">标题</label>
+          <input type="text" id="exam-form-title" placeholder="测验标题" data-i18n-placeholder="测验标题">
         </div>
         <div class="field">
-          <label>分类</label>
-          <input type="text" id="exam-form-subject" placeholder="如：产品、技术">
+          <label data-i18n="分类">分类</label>
+          <input type="text" id="exam-form-subject" placeholder="如：产品、技术" data-i18n-placeholder="如：产品、技术">
         </div>
         <div class="field">
-          <label>难度</label>
+          <label data-i18n="难度">难度</label>
           <select id="exam-form-difficulty">
-            <option value="easy">简单</option>
-            <option value="medium" selected>中等</option>
-            <option value="hard">困难</option>
+            <option value="easy" data-i18n="简单">简单</option>
+            <option value="medium" selected data-i18n="中等">中等</option>
+            <option value="hard" data-i18n="困难">困难</option>
           </select>
         </div>
         <div class="field">
-          <label>日期</label>
+          <label data-i18n="日期">日期</label>
           <input type="date" id="exam-form-date">
         </div>
         <div class="field field-wide">
-          <label>标签（用逗号分隔）</label>
-          <input type="text" id="exam-form-tags" placeholder="如：期中, 重点">
+          <label data-i18n="标签（用逗号分隔）">标签（用逗号分隔）</label>
+          <input type="text" id="exam-form-tags" placeholder="如：期中, 重点" data-i18n-placeholder="如：期中, 重点">
         </div>
         <div class="field field-wide">
-          <label>说明</label>
-          <textarea id="exam-form-description" rows="2" placeholder="测验说明（可选）"></textarea>
+          <label data-i18n="说明">说明</label>
+          <textarea id="exam-form-description" rows="2" placeholder="测验说明（可选）" data-i18n-placeholder="测验说明（可选）"></textarea>
         </div>
       </div>
       <div class="field" style="margin-top:4px;">
         <label style="display:flex;justify-content:space-between;align-items:center;">
-          <span>题目</span>
-          <button id="btn-exam-add-question" class="btn-secondary" style="padding:4px 10px;font-size:12px;">+
-            添加题目</button>
+          <span data-i18n="题目">题目</span>
+          <button id="btn-exam-add-question" class="btn-secondary" style="padding:4px 10px;font-size:12px;" data-i18n="+ 添加题目">+ 添加题目</button>
         </label>
         <div id="exam-questions-list"></div>
       </div>
       <div class="modal-actions">
-        <button id="btn-cancel-exam" class="btn-secondary">取消</button>
-        <button id="btn-confirm-exam" class="btn-primary">保存</button>
+        <button id="btn-cancel-exam" class="btn-secondary" data-i18n="取消">取消</button>
+        <button id="btn-confirm-exam" class="btn-primary" data-i18n="保存">保存</button>
       </div>
     </div>
   </div>
@@ -1262,22 +1336,22 @@
   <div id="smart-exam-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-body">
-      <h3>智能组卷</h3>
+      <h3 data-i18n="智能组卷">智能组卷</h3>
       <div class="field">
-        <label>题目数量</label>
+        <label data-i18n="题目数量">题目数量</label>
         <select id="smart-exam-count">
-          <option value="5" selected>5 题</option>
-          <option value="10">10 题</option>
-          <option value="15">15 题</option>
+          <option value="5" selected data-i18n="5 题">5 题</option>
+          <option value="10" data-i18n="10 题">10 题</option>
+          <option value="15" data-i18n="15 题">15 题</option>
         </select>
       </div>
       <div class="field">
-        <label>分类（可选）</label>
-        <input type="text" id="smart-exam-subject" placeholder="留空则不限分类">
+        <label data-i18n="分类（可选）">分类（可选）</label>
+        <input type="text" id="smart-exam-subject" placeholder="留空则不限分类" data-i18n-placeholder="留空则不限分类">
       </div>
-      <div style="font-size:13px;opacity:0.7;line-height:1.6;">将根据低熟练度卡片、到期复习和历史错题自动组卷</div>
+      <div style="font-size:13px;opacity:0.7;line-height:1.6;" data-i18n="将根据低熟练度卡片、到期复习和历史错题自动组卷">将根据低熟练度卡片、到期复习和历史错题自动组卷</div>
       <div class="modal-actions">
-        <button id="btn-cancel-smart-exam" class="btn-secondary">取消</button>
+        <button id="btn-cancel-smart-exam" class="btn-secondary" data-i18n="取消">取消</button>
         <button id="btn-confirm-smart-exam" class="btn-primary">开始组卷</button>
       </div>
     </div>
@@ -1289,46 +1363,46 @@
     <div class="modal-body modal-wide">
       <h3 id="mistake-modal-title">记录错题</h3>
       <div class="field">
-        <label>题目</label>
-        <textarea id="mistake-form-question" rows="3" placeholder="错题题目内容"></textarea>
+        <label data-i18n="题目">题目</label>
+        <textarea id="mistake-form-question" rows="3" placeholder="错题题目内容" data-i18n-placeholder="错题题目内容"></textarea>
       </div>
       <div class="fields-grid">
         <div class="field">
-          <label>我的错误答案</label>
+          <label data-i18n="我的错误答案">我的错误答案</label>
           <textarea id="mistake-form-wrong" rows="2"></textarea>
         </div>
         <div class="field">
-          <label>正确答案</label>
+          <label data-i18n="正确答案">正确答案</label>
           <textarea id="mistake-form-correct" rows="2"></textarea>
         </div>
         <div class="field">
-          <label>分类</label>
-          <input type="text" id="mistake-form-subject" placeholder="如：产品知识">
+          <label data-i18n="分类">分类</label>
+          <input type="text" id="mistake-form-subject" placeholder="如：产品知识" data-i18n-placeholder="如：产品知识">
         </div>
         <div class="field">
-          <label>题型</label>
-          <input type="text" id="mistake-form-questiontype" placeholder="如：选择题、填空题">
+          <label data-i18n="题型">题型</label>
+          <input type="text" id="mistake-form-questiontype" placeholder="如：选择题、填空题" data-i18n-placeholder="如：选择题、填空题">
         </div>
         <div class="field">
-          <label>难度</label>
+          <label data-i18n="难度">难度</label>
           <select id="mistake-form-difficulty">
-            <option value="easy">简单</option>
-            <option value="medium" selected>中等</option>
-            <option value="hard">困难</option>
+            <option value="easy" data-i18n="简单">简单</option>
+            <option value="medium" selected data-i18n="中等">中等</option>
+            <option value="hard" data-i18n="困难">困难</option>
           </select>
         </div>
         <div class="field">
-          <label>标签（用逗号分隔）</label>
-          <input type="text" id="mistake-form-tags" placeholder="如：易错, 重点">
+          <label data-i18n="标签（用逗号分隔）">标签（用逗号分隔）</label>
+          <input type="text" id="mistake-form-tags" placeholder="如：易错, 重点" data-i18n-placeholder="如：易错, 重点">
         </div>
       </div>
       <div class="field">
-        <label>解析 / 错因</label>
+        <label data-i18n="解析 / 错因">解析 / 错因</label>
         <textarea id="mistake-form-analysis" rows="2"></textarea>
       </div>
       <div class="modal-actions">
-        <button id="btn-cancel-mistake" class="btn-secondary">取消</button>
-        <button id="btn-confirm-mistake" class="btn-primary">保存</button>
+        <button id="btn-cancel-mistake" class="btn-secondary" data-i18n="取消">取消</button>
+        <button id="btn-confirm-mistake" class="btn-primary" data-i18n="保存">保存</button>
       </div>
     </div>
   </div>
@@ -1337,14 +1411,14 @@
   <div id="review-deck-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-body">
-      <h3 id="review-deck-title">生成复习 PPT</h3>
+      <h3 id="review-deck-title" data-i18n="生成复习 PPT">生成复习 PPT</h3>
       <div class="field">
-        <label>项目标识（英文/数字/中划线）</label>
+        <label data-i18n="项目标识（英文/数字/中划线）">项目标识（英文/数字/中划线）</label>
         <input type="text" id="review-deck-name" placeholder="review-cards-20240101">
       </div>
       <div class="modal-actions">
-        <button id="btn-cancel-review-deck" class="btn-secondary">取消</button>
-        <button id="btn-confirm-review-deck" class="btn-primary">开始生成</button>
+        <button id="btn-cancel-review-deck" class="btn-secondary" data-i18n="取消">取消</button>
+        <button id="btn-confirm-review-deck" class="btn-primary" data-i18n="开始生成">开始生成</button>
       </div>
     </div>
   </div>
@@ -1355,57 +1429,57 @@
     <div class="modal-body modal-wide">
       <h3 id="gen-modal-title">生成</h3>
       <div class="field">
-        <label>来源</label>
+        <label data-i18n="来源">来源</label>
         <div id="gen-source" class="graph-deck-nodes"></div>
       </div>
       <div class="field" id="gen-type-field">
-        <label>生成类型</label>
+        <label data-i18n="生成类型">生成类型</label>
         <div class="note-gen-types">
           <label><input type="radio" name="gen-type" value="ppt" checked> PPT</label>
-          <label><input type="radio" name="gen-type" value="video"> 视频</label>
-          <label><input type="radio" name="gen-type" value="report"> 报告</label>
+          <label><input type="radio" name="gen-type" value="video"> <span data-i18n="视频">视频</span></label>
+          <label><input type="radio" name="gen-type" value="report"> <span data-i18n="报告">报告</span></label>
         </div>
       </div>
       <div id="gen-params-ppt" class="note-gen-params">
         <div id="gen-ppt-extra-params">
           <div class="field">
-            <label>页数</label>
+            <label data-i18n="页数">页数</label>
             <input type="number" id="gen-slide-count" value="8" min="3" max="30">
           </div>
           <div class="field">
-            <label>受众</label>
-            <input type="text" id="gen-audience" placeholder="例如：管理层">
+            <label data-i18n="受众">受众</label>
+            <input type="text" id="gen-audience" placeholder="例如：管理层" data-i18n-placeholder="例如：管理层">
           </div>
           <div class="field">
-            <label>风格</label>
+            <label data-i18n="风格">风格</label>
             <input type="text" id="gen-style" value="商业汇报">
           </div>
         </div>
         <div class="field" id="gen-project-name-field">
-          <label>项目标识（英文/数字/中划线）</label>
+          <label data-i18n="项目标识（英文/数字/中划线）">项目标识（英文/数字/中划线）</label>
           <input type="text" id="gen-project-name" placeholder="notes-deck-20240101">
         </div>
       </div>
       <div id="gen-params-video" class="note-gen-params hidden">
         <div class="field">
-          <label>补充说明（可选）</label>
-          <textarea id="gen-video-prompt" rows="3" placeholder="例如：竖屏 60 秒，配旁白"></textarea>
+          <label data-i18n="补充说明（可选）">补充说明（可选）</label>
+          <textarea id="gen-video-prompt" rows="3" placeholder="例如：竖屏 60 秒，配旁白" data-i18n-placeholder="例如：竖屏 60 秒，配旁白"></textarea>
         </div>
       </div>
       <div id="gen-params-report" class="note-gen-params hidden">
         <div class="field">
-          <label>报告标题</label>
-          <input type="text" id="gen-report-title" placeholder="笔记汇总报告">
+          <label data-i18n="报告标题">报告标题</label>
+          <input type="text" id="gen-report-title" placeholder="笔记汇总报告" data-i18n-placeholder="笔记汇总报告">
         </div>
         <div class="field">
-          <label>报告文件名（可选）</label>
+          <label data-i18n="报告文件名（可选）">报告文件名（可选）</label>
           <input type="text" id="gen-report-name" placeholder="report-20240101">
         </div>
       </div>
       <div id="gen-result" class="note-gen-result hidden"></div>
       <div class="modal-actions">
         <button id="btn-cancel-gen" class="btn-secondary">取消</button>
-        <button id="btn-confirm-gen" class="btn-primary">开始生成</button>
+        <button id="btn-confirm-gen" class="btn-primary" data-i18n="开始生成">开始生成</button>
       </div>
     </div>
   </div>
@@ -1416,13 +1490,34 @@
     <div class="modal-body">
       <h3 id="ai-image-modal-title">生成配图</h3>
       <div class="field">
-        <label>图片描述</label>
-        <textarea id="ai-image-prompt" rows="3" placeholder="例如：扁平风格的数据增长曲线插图，青绿色调"></textarea>
+        <label data-i18n="图片描述">图片描述</label>
+        <textarea id="ai-image-prompt" rows="3" placeholder="例如：扁平风格的数据增长曲线插图，青绿色调" data-i18n-placeholder="例如：扁平风格的数据增长曲线插图，青绿色调"></textarea>
       </div>
-      <div class="ai-image-hint">生图可能需要 30-60 秒，点击生成后请耐心等待</div>
+      <div class="ai-image-hint" data-i18n="生图可能需要 30-60 秒，点击生成后请耐心等待">生图可能需要 30-60 秒，点击生成后请耐心等待</div>
+      <!-- 生成结果区：配图闭环动作（按上下文显隐「插入笔记 / 插入幻灯片」） -->
+      <div id="ai-image-result" class="ai-image-result hidden">
+        <img id="ai-image-preview" class="ai-image-preview" alt="生成结果预览">
+        <div class="ai-image-actions">
+          <button id="btn-ai-image-insert-note" class="btn-secondary" data-i18n="插入笔记">插入笔记</button>
+          <button id="btn-ai-image-insert-slide" class="btn-secondary" data-i18n="插入幻灯片">插入幻灯片</button>
+        </div>
+      </div>
       <div class="modal-actions">
-        <button id="btn-cancel-ai-image" class="btn-secondary">取消</button>
+        <button id="btn-cancel-ai-image" class="btn-secondary" data-i18n="取消">取消</button>
         <button id="btn-confirm-ai-image" class="btn-primary">生成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 资产库弹窗（vault/assets 管理：查看/插入笔记/删除，删除有引用保护） -->
+  <div id="assets-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body modal-wide">
+      <h3 data-i18n="资产库">资产库</h3>
+      <div class="ai-image-hint" style="margin-bottom:12px;" data-i18n="知识库附件与 AI 生成产物；点击「插入」把 ![[文件名]] 加入当前笔记">知识库附件与 AI 生成产物；点击「插入」把 ![[文件名]] 加入当前笔记</div>
+      <div id="assets-list" class="assets-list"></div>
+      <div class="modal-actions">
+        <button id="btn-close-assets" class="btn-secondary" data-i18n="关闭">关闭</button>
       </div>
     </div>
   </div>
@@ -1431,15 +1526,15 @@
   <div id="voice-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-body voice-body">
-      <h3>语音听记</h3>
+      <h3 data-i18n="语音听记">语音听记</h3>
       <div class="voice-timer" id="voice-timer">00:00</div>
       <div class="voice-status" id="voice-status">准备录音…</div>
       <canvas id="voice-wave" class="voice-wave" width="320" height="64"></canvas>
-      <div class="voice-hint">完成后自动保存为速记，并转写为文字（可校对）</div>
+      <div class="voice-hint" data-i18n="完成后自动保存为速记，并转写为文字（可校对）">完成后自动保存为速记，并转写为文字（可校对）</div>
       <div class="modal-actions">
-        <button id="btn-voice-cancel" class="btn-secondary">取消</button>
+        <button id="btn-voice-cancel" class="btn-secondary" data-i18n="取消">取消</button>
         <button id="btn-voice-pause" class="btn-secondary" disabled>暂停</button>
-        <button id="btn-voice-finish" class="btn-primary" disabled>完成</button>
+        <button id="btn-voice-finish" class="btn-primary" disabled data-i18n="完成">完成</button>
       </div>
     </div>
   </div>
@@ -1448,12 +1543,12 @@
   <div id="organize-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-body modal-wide">
-      <h3>AI 整理建议</h3>
-      <div id="organize-degraded-tip" class="organize-degraded hidden">当前为离线规则建议（未配置文本模型）</div>
+      <h3 data-i18n="AI 整理建议">AI 整理建议</h3>
+      <div id="organize-degraded-tip" class="organize-degraded hidden" data-i18n="当前为离线规则建议（未配置文本模型）">当前为离线规则建议（未配置文本模型）</div>
       <div id="organize-status" class="organize-status hidden">正在分析碎片…</div>
       <div id="organize-list" class="organize-list"></div>
       <div class="modal-actions">
-        <button id="btn-cancel-organize" class="btn-secondary">取消</button>
+        <button id="btn-cancel-organize" class="btn-secondary" data-i18n="取消">取消</button>
         <button id="btn-apply-organize" class="btn-primary">应用所选</button>
       </div>
     </div>
@@ -1463,7 +1558,7 @@
   <div id="quick-open-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-body quick-open-body">
-      <input type="text" id="quick-open-input" placeholder="输入笔记名快速跳转…（↑↓ 选择，Enter 打开，Esc 关闭）" autocomplete="off">
+      <input type="text" id="quick-open-input" placeholder="输入笔记名快速跳转…（↑↓ 选择，Enter 打开，Esc 关闭）" autocomplete="off" data-i18n-placeholder="输入笔记名快速跳转…（↑↓ 选择，Enter 打开，Esc 关闭）">
       <div id="quick-open-list" class="quick-open-list"></div>
     </div>
   </div>
@@ -1472,8 +1567,8 @@
     <div class="help-panel-overlay"></div>
     <div class="help-panel-content">
       <div class="help-panel-header">
-        <div class="help-panel-title">键盘快捷键</div>
-        <button id="btn-close-help" class="btn-secondary btn-icon" title="关闭">
+        <div class="help-panel-title" data-i18n="键盘快捷键">键盘快捷键</div>
+        <button id="btn-close-help" class="btn-secondary btn-icon" title="关闭" data-i18n-title="关闭">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1483,35 +1578,75 @@
       </div>
       <div class="help-panel-body">
         <div class="help-section">
-          <div class="help-section-title">通用</div>
-          <div class="help-grid">
-            <div class="help-key-row"><kbd>?</kbd><span>显示/隐藏帮助</span></div>
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>N</kbd><span>新建项目</span></div>
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>S</kbd><span>保存配置</span></div>
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>导出菜单</span></div>
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>全局搜索</span></div>
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd><span>聚焦速记输入框</span></div>
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd><span>快速跳转笔记</span></div>
+          <div class="help-section-title" data-i18n="场景指引">场景指引</div>
+          <div class="help-scenarios">
+            <div class="help-scenario">
+              <div class="help-scenario-title" data-i18n="我想做 PPT">我想做 PPT</div>
+              <p data-i18n="在「知识库」打开一篇笔记 → 点「生成 PPT」；或到「PPT 作品」tab 新建项目，按 选材 → 生成 → 修改 → 发布 四步走完。">在「知识库」打开一篇笔记 → 点「生成 PPT」；或到「PPT 作品」tab 新建项目，按 选材 → 生成 → 修改 → 发布 四步走完。</p>
+            </div>
+            <div class="help-scenario">
+              <div class="help-scenario-title" data-i18n="我想整理笔记">我想整理笔记</div>
+              <p data-i18n="在「速记」tab 随手记录（支持 🎙 语音听记、📎 附件、粘贴截图），用「AI 整理」把碎片归置为笔记 / 卡片 / 错题。">在「速记」tab 随手记录（支持 🎙 语音听记、📎 附件、粘贴截图），用「AI 整理」把碎片归置为笔记 / 卡片 / 错题。</p>
+            </div>
+            <div class="help-scenario">
+              <div class="help-scenario-title" data-i18n="我想复习">我想复习</div>
+              <p data-i18n="「学习」tab 做测验、看错题集、开始复习训练；「知识卡片」tab 按记忆曲线复习到期卡片。">「学习」tab 做测验、看错题集、开始复习训练；「知识卡片」tab 按记忆曲线复习到期卡片。</p>
+            </div>
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">项目操作</div>
+          <div class="help-section-title" data-i18n="通用">通用</div>
           <div class="help-grid">
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>G</kbd><span>生成幻灯片</span></div>
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>O</kbd><span>打开预览</span></div>
-            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>笔记内循环任务状态</span></div>
+            <div class="help-key-row"><kbd>?</kbd><span data-i18n="显示/隐藏帮助">显示/隐藏帮助</span></div>
+            <div class="help-key-row"><kbd>Esc</kbd><span data-i18n="关闭弹窗/面板/抽屉">关闭弹窗/面板/抽屉</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>N</kbd><span data-i18n="新建项目">新建项目</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>S</kbd><span data-i18n="保存（笔记 / 项目配置）">保存（笔记 / 项目配置）</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span data-i18n="导出菜单（项目内）">导出菜单（项目内）</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span data-i18n="全局搜索">全局搜索</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd><span data-i18n="聚焦速记输入框">聚焦速记输入框</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd><span data-i18n="快速跳转笔记">快速跳转笔记</span></div>
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">配置面板</div>
+          <div class="help-section-title" data-i18n="笔记与速记">笔记与速记</div>
           <div class="help-grid">
-            <div class="help-key-row"><kbd>Tab</kbd><span>切换配置标签</span></div>
-            <div class="help-key-row"><kbd>Esc</kbd><span>关闭弹窗/面板</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span data-i18n="笔记内循环任务状态">笔记内循环任务状态</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Z</kbd><span data-i18n="笔记编辑撤销">笔记编辑撤销</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd><span data-i18n="笔记编辑重做">笔记编辑重做</span></div>
+            <div class="help-key-row"><kbd>Enter</kbd><span data-i18n="速记提交（Shift+Enter 换行）">速记提交（Shift+Enter 换行）</span></div>
+          </div>
+        </div>
+        <div class="help-section">
+          <div class="help-section-title" data-i18n="项目操作">项目操作</div>
+          <div class="help-grid">
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>G</kbd><span data-i18n="生成幻灯片">生成幻灯片</span></div>
+            <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>O</kbd><span data-i18n="打开预览">打开预览</span></div>
+            <div class="help-key-row"><kbd>Tab</kbd><span data-i18n="配置面板内切换标签">配置面板内切换标签</span></div>
           </div>
         </div>
       </div>
       <div class="help-panel-footer">
-        <span>提示：在输入框中时快捷键会暂时失效</span>
+        <span><span data-i18n="提示：在输入框中时快捷键会暂时失效；macOS 下 Ctrl 对应 ⌘">提示：在输入框中时快捷键会暂时失效；macOS 下 Ctrl 对应 ⌘</span><br><span data-i18n="安装到桌面：浏览器菜单 → 安装应用（Chrome/Edge 地址栏右侧也有安装图标）；安装后界面壳可离线打开，数据需本地服务在线">安装到桌面：浏览器菜单 → 安装应用（Chrome/Edge 地址栏右侧也有安装图标）；安装后界面壳可离线打开，数据需本地服务在线</span></span>
+        <button id="btn-replay-onboarding" class="btn-secondary" style="padding:4px 12px;font-size:12px;" data-i18n="重新查看引导">重新查看引导</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 首次启动向导：localStorage ai-ppt-onboarded 未设置时显示，帮助面板可重新打开 -->
+  <div id="onboarding-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body onboarding-body">
+      <div class="onboarding-step-tag" id="onboarding-step-tag">第 1 步 · 共 3 步</div>
+      <h3 id="onboarding-title">记录</h3>
+      <p class="onboarding-desc" id="onboarding-desc"></p>
+      <div class="onboarding-dots" id="onboarding-dots">
+        <span class="onboarding-dot active"></span>
+        <span class="onboarding-dot"></span>
+        <span class="onboarding-dot"></span>
+      </div>
+      <div class="modal-actions onboarding-actions">
+        <button id="btn-onboarding-skip" class="btn-secondary" data-i18n="跳过引导">跳过引导</button>
+        <button id="btn-onboarding-next" class="btn-primary">写第一条速记</button>
       </div>
     </div>
   </div>

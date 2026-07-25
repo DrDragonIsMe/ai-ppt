@@ -374,6 +374,20 @@ html, body {
   padding: 4px;
 }
 
+.project-cover {
+  width: 48px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--tile);
+  flex-shrink: 0;
+}
+
+.sidebar.collapsed .project-cover {
+  display: none;
+}
+
 .project-item:hover .project-delete {
   opacity: 1;
 }
@@ -1254,6 +1268,37 @@ html, body {
   background: var(--tile-strong);
 }
 
+/* 发布结果弹窗 */
+.publish-modal-link-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.publish-modal-link-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.12));
+  border-radius: 6px;
+  background: var(--tile);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.publish-modal-qr {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.publish-modal-qr img {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  background: #fff;
+}
+
 .panel-header {
   display: none;
 }
@@ -1583,6 +1628,11 @@ html, body {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 20px;
+}
+
+/* 设计检查等确认弹窗中的多行列表：保留换行 */
+#confirm-modal-message {
+  white-space: pre-line;
 }
 
 /* 宽版表单弹窗（测验/错题） */
@@ -1967,6 +2017,107 @@ html, body {
   font-size: 12px;
 }
 
+/* ===== 移动端侧边栏抽屉（桌面默认隐藏汉堡与遮罩） ===== */
+#btn-sidebar-toggle {
+  display: none;
+}
+
+.sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 80;
+}
+
+.sidebar-scrim.hidden {
+  display: none;
+}
+
+/* ===== 速记提交按钮（小屏与 Enter 等价） ===== */
+.fragment-submit-btn {
+  padding: 3px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ===== 帮助面板场景指引 ===== */
+.help-scenarios {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.help-scenario {
+  padding: 12px 14px;
+  border: 1px solid var(--tile-strong);
+  border-radius: 10px;
+  background: var(--cream);
+}
+
+.help-scenario-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal);
+  margin-bottom: 4px;
+}
+
+.help-scenario p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink);
+  opacity: 0.75;
+}
+
+.help-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* ===== 首次启动向导 ===== */
+.onboarding-body {
+  width: 440px;
+}
+
+.onboarding-step-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--teal);
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.onboarding-desc {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink);
+  opacity: 0.8;
+  min-height: 76px;
+}
+
+.onboarding-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tile-strong);
+  transition: background 0.2s ease;
+}
+
+.onboarding-dot.active {
+  background: var(--teal);
+}
+
+.onboarding-actions {
+  justify-content: space-between;
+}
+
 @media (max-width: 1100px) {
   .project-panel {
     grid-template-columns: 1fr;
@@ -1981,6 +2132,12 @@ html, body {
 }
 
 @media (max-width: 768px) {
+  /* 防横向溢出兜底 */
+  html, body {
+    overflow-x: hidden;
+  }
+
+  /* 顶栏：两行（logo 行 / 搜索与操作行），汉堡可见 */
   .topbar {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto;
@@ -1995,25 +2152,189 @@ html, body {
     justify-content: flex-start;
     flex-wrap: wrap;
   }
-  .layout {
+  #btn-sidebar-toggle {
+    display: inline-flex;
+  }
+  .topbar-search {
+    width: 100%;
+  }
+  .search-results {
+    width: min(320px, 90vw);
+  }
+
+  /* 侧边栏 → 全高抽屉：默认收起，汉堡展开，点 tab / 遮罩 / Esc 收起 */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(84vw, 320px);
+    max-height: none;
+    z-index: 90;
+    transform: translateX(-105%);
+    transition: transform 0.25s var(--ease-out-expo);
+    border-right: 1px solid var(--tile-strong);
+    box-shadow: 0 0 40px rgba(15, 23, 42, 0.25);
+  }
+  .sidebar.collapsed {
+    width: min(84vw, 320px); /* 移动端忽略桌面折叠宽度 */
+  }
+  .sidebar.drawer-open {
+    transform: none;
+  }
+
+  /* 速记输入区：提示占整行，按钮自然换行 */
+  .fragment-input-footer {
+    flex-wrap: wrap;
+  }
+  .fragment-input-hint {
+    flex-basis: 100%;
+    margin-bottom: 4px;
+  }
+
+  /* 语音听记弹窗全屏化 */
+  #voice-modal .modal-body.voice-body {
+    width: 100vw;
+    max-width: 100vw;
+    min-height: 100vh;
+    min-height: 100dvh;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* 笔记面板：编辑区上下堆叠，工具栏横向滚动，大纲降为普通区块 */
+  .vault-panel {
+    padding: 12px;
+  }
+  #vault-note-panel .card-title {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 12px;
+  }
+  #vault-note-panel .card-title > span {
+    flex-shrink: 0;
+  }
+  #vault-note-panel .card-title button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .vault-note-editor-row {
     flex-direction: column;
   }
-  .sidebar {
+  .vault-note-editor-main {
     width: 100%;
-    height: auto;
-    max-height: 160px;
+  }
+  .vault-note-outline {
+    width: 100%;
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--tile-strong);
+    padding-top: 12px;
+    position: static;
+    max-height: none;
+  }
+
+  /* 工作台 / 标签 / 主题等 grid 类面板单列 */
+  .dashboard-panel {
+    padding: 12px;
+  }
+  .dashboard-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .dashboard-body {
+    grid-template-columns: 1fr;
+  }
+  .tags-columns {
+    grid-template-columns: 1fr;
+  }
+  .theme-grid,
+  .component-grid {
+    grid-template-columns: 1fr;
+  }
+  .empty-state {
+    padding: 24px 16px;
+  }
+
+  /* 卡片面板：列表与详情上下堆叠 */
+  .cards-panel {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .cards-list-view {
+    width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--tile-strong);
+    max-height: 40vh;
   }
+  .cards-detail-view {
+    padding: 16px;
+    overflow-y: visible;
+  }
+
+  /* 星图：侧栏移到画布下方 */
+  .graph-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .graph-sidebar {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--tile-strong);
+  }
+
+  /* 学习面板：测验/错题列表与详情上下堆叠（覆盖行内 flex 样式） */
+  .study-subtabs {
+    max-width: none;
+    margin: 8px 12px;
+  }
+  #exams-panel > div,
+  #mistakes-panel > div {
+    flex-direction: column !important;
+    overflow-y: auto;
+  }
+  #exams-panel > div > div:first-child,
+  #mistakes-panel > div > div:first-child {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--tile-strong);
+  }
+
+  /* 项目工作区：工具栏与流水线可横向滚动 */
   .project-panel {
     display: flex;
     flex-direction: column;
   }
+  .project-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .project-toolbar-actions {
+    flex-wrap: wrap;
+  }
+  .pipeline-bar {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
   .workspace-config {
     max-height: 50vh;
   }
+
+  /* 设置 / 帮助 */
+  .settings-body {
+    padding: 12px;
+  }
   .help-grid {
     grid-template-columns: 1fr;
+  }
+  .help-panel-footer {
+    flex-wrap: wrap;
+  }
+  .onboarding-body {
+    width: 100%;
   }
 }
 
@@ -2051,6 +2372,13 @@ html, body {
   background: white;
   border-bottom: 2px solid var(--teal);
   margin-bottom: -1px;
+}
+
+/* 英文界面 tab 文案更长：略缩字号并按内容自适应宽度，避免截断（zh 不受影响） */
+html[lang="en"] .sidebar-tab {
+  flex: 1 1 auto;
+  font-size: 11px;
+  padding: 8px 6px;
 }
 
 .sidebar-content {
@@ -2144,6 +2472,15 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 拖拽排序状态 */
+.vault-note-item.dragging {
+  opacity: 0.4;
+}
+
+.vault-note-item.drag-over {
+  border-top: 2px solid var(--teal);
 }
 
 /* ===== 笔记编辑器：预览 / 大纲 / [[ 补全 ===== */
@@ -3310,6 +3647,83 @@ html, body {
   line-height: 1.5;
 }
 
+.ai-image-result {
+  margin-top: 12px;
+}
+
+.ai-image-preview {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e3e9e7);
+  background: var(--tile, #f4f6f5);
+}
+
+.ai-image-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* ==== 资产库 ==== */
+.assets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.asset-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #e3e9e7);
+  border-radius: 8px;
+}
+
+.asset-thumb {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--tile, #f4f6f5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.asset-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.asset-name {
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.asset-meta {
+  font-size: 12px;
+  opacity: 0.55;
+  margin-top: 2px;
+}
+
+.asset-meta .asset-ref-badge {
+  color: var(--danger, #d64545);
+  opacity: 1;
+}
+
+.asset-actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
 /* ==== 标签浏览（契约 N） ==== */
 .tags-panel {
   display: flex;
@@ -3553,6 +3967,62 @@ html, body {
 .vault-note-select-bar span {
   flex: 1;
   opacity: 0.7;
+}
+
+/* ==== 笔记历史版本弹窗 ==== */
+.note-history-list {
+  max-height: 420px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note-history-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--tile);
+  border-radius: 8px;
+}
+
+.note-history-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.note-history-item-time {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.note-history-item-preview {
+  font-size: 12px;
+  color: var(--ink);
+  opacity: 0.6;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-history-empty {
+  padding: 30px 0;
+  text-align: center;
+  opacity: 0.5;
+  font-size: 13px;
+}
+
+/* AI 修改后的「撤销本次修改」按钮 */
+.chat-undo-btn {
+  margin-top: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
 }
 
 /* ==== Journal 导航 ==== */

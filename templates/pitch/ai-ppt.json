@@ -1,0 +1,19 @@
+{
+  "name": "pitch",
+  "sourceType": "article",
+  "sourceUrl": "",
+  "articleText": "",
+  "params": {
+    "title": "项目路演",
+    "audience": "投资人",
+    "style": "路演融资",
+    "slideCount": 9,
+    "language": "zh-CN"
+  },
+  "theme": "web-ui",
+  "animation": "slide",
+  "status": "draft",
+  "lastGeneratedAt": null,
+  "errorMessage": null,
+  "template": "pitch"
+}

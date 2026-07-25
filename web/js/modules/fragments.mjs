@@ -2,6 +2,7 @@
 import { S } from './state.mjs';
 import { api, apiUpload, showToast, escapeHtml, escapeHtmlAttr } from './state.mjs';
 import { showConfirmModal } from './modals.mjs';
+import { t } from './i18n.mjs';
 
 let _cb = {};
 export function initFragmentsModule(callbacks) {
@@ -12,15 +13,15 @@ export function initFragmentsModule(callbacks) {
 // 辅助
 // ============================================================
 function relativeTime(iso) {
-    const t = new Date(iso).getTime();
-    if (!t) return '';
-    const m = Math.floor((Date.now() - t) / 60000);
-    if (m < 1) return '刚刚';
-    if (m < 60) return `${m} 分钟前`;
+    const ts = new Date(iso).getTime();
+    if (!ts) return '';
+    const m = Math.floor((Date.now() - ts) / 60000);
+    if (m < 1) return t('刚刚');
+    if (m < 60) return t('{m} 分钟前', { m });
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h} 小时前`;
+    if (h < 24) return t('{h} 小时前', { h });
     const d = Math.floor(h / 24);
-    if (d < 7) return `${d} 天前`;
+    if (d < 7) return t('{d} 天前', { d });
     return new Date(iso).toLocaleDateString();
 }
 
@@ -34,7 +35,7 @@ export async function loadFragments() {
         S.fragments = data.fragments || [];
         renderFragments();
         updateOrganizeButton();
-    } catch (e) { console.error('Failed to load fragments:', e); showToast('加载速记列表失败'); }
+    } catch (e) { console.error('Failed to load fragments:', e); showToast(t('加载速记列表失败')); }
 }
 
 // 附件文件名白名单（渲染端防注入，与服务端落盘命名规则一致）
@@ -73,21 +74,21 @@ function renderFragmentContent(content) {
 function renderFragments() {
     const listEl = document.getElementById('fragment-list');
     if (!listEl) return;
-    if (S.fragments.length === 0) { listEl.innerHTML = '<div style="padding:20px;text-align:center;opacity:0.6;font-size:13px;">暂无碎片，在上方记录第一条吧</div>'; return; }
+    if (S.fragments.length === 0) { listEl.innerHTML = `<div style="padding:20px;text-align:center;opacity:0.6;font-size:13px;">${t('暂无碎片，在上方记录第一条吧')}</div>`; return; }
     listEl.innerHTML = S.fragments.map((f) => {
         const organized = f.status === 'organized';
         const hasAttach = /!\[\[[^\]]+\.(png|jpe?g|gif|webp|mp4|webm|mov|mp3|wav|m4a|ogg|pdf|docx)\]\]/i.test(f.content || '');
         const tags = (f.tags || []).map((t) => `<span class="fragment-tag" data-tag="${escapeHtmlAttr(t)}">${escapeHtml(t)}</span>`).join('');
         return `<div class="fragment-item ${organized ? 'fragment-organized' : ''}" data-id="${escapeHtmlAttr(f.id)}">
         <div class="fragment-content">${renderFragmentContent(f.content)}</div>
-        <div class="fragment-meta">${tags}<span class="fragment-time">${escapeHtml(relativeTime(f.created))}</span>${organized ? '<span class="fragment-organized-badge">已整理</span>' : ''}</div>
+        <div class="fragment-meta">${tags}<span class="fragment-time">${escapeHtml(relativeTime(f.created))}</span>${organized ? `<span class="fragment-organized-badge">${t('已整理')}</span>` : ''}</div>
         <div class="fragment-actions">
-          <button class="btn-secondary fragment-action" data-action="promote" data-to="card" ${organized ? 'disabled' : ''}>转卡片</button>
-          <button class="btn-secondary fragment-action" data-action="promote" data-to="note" ${organized ? 'disabled' : ''}>转笔记</button>
-          <button class="btn-secondary fragment-action" data-action="promote" data-to="mistake" ${organized ? 'disabled' : ''}>转错题</button>
-          <button class="btn-secondary fragment-action" data-action="today" ${organized ? 'disabled' : ''}>到今日</button>
-          ${hasAttach ? '<button class="btn-secondary fragment-action" data-action="reparse">重新解析</button>' : ''}
-          <button class="btn-secondary fragment-action fragment-delete" data-action="delete">删除</button>
+          <button class="btn-secondary fragment-action" data-action="promote" data-to="card" ${organized ? 'disabled' : ''}>${t('转卡片')}</button>
+          <button class="btn-secondary fragment-action" data-action="promote" data-to="note" ${organized ? 'disabled' : ''}>${t('转笔记')}</button>
+          <button class="btn-secondary fragment-action" data-action="promote" data-to="mistake" ${organized ? 'disabled' : ''}>${t('转错题')}</button>
+          <button class="btn-secondary fragment-action" data-action="today" ${organized ? 'disabled' : ''}>${t('到今日')}</button>
+          ${hasAttach ? `<button class="btn-secondary fragment-action" data-action="reparse">${t('重新解析')}</button>` : ''}
+          <button class="btn-secondary fragment-action fragment-delete" data-action="delete">${t('删除')}</button>
         </div></div>`;
     }).join('');
 }
@@ -115,9 +116,9 @@ function addAttachmentFiles(files) {
     for (const file of files) {
         if (!file) continue;
         const kind = classifyAttachment(file);
-        if (!kind) { showToast(`不支持的附件类型：${file.name || '未命名文件'}`, 'error'); continue; }
+        if (!kind) { showToast(t('不支持的附件类型：{name}', { name: file.name || t('未命名文件') }), 'error'); continue; }
         if (file.size > ATTACH_LIMITS[kind]) {
-            showToast(`附件超过 ${ATTACH_LIMIT_LABEL[kind]} 限制，已跳过：${file.name || '未命名文件'}`, 'error');
+            showToast(t('附件超过 {limit} 限制，已跳过：{name}', { limit: ATTACH_LIMIT_LABEL[kind], name: file.name || t('未命名文件') }), 'error');
             continue;
         }
         let name = String(file.name || '').trim();
@@ -185,7 +186,7 @@ function renderAttachmentChips() {
         rm.type = 'button';
         rm.className = 'fragment-attach-remove';
         rm.textContent = '✕';
-        rm.title = '移除附件';
+        rm.title = t('移除附件');
         rm.addEventListener('click', () => removeAttachment(att.id));
         chip.appendChild(rm);
         box.appendChild(chip);
@@ -202,7 +203,7 @@ async function uploadAttachment(att) {
         return { name: data.name || att.name, kind: data.kind || att.kind };
     } catch (e) {
         console.error('Failed to upload attachment:', e);
-        showToast(`附件上传失败，已跳过：${att.name}`, 'error');
+        showToast(t('附件上传失败，已跳过：{name}', { name: att.name }), 'error');
         return null;
     }
 }
@@ -226,8 +227,8 @@ function pollParseTasks(taskIds) {
         }
         if (pending.size === 0 || Date.now() - startedAt > 5 * 60 * 1000) {
             clearInterval(timer);
-            if (interrupted) showToast('服务已重启，任务中断，请重试', 'error');
-            else showToast(pending.size === 0 ? '附件解析完成' : '附件解析超时，稍后刷新查看');
+            if (interrupted) showToast(t('服务已重启，任务中断，请重试'), 'error');
+            else showToast(pending.size === 0 ? t('附件解析完成') : t('附件解析超时，稍后刷新查看'));
             loadFragments();
         }
     }, 2000);
@@ -252,41 +253,42 @@ async function submitFragment() {
         input.value = '';
         clearAttachments();
         input.focus();
-        showToast('已记录');
+        showToast(t('已记录'));
         await loadFragments();
         const taskIds = (data && data.parseTaskIds) || [];
         if (taskIds.length) {
-            showToast('附件 AI 解析中…');
+            showToast(t('附件 AI 解析中…'));
             pollParseTasks(taskIds);
         }
     }
-    catch (e) { console.error('Failed to create fragment:', e); showToast(e.message || '记录失败'); }
+    catch (e) { console.error('Failed to create fragment:', e); showToast(e.message || t('记录失败')); }
 }
 
 async function promoteFragment(id, to) {
-    const label = { card: '知识卡片', note: '笔记', mistake: '错题' }[to] || '目标';
-    try { await api('POST', `/api/vault/fragments/${encodeURIComponent(id)}/promote`, { to }); showToast(`已转为${label}`); await loadFragments(); }
-    catch (e) { console.error('Failed to promote fragment:', e); showToast(e.message || '转化失败'); }
+    const label = t({ card: '知识卡片', note: '笔记', mistake: '错题' }[to] || '目标');
+    try { await api('POST', `/api/vault/fragments/${encodeURIComponent(id)}/promote`, { to }); showToast(t('已转为{label}', { label })); await loadFragments(); }
+    catch (e) { console.error('Failed to promote fragment:', e); showToast(e.message || t('转化失败')); }
 }
 
 async function deleteFragment(id) {
-    if (!(await showConfirmModal({ title: '删除碎片', message: '确定要删除这条碎片吗？此操作不可恢复。', confirmText: '删除', danger: true }))) return;
-    try { await api('DELETE', `/api/vault/fragments/${encodeURIComponent(id)}`); showToast('已删除'); await loadFragments(); }
-    catch (e) { console.error('Failed to delete fragment:', e); showToast(e.message || '删除失败'); }
+    if (!(await showConfirmModal({ title: t('删除碎片'), message: t('确定要删除这条碎片吗？此操作不可恢复。'), confirmText: t('删除'), danger: true }))) return;
+    try { await api('DELETE', `/api/vault/fragments/${encodeURIComponent(id)}`); showToast(t('已删除')); await loadFragments(); }
+    catch (e) { console.error('Failed to delete fragment:', e); showToast(e.message || t('删除失败')); }
 }
 
 async function reparseFragment(id) {
     try {
         const data = await api('POST', `/api/vault/fragments/${encodeURIComponent(id)}/reparse`, {});
-        showToast(`重新解析 ${data.count} 个附件…`);
+        showToast(t('重新解析 {count} 个附件…', { count: data.count }));
         const taskIds = (data && data.parseTaskIds) || [];
         if (taskIds.length) pollParseTasks(taskIds);
-    } catch (e) { console.error('Failed to reparse fragment:', e); showToast(e.message || '重新解析失败', 'error'); }
+    } catch (e) { console.error('Failed to reparse fragment:', e); showToast(e.message || t('重新解析失败'), 'error'); }
 }
 
 export function focusFragmentInput() {
     if (S.currentSidebarTab !== 'fragments' && _cb.switchSidebarTab) _cb.switchSidebarTab('fragments');
     document.getElementById('sidebar')?.classList.remove('collapsed');
+    if (_cb.openSidebarDrawer) _cb.openSidebarDrawer(); // 移动端：输入区在抽屉内，先展开（桌面为 no-op）
     document.getElementById('fragment-input')?.focus();
 }
 
@@ -297,8 +299,8 @@ let organizeSuggestions = [];
 const ORGANIZE_ACTION_LABELS = { tag: '补标签', link: '关联笔记', merge: '合并', leave: '保留' };
 
 function organizeActionLabel(s) {
-    if (s.action === 'promote') return { card: '转卡片', note: '转笔记', mistake: '转错题' }[s.to] || '转化';
-    return ORGANIZE_ACTION_LABELS[s.action] || s.action || '保留';
+    if (s.action === 'promote') return t({ card: '转卡片', note: '转笔记', mistake: '转错题' }[s.to] || '转化');
+    return t(ORGANIZE_ACTION_LABELS[s.action] || s.action || '保留');
 }
 
 async function updateOrganizeButton() {
@@ -308,7 +310,7 @@ async function updateOrganizeButton() {
         const data = await api('GET', '/api/vault/fragments?status=inbox');
         const count = (data.fragments || []).length;
         btn.disabled = count === 0;
-        btn.textContent = count > 0 ? `AI 整理（${count}）` : 'AI 整理';
+        btn.textContent = count > 0 ? t('AI 整理（{count}）', { count }) : t('AI 整理');
     } catch (e) { console.error('Failed to check inbox fragments:', e); btn.disabled = false; }
 }
 
@@ -322,7 +324,7 @@ export async function openOrganizeModal() {
     organizeSuggestions = [];
     listEl.innerHTML = '';
     tipEl.classList.add('hidden');
-    statusEl.textContent = '正在分析碎片…';
+    statusEl.textContent = t('正在分析碎片…');
     statusEl.classList.remove('hidden');
     applyBtn.disabled = true;
     try {
@@ -333,13 +335,13 @@ export async function openOrganizeModal() {
         renderOrganizeList();
     } catch (e) {
         console.error('Failed to get organize suggestions:', e);
-        statusEl.textContent = `分析失败：${e.message || '未知错误'}`;
+        statusEl.textContent = t('分析失败：{msg}', { msg: e.message || t('未知错误') });
     } finally { applyBtn.disabled = false; }
 }
 
 function renderOrganizeList() {
     const listEl = document.getElementById('organize-list');
-    if (!organizeSuggestions.length) { listEl.innerHTML = '<div class="organize-status">暂无可整理的碎片</div>'; return; }
+    if (!organizeSuggestions.length) { listEl.innerHTML = `<div class="organize-status">${t('暂无可整理的碎片')}</div>`; return; }
     listEl.innerHTML = organizeSuggestions.map((s, i) => `
       <label class="organize-item">
         <input type="checkbox" class="organize-check" data-index="${i}" checked>
@@ -354,18 +356,18 @@ function renderOrganizeList() {
 async function applyOrganize() {
     const checked = document.querySelectorAll('#organize-list .organize-check:checked');
     const actions = [...checked].map((c) => organizeSuggestions[Number(c.dataset.index)]).filter(Boolean);
-    if (!actions.length) { showToast('请先勾选要应用的建议'); return; }
+    if (!actions.length) { showToast(t('请先勾选要应用的建议')); return; }
     const applyBtn = document.getElementById('btn-apply-organize');
-    applyBtn.disabled = true; applyBtn.textContent = '应用中…';
+    applyBtn.disabled = true; applyBtn.textContent = t('应用中…');
     try {
         const res = await api('POST', '/api/vault/organize/apply', { actions });
         const applied = res.applied || 0;
         const failed = (res.errors || []).length;
-        showToast(`整理完成：成功 ${applied} 条${failed ? `，失败 ${failed} 条` : ''}`);
+        showToast(failed ? t('整理完成：成功 {applied} 条，失败 {failed} 条', { applied, failed }) : t('整理完成：成功 {applied} 条', { applied }));
         document.getElementById('organize-modal').classList.add('hidden');
         await loadFragments();
-    } catch (e) { console.error('Failed to apply organize actions:', e); showToast(e.message || '应用失败'); }
-    finally { applyBtn.disabled = false; applyBtn.textContent = '应用所选'; }
+    } catch (e) { console.error('Failed to apply organize actions:', e); showToast(e.message || t('应用失败')); }
+    finally { applyBtn.disabled = false; applyBtn.textContent = t('应用所选'); }
 }
 
 // ============================================================
@@ -425,15 +427,15 @@ function drawVoiceWave() {
 
 async function openVoiceModal() {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-        showToast('当前浏览器不支持录音', 'error');
+        showToast(t('当前浏览器不支持录音'), 'error');
         return;
     }
     const modal = document.getElementById('voice-modal');
     const pauseBtn = document.getElementById('btn-voice-pause');
     const finishBtn = document.getElementById('btn-voice-finish');
     document.getElementById('voice-timer').textContent = '00:00';
-    setVoiceStatus('准备录音…', false);
-    pauseBtn.disabled = true; pauseBtn.textContent = '暂停';
+    setVoiceStatus(t('准备录音…'), false);
+    pauseBtn.disabled = true; pauseBtn.textContent = t('暂停');
     finishBtn.disabled = true;
     modal.classList.remove('hidden');
     try {
@@ -456,14 +458,14 @@ async function openVoiceModal() {
         voiceRec.timerId = setInterval(() => {
             if (voiceRec && !voiceRec.paused) { voiceRec.seconds++; updateVoiceTimer(); }
         }, 1000);
-        setVoiceStatus('录音中', true);
+        setVoiceStatus(t('录音中'), true);
         pauseBtn.disabled = false;
         finishBtn.disabled = false;
         drawVoiceWave();
     } catch (e) {
         console.error('Failed to start recording:', e);
         modal.classList.add('hidden');
-        showToast('无法访问麦克风，请检查浏览器授权', 'error');
+        showToast(t('无法访问麦克风，请检查浏览器授权'), 'error');
     }
 }
 
@@ -482,7 +484,7 @@ function closeVoiceModal() {
 }
 
 async function cancelVoiceRecording() {
-    if (voiceRec && voiceRec.seconds > 0 && !(await showConfirmModal({ title: '放弃录音', message: '录音尚未完成，确定要放弃这段录音吗？', confirmText: '放弃', danger: true }))) return;
+    if (voiceRec && voiceRec.seconds > 0 && !(await showConfirmModal({ title: t('放弃录音'), message: t('录音尚未完成，确定要放弃这段录音吗？'), confirmText: t('放弃'), danger: true }))) return;
     closeVoiceModal();
 }
 
@@ -492,13 +494,13 @@ function toggleVoicePause() {
     if (voiceRec.paused) {
         voiceRec.recorder.resume();
         voiceRec.paused = false;
-        setVoiceStatus('录音中', true);
-        pauseBtn.textContent = '暂停';
+        setVoiceStatus(t('录音中'), true);
+        pauseBtn.textContent = t('暂停');
     } else {
         voiceRec.recorder.pause();
         voiceRec.paused = true;
-        setVoiceStatus('已暂停', false);
-        pauseBtn.textContent = '继续';
+        setVoiceStatus(t('已暂停'), false);
+        pauseBtn.textContent = t('继续');
     }
 }
 
@@ -514,7 +516,7 @@ async function finishVoiceRecording() {
         rec.recorder.stop();
     });
     closeVoiceModal();
-    if (!blob.size || seconds < 1) { showToast('录音太短，未保存'); return; }
+    if (!blob.size || seconds < 1) { showToast(t('录音太短，未保存')); return; }
     const ext = mime.includes('mp4') ? 'm4a' : 'webm';
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
@@ -525,7 +527,7 @@ async function finishVoiceRecording() {
 
 async function submitVoiceFragment(file, name, seconds) {
     try {
-        showToast('录音上传中…');
+        showToast(t('录音上传中…'));
         const uploaded = await uploadAttachment({ file, name });
         if (!uploaded) return;
         const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
@@ -535,13 +537,13 @@ async function submitVoiceFragment(file, name, seconds) {
             attachments: [uploaded.name],
             parse: true
         });
-        showToast('语音已保存，转写中…');
+        showToast(t('语音已保存，转写中…'));
         await loadFragments();
         const taskIds = (data && data.parseTaskIds) || [];
         if (taskIds.length) pollParseTasks(taskIds);
     } catch (e) {
         console.error('Failed to submit voice fragment:', e);
-        showToast(e.message || '语音保存失败', 'error');
+        showToast(e.message || t('语音保存失败'), 'error');
     }
 }
 
@@ -552,6 +554,7 @@ export function bindFragmentEvents() {
     document.getElementById('fragment-input')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submitFragment(); }
     });
+    document.getElementById('btn-fragment-submit')?.addEventListener('click', submitFragment);
     // 粘贴附件（截图粘贴是核心场景）
     document.getElementById('fragment-input')?.addEventListener('paste', (e) => {
         const items = e.clipboardData?.items || [];

@@ -20,6 +20,7 @@ import {
   splitChangeDetails,
   buildLineDiff,
 } from './generation-common.mjs';
+import { lintAfterGenerate } from './design-lint.mjs';
 
 // 超过该页数时 prompt 只放与指令相关的页（+ 前后各 1 页上下文）
 export const PARTIAL_THRESHOLD = 15;
@@ -222,6 +223,7 @@ async function main() {
       cfg.lastGeneratedAt = new Date().toISOString();
       writeConfig(name, cfg);
 
+      lintAfterGenerate(name, emit);
       const summary = `修改完成，共 ${mergedSlideCount} 页幻灯片`;
       const details = llmDetails || buildLineDiff(slidesHtml, partialDiffHtml);
       emit('ready', summary);
@@ -253,6 +255,7 @@ async function main() {
     cfg.lastGeneratedAt = new Date().toISOString();
     writeConfig(name, cfg);
 
+    lintAfterGenerate(name, emit);
     const summary = `修改完成，共 ${sectionCount} 页幻灯片`;
     // LLM 修改说明优先；缺失时用行级 diff 兜底，方便用户知道改了哪里
     const details = llmDetails || buildLineDiff(slidesHtml, newSlides);

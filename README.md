@@ -1,5 +1,15 @@
 # ai-ppt
 
+[![version](https://img.shields.io/badge/version-2.7.0-blue)](https://github.com/DrDragonIsMe/ai-ppt)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![tests](https://img.shields.io/badge/tests-193%20passed-brightgreen)](tests/core.test.mjs)
+[![在线演示](https://img.shields.io/badge/demo-%E5%9C%A8%E7%BA%BF%E6%BC%94%E7%A4%BA-teal)](https://drdragonisme.github.io/ai-ppt/)
+
+**[English](README.en.md)** | 中文 | **[在线演示](https://drdragonisme.github.io/ai-ppt/)**（需开启 GitHub Pages，见下文）
+
+![ai-ppt 演示](docs/marketing/demo.gif)
+
 个人知识中枢：**速记碎片 → AI 整理与加权星图 → PPT/配图/视频表现 → 智能测验迭代** 的闭环系统。基于 HTML/CSS/JS 的轻量级幻灯片引擎（键盘导航、全屏放映、多页预览、PDF 导出）+ 内置知识库 vault（双链笔记、速记碎片、知识卡片、测验、错题集），支持从 URL、文章、笔记或星图选区自动生成完整 deck，并可用 AI 生成配图与视频。附带 Claude CLI / Kimi CLI 的 skill 扩展：`/ppt-preview`、`/ppt-structure`、`/ppt-edit`、`/ppt-export`、`/ppt-list`、`/ppt-delete`、`/ppt-design` 等 11 个（见下文「可用 skill」）。
 
 ## 概念模型
@@ -76,6 +86,10 @@ npx ai-ppt-skills
 ```
 
 安装完成后重启 CLI 会话。
+
+### 在线演示（GitHub Pages）
+
+仓库内置 `demo/` 目录（产品落地页 + 若干单文件 HTML 演示 deck）和 `.github/workflows/pages.yml`。fork 或推送后在仓库 **Settings → Pages → Build and deployment 选 GitHub Actions** 即可，push 到 main 时自动部署到 `https://<用户名>.github.io/ai-ppt/`。
 
 ### LLM 配置（系统级别，默认火山方舟 doubao-seed-2.0-lite）
 

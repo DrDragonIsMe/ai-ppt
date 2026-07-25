@@ -20,6 +20,8 @@ import {
   buildFallbackSlides as renderFallbackSlides,
   generateSlidesHtml,
 } from './generation-common.mjs';
+import { lintAfterGenerate } from './design-lint.mjs';
+import { captureCover } from './deck-capture.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -212,6 +214,8 @@ async function generateFromGraph(projectName, nodeNames, options = {}) {
   };
   writeConfig(projectName, cfg);
 
+  lintAfterGenerate(projectName, emit);
+  await captureCover(projectName); // 顺手更新封面（静默失败，不阻断生成）
   emit('done', `生成完成！项目：${projectName}`);
   emitDone();
 

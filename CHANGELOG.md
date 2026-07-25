@@ -2,6 +2,46 @@
 
 本文件记录 ai-ppt 的版本历史。现行有效约定见 AGENTS.md。
 
+## v2.8.1 — Web UI i18n（2026-07）
+
+- **英文界面**：新增轻量 i18n（`web/js/modules/i18n.mjs`，中文原文即 key，`t(key, vars?)` 缺 key 回退中文 + 去重 console.warn；语言存 localStorage `ai-ppt-lang`，未设置按 navigator.language 探测；`setLang()` 后 reload 生效）；语言包 `web/js/i18n/zh.mjs`（恒等兜底）与 `web/js/i18n/en.mjs`（739 key 全量翻译）。
+- **覆盖**：index.html 静态文案 450 处 `data-i18n(-placeholder/-title/-aria)` 打标（启动时 `applyStaticI18n()` 批量替换，zh 模式恒等）；vault/fragments/projects/generate/modals/app/state 模块动态文案全部走 `t()`；cards/exams/graph 深埋文案暂留中文（en 模式降级显示原文）。
+- **设置面板**新增「界面语言」下拉（中文/English，切换即生效）；生成参数风格下拉加稳定 `value` 属性（翻译只影响显示不影响提交值）；sw.js 预缓存新增 i18n 三个文件。
+
+## v2.8.0 — 产出链路、主题生态与易用性深化（2026-07）
+
+### 产出
+
+- **真实数据图表组件**：`chart-line`（折线/面积/多序列）、`chart-pie`（饼/环图）、`chart-bars`（分组/堆叠柱），slide 内 `data-chart` JSON 声明、ppt.js 渲染为静态 SVG（零依赖、打印/缩略图/导出天然正确、配色走 `--chart-1..6` 主题变量）；生成 prompt 类清单同步，LLM 可直接产出图表页。
+- **发布产品化**：项目工具栏「发布」按钮 + `#publish-modal`（完整链接/复制/局域网 IP 链接/二维码，`qrcode` 本地生成）；版本化发布 `published/<name>/vN/` + `latest` 软链；「静态站点包 ZIP」导出（`archiver`）。
+- **Deck → 视频**：`scripts/export-video.mjs`（puppeteer 逐页 1280×800 + ffmpeg 合成 mp4，每页默认 4s，ffmpeg 缺失降级为逐帧 PNG），任务化接入导出下拉（202 + SSE，计入 puppeteer 并发上限）。
+- **设计质量护栏**：`scripts/design-lint.mjs` 9 条规则（大数字超 4/标题/渐变文字/空页/眉毛滥用/疑似占位数据/版式单调/密表/图片缺失），生成与 chat-modify 后自动 lint 发 NDJSON 事件；`GET/POST /api/projects/:name/design-lint(/fix)` + 前端「设计检查」按钮，gradient-text 可一键自动修复。
+- **配图闭环**：生成配图结果区新增「插入笔记」（光标处插入 `![[name]]`）与「插入幻灯片」（`POST .../insert-image`，vault 资产自动复制进项目、默认新建 `.two-col` 图片页、写前快照+索引刷新）；视频资产生成 `<video>` 页。
+- **vault 资产管理**：`DELETE /api/vault/assets/:name`（被引用 409 + 引用方列表，`?force=true` 强删）；「资产库」modal（缩略图/大小/引用徽标/插入/删除）；启动清理 `.tmp/` 孤儿 .part。
+- **场景模板**：`templates/` 4 个标杆模板（周报/培训课件/路演/复习课件，全部通过 design-lint 零问题），新建项目可选模板（`POST /api/projects` 支持 `template` 字段）。
+- **主题画廊**：theme-showcase.html 改为从 themes.json 自动渲染（补 `desc`/`mode` 字段），Web UI「主题画廊」modal iframe 嵌入、点选即应用（postMessage）。
+- **项目封面**：`captureCover()` 生成 480×300 cover.png（生成与 PDF 导出后自动更新），PPT 作品列表显示封面缩略图。
+
+### 易用性
+
+- **撤销/重做**：笔记编辑器自定义 undo/redo 栈（500ms 输入合并、程序化修改独立入栈、100 步上限）；笔记「历史版本」modal（`GET .../backups` + `POST .../restore-backup`，恢复前自动备份当前版）；笔记与 PPT 的 AI 修改完成后显示「撤销本次修改」按钮。
+- **批量操作与拖拽**：笔记多选支持批量删除/批量打标签（服务端统一 FM 解析保持格式）；笔记列表 HTML5 拖拽排序（顺序持久化 `vault/.meta/note-order.json`）。
+- **新手引导**：首次启动 3 步向导（记录 → 生成 → 导出与发布，localStorage 记忆，帮助面板可重放）；帮助面板按场景重组（我想做 PPT/整理笔记/复习）+ 快捷键清单与实际绑定对齐。
+- **移动端底线可用**（≤768px）：侧边栏汉堡抽屉、语音 modal 全屏、笔记上下堆叠、面板单列、零横向溢出——速记/语音听记/笔记阅读手机上可用。
+- **截图管线修复**：`captureSlideFrames`（export-pdf/video 共用）补齐 UI 铬件隐藏与动画终态强制可见，PDF/视频不再带入侧边栏与空白页。
+
+### 推广
+
+- **README 双语 + 元数据**：新建 `README.en.md`、中英互链、badges（版本/license/node/tests）、keywords/description 补全、新建 `LICENSE`（MIT）与 `CONTRIBUTING.md`。
+- **npm 安装向导**：install-skills.js 重写（CLI 检测含 Claude Code、`--dry-run`/`--uninstall`/`--guide`、幂等、装完打印快速上手）；`npm run intro`。
+- **Demo 站点**：`demo/`（产品落地页 + 3 个单文件演示 deck + 封面）+ `.github/workflows/pages.yml`（GitHub Pages 自动部署，需仓库设置开启）。
+- **自产素材**：`projects/ai-ppt-intro` 产品介绍 deck（LLM 生成 + 人工标杆化修订）→ `docs/marketing/demo.gif`（30s，README 嵌入）；`docs/marketing/` 三篇场景文案（HR 培训/错题复习/会议汇报，功能路径与 UI 文案逐字核对）。
+
+### PWA
+
+- **安装到桌面**：`web/manifest.webmanifest`（standalone、teal 主题色、192/512 PNG 图标，源 `web/icons/icon.svg` 经 puppeteer 导出）+ index.html head 注入 manifest/theme-color/icon/apple-touch-icon；帮助面板 footer 增加安装指引。
+- **Service Worker 离线壳**：`web/sw.js` 版本化 cache（`ai-ppt-v<version>`，activate 清旧版本，skipWaiting + clientsClaim）；静态壳 cache-first 预缓存（含 `web/js/modules/*` 与 `vendor/marked.umd.js`），导航 network-first 离线回退缓存壳，`/api/` 离线返回 503 自定义 JSON（不做数据离线化），`/projects/`、`/published/`、`/base/` network-first + 运行时缓存副本；app.mjs 启动时注册（仅 https/localhost，失败静默）。server.mjs MIME 表新增 `.webmanifest`。
+
 ## v2.7.0 — 底层架构加固（2026-07）
 
 ### 基础模块

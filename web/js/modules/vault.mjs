@@ -2,6 +2,7 @@
 import { S } from './state.mjs';
 import { api, apiUpload, showToast, escapeHtml, escapeHtmlAttr, withLlmSettingsHint } from './state.mjs';
 import { showConfirmModal, showInputModal } from './modals.mjs';
+import { t } from './i18n.mjs';
 
 // 外部回调（通过 initVaultModule 注入）
 let _cb = {};
@@ -54,7 +55,7 @@ export async function loadNotes() {
         renderNoteList();
     } catch (e) {
         console.error('Failed to load notes:', e);
-        showToast('加载笔记列表失败');
+        showToast(t('加载笔记列表失败'));
     }
 }
 
@@ -65,11 +66,11 @@ function renderNoteList(filter) {
     S.vaultSearchQuery = '';
     let html = '';
     if (S.notes.length === 0) {
-        html = '<div class="vault-empty" style="padding:20px;text-align:center;opacity:0.6;font-size:13px;">暂无笔记</div>';
+        html = `<div class="vault-empty" style="padding:20px;text-align:center;opacity:0.6;font-size:13px;">${t('暂无笔记')}</div>`;
     } else {
         for (const note of S.notes) {
-            html += `<div class="vault-note-item ${S.currentNote === note.name ? 'active' : ''}" data-name="${escapeHtmlAttr(note.name)}">
-          <input type="checkbox" class="vault-note-check" data-name="${escapeHtmlAttr(note.name)}" title="选择笔记" ${S.selectedNotes.has(note.name) ? 'checked' : ''}>
+            html += `<div class="vault-note-item ${S.currentNote === note.name ? 'active' : ''}" data-name="${escapeHtmlAttr(note.name)}" draggable="true" title="${t('拖拽可调整顺序')}">
+          <input type="checkbox" class="vault-note-check" data-name="${escapeHtmlAttr(note.name)}" title="${t('选择笔记')}" ${S.selectedNotes.has(note.name) ? 'checked' : ''}>
           <div class="vault-note-item-main">
             <div class="vault-note-item-title">${escapeHtml(note.name)}</div>
             <div class="vault-note-item-meta">${note.mtime ? new Date(note.mtime).toLocaleDateString() : ''}</div>
@@ -90,12 +91,123 @@ function updateNoteSelectBar() {
     if (!bar || !count) return;
     const n = S.selectedNotes.size;
     bar.classList.toggle('hidden', n === 0);
-    count.textContent = `已选 ${n} 篇`;
+    count.textContent = t('已选 {n} 篇', { n });
 }
 
 function clearSelectedNotes() {
     S.selectedNotes.clear();
     renderNoteList();
+}
+
+// 批量删除：逐个 DELETE（服务端删前自动备份到 .snapshots/_vault）
+async function batchDeleteNotes() {
+    const names = [...S.selectedNotes];
+    if (!names.length) { showToast(t('请先勾选笔记')); return; }
+    const ok = await showConfirmModal({
+        title: t('批量删除笔记'),
+        message: t('确定删除选中的 {count} 篇笔记吗？（删除前会自动备份，可在「历史版本」中恢复）', { count: names.length }),
+        confirmText: t('全部删除'),
+        danger: true,
+    });
+    if (!ok) return;
+    let done = 0, failed = 0;
+    for (const name of names) {
+        try {
+            await api('DELETE', `/api/vault/notes/${encodeURIComponent(name)}`);
+            removeNoteDraft(name);
+            S.selectedNotes.delete(name);
+            done++;
+        } catch (e) {
+            console.error('Failed to delete note:', name, e);
+            failed++;
+        }
+    }
+    // 当前打开的笔记被删除时收起编辑区
+    if (S.currentNote && names.includes(S.currentNote)) {
+        S.currentNote = null;
+        resetNoteDirtyState();
+        document.getElementById('vault-note-panel').classList.add('hidden');
+        document.getElementById('vault-no-note-selected').classList.remove('hidden');
+    }
+    await loadNotes();
+    showToast(failed ? t('已删除 {done} 篇，失败 {failed} 篇', { done, failed }) : t('已删除 {done} 篇笔记', { done }), failed ? 'error' : undefined);
+}
+
+// 批量打标签：追加进各笔记 Front Matter tags（服务端去重、保持 FM 格式）
+async function batchTagNotes() {
+    const names = [...S.selectedNotes];
+    if (!names.length) { showToast(t('请先勾选笔记')); return; }
+    const input = await showInputModal({ title: t('批量打标签'), label: t('为 {count} 篇笔记追加标签（多个用逗号或空格分隔）', { count: names.length }), placeholder: t('例如：重要, 工作') });
+    if (input === null) return;
+    const tags = input.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean);
+    if (!tags.length) { showToast(t('请输入标签')); return; }
+    let done = 0, failed = 0;
+    for (const name of names) {
+        try {
+            await api('POST', `/api/vault/notes/${encodeURIComponent(name)}/add-tags`, { tags });
+            done++;
+        } catch (e) {
+            console.error('Failed to tag note:', name, e);
+            failed++;
+        }
+    }
+    await loadNotes();
+    // 当前打开的笔记被打过标签则重载，刷新 Front Matter 显示
+    if (S.currentNote && names.includes(S.currentNote)) await selectNote(S.currentNote);
+    showToast(failed ? t('已为 {done} 篇笔记打标签，失败 {failed} 篇', { done, failed }) : t('已为 {done} 篇笔记追加标签', { done }), failed ? 'error' : undefined);
+}
+
+// ============================================================
+// 笔记列表拖拽排序（HTML5 DnD，顺序持久化到服务端 note-order.json）
+// ============================================================
+function bindNoteListDragEvents() {
+    const list = getVaultEls().vaultNoteList;
+    let dragEl = null;
+    list.addEventListener('dragstart', (e) => {
+        const item = e.target.closest('.vault-note-item');
+        if (!item) return;
+        dragEl = item;
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', item.dataset.name || '');
+    });
+    list.addEventListener('dragover', (e) => {
+        if (!dragEl) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const target = e.target.closest('.vault-note-item');
+        list.querySelectorAll('.vault-note-item.drag-over').forEach((el) => el.classList.remove('drag-over'));
+        if (!target || target === dragEl) return;
+        const rect = target.getBoundingClientRect();
+        const before = (e.clientY - rect.top) < rect.height / 2;
+        target.classList.add('drag-over');
+        list.insertBefore(dragEl, before ? target : target.nextSibling);
+    });
+    list.addEventListener('drop', (e) => { if (dragEl) e.preventDefault(); });
+    list.addEventListener('dragend', () => {
+        if (!dragEl) return;
+        dragEl.classList.remove('dragging');
+        list.querySelectorAll('.vault-note-item.drag-over').forEach((el) => el.classList.remove('drag-over'));
+        dragEl = null;
+        persistNoteOrder();
+    });
+}
+
+// 把当前 DOM 顺序保存到服务端；失败则重载列表还原
+async function persistNoteOrder() {
+    const order = [...getVaultEls().vaultNoteList.querySelectorAll('.vault-note-item')]
+        .map((el) => el.dataset.name).filter(Boolean);
+    if (!order.length) return;
+    const byName = new Map(S.notes.map((n) => [n.name, n]));
+    S.notes = [...order.map((n) => byName.get(n)).filter(Boolean), ...S.notes.filter((n) => !order.includes(n.name))];
+    try {
+        await api('PUT', '/api/vault/note-order', { order });
+        showToast(t('顺序已保存'));
+    } catch (e) {
+        console.error('Failed to save note order:', e);
+        showToast(t('顺序保存失败：{msg}', { msg: e.message || '' }), 'error');
+        await loadNotes();
+    }
 }
 
 // ============================================================
@@ -132,7 +244,7 @@ function highlightSearchHit(text, query) {
 function renderVaultSearchResults(results, query) {
     const els = getVaultEls();
     if (results.length === 0) {
-        els.vaultNoteList.innerHTML = '<div class="vault-empty" style="padding:20px;text-align:center;opacity:0.6;font-size:13px;">无匹配笔记</div>';
+        els.vaultNoteList.innerHTML = `<div class="vault-empty" style="padding:20px;text-align:center;opacity:0.6;font-size:13px;">${t('无匹配笔记')}</div>`;
         return;
     }
     els.vaultNoteList.innerHTML = results.map((r) => {
@@ -150,6 +262,7 @@ function renderVaultSearchResults(results, query) {
 // 选择笔记
 // ============================================================
 export async function selectNote(name) {
+    if (_cb.closeSidebarDrawer) _cb.closeSidebarDrawer(); // 移动端：选中笔记后收起抽屉进入阅读
     if (S.currentNote !== name) {
         const noteChatMessages = document.getElementById('note-chat-messages');
         if (noteChatMessages) noteChatMessages.innerHTML = '';
@@ -174,6 +287,7 @@ export async function selectNote(name) {
         els.vaultNoteFrontmatter.value = frontmatterText;
         const contentWithoutFrontmatter = data.content.replace(/^---[\s\S]*?---\n*/, '');
         els.vaultNoteContent.value = contentWithoutFrontmatter;
+        resetNoteUndoStack(contentWithoutFrontmatter); // 切换笔记清空撤销栈
         resetNoteDirtyState();
         checkNoteDraft(name, frontmatterText + contentWithoutFrontmatter);
         await loadNoteLinks(name);
@@ -194,16 +308,16 @@ function checkNoteDraft(name, serverContent) {
     const noteMeta = S.notes.find((n) => n.name === name);
     const mtime = noteMeta && noteMeta.mtime ? new Date(noteMeta.mtime).getTime() : 0;
     if (mtime && (draft.time || 0) <= mtime) return;
-    const when = draft.time ? new Date(draft.time).toLocaleString() : '未知时间';
+    const when = draft.time ? new Date(draft.time).toLocaleString() : t('未知时间');
     showConfirmModal({
-        title: '发现未保存草稿',
-        message: `检测到「${name}」有一版未保存的草稿（${when}），与当前内容不同。是否恢复？`,
-        confirmText: '恢复草稿'
+        title: t('发现未保存草稿'),
+        message: t('检测到「{name}」有一版未保存的草稿（{when}），与当前内容不同。是否恢复？', { name, when }),
+        confirmText: t('恢复草稿')
     }).then((restore) => {
         if (restore) {
-            if (S.currentNote !== name) { showToast('草稿仍在本地，重新打开该笔记可再次恢复'); return; }
+            if (S.currentNote !== name) { showToast(t('草稿仍在本地，重新打开该笔记可再次恢复')); return; }
             applyNoteDraft(draft);
-            showToast('已恢复未保存草稿');
+            showToast(t('已恢复未保存草稿'));
         } else {
             removeNoteDraft(name);
         }
@@ -220,6 +334,7 @@ function applyNoteDraft(draft) {
         els.vaultNoteFrontmatter.value = '';
         els.vaultNoteContent.value = draft.content;
     }
+    resetNoteUndoStack(els.vaultNoteContent.value); // 草稿整体替换，撤销栈以草稿内容为基线
     buildOutline();
     if (S.notePreviewMode) renderNotePreview();
     markNoteDirty(); // 恢复进编辑器并标脏，等待自动/手动保存
@@ -237,7 +352,7 @@ async function loadNoteLinks(name) {
 }
 
 function renderLinksList(el, links) {
-    if (!links || links.length === 0) { el.innerHTML = '<div style="opacity:0.5;font-size:13px;">暂无</div>'; return; }
+    if (!links || links.length === 0) { el.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('暂无')}</div>`; return; }
     let html = '';
     for (const link of links) {
         const name = link.name || link;
@@ -261,23 +376,23 @@ async function loadNoteMentions(name) {
         renderNoteMentions(data.mentions || []);
     } catch (e) {
         console.error('Failed to load note mentions:', e);
-        el.innerHTML = '<div style="opacity:0.5;font-size:13px;">暂无未链接提及</div>';
+        el.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('暂无未链接提及')}</div>`;
     }
 }
 
 function renderNoteMentions(mentions) {
     const el = document.getElementById('vault-mentions');
-    if (!mentions.length) { el.innerHTML = '<div style="opacity:0.5;font-size:13px;">暂无未链接提及</div>'; return; }
+    if (!mentions.length) { el.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('暂无未链接提及')}</div>`; return; }
     el.innerHTML = mentions.map((m) => {
         const source = m.source || '';
         const isFragment = source.startsWith('fragment:');
-        const badge = isFragment ? '碎片' : '笔记';
+        const badge = isFragment ? t('碎片') : t('笔记');
         const label = isFragment ? source.slice('fragment:'.length) : source;
         return `<div class="vault-mention-item" data-source="${escapeHtmlAttr(source)}">
         <div class="vault-mention-head">
           <span class="vault-mention-badge">${badge}</span>
           <span class="vault-mention-source">${escapeHtml(label)}</span>
-          <button class="btn-secondary vault-mention-link-btn">转为链接</button>
+          <button class="btn-secondary vault-mention-link-btn">${t('转为链接')}</button>
         </div>
         <div class="vault-mention-snippet">${escapeHtml(m.snippet || '')}</div>
       </div>`;
@@ -288,10 +403,10 @@ async function linkMention(source) {
     if (!S.currentNote) return;
     try {
         const data = await api('POST', `/api/vault/notes/${encodeURIComponent(S.currentNote)}/link-mentions`, { source });
-        showToast(`已转换 ${data.count ?? 0} 处提及`);
+        showToast(t('已转换 {count} 处提及', { count: data.count ?? 0 }));
         await loadNoteMentions(S.currentNote);
         await loadNoteLinks(S.currentNote);
-    } catch (e) { console.error('Failed to link mention:', e); showToast(e.message || '转换失败'); }
+    } catch (e) { console.error('Failed to link mention:', e); showToast(e.message || t('转换失败')); }
 }
 
 // ============================================================
@@ -314,9 +429,95 @@ async function confirmRename() {
         const data = await api('POST', `/api/vault/notes/${encodeURIComponent(S.currentNote)}/rename`, { newName });
         closeRenameModal();
         const finalName = data.newName || newName;
-        showToast(`已重命名为 ${finalName}，更新 ${data.updatedRefs ?? 0} 处引用`);
+        showToast(t('已重命名为 {name}，更新 {count} 处引用', { name: finalName, count: data.updatedRefs ?? 0 }));
         await loadNotes(); selectNote(finalName);
-    } catch (e) { console.error('Failed to rename note:', e); showToast(e.message || '重命名失败'); }
+    } catch (e) { console.error('Failed to rename note:', e); showToast(e.message || t('重命名失败')); }
+}
+
+// ============================================================
+// 历史版本（.snapshots/_vault 备份列表 / 恢复）
+// ============================================================
+function formatBackupTs(ts) {
+    const m = String(ts).match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-\d{3}Z$/);
+    return m ? `${m[1]} ${m[2]}:${m[3]}:${m[4]}` : String(ts);
+}
+
+function closeNoteHistoryModal() { document.getElementById('note-history-modal').classList.add('hidden'); }
+
+async function openNoteHistoryModal() {
+    if (!S.currentNote) return;
+    const list = document.getElementById('note-history-list');
+    list.innerHTML = `<div class="note-history-empty">${t('加载中…')}</div>`;
+    document.getElementById('note-history-modal').classList.remove('hidden');
+    let backups = [];
+    try {
+        const data = await api('GET', `/api/vault/notes/${encodeURIComponent(S.currentNote)}/backups`);
+        backups = data.backups || [];
+    } catch (e) {
+        console.error('Failed to load note backups:', e);
+        list.innerHTML = `<div class="note-history-empty">${t('加载失败')}</div>`;
+        return;
+    }
+    if (!backups.length) {
+        list.innerHTML = `<div class="note-history-empty">${t('暂无历史版本（笔记在覆盖 / 删除 / AI 修改前会自动备份）')}</div>`;
+        return;
+    }
+    list.innerHTML = backups.map((b) => `<div class="note-history-item">
+      <div class="note-history-item-main">
+        <div class="note-history-item-time">${escapeHtml(formatBackupTs(b.ts))}</div>
+        <div class="note-history-item-preview">${escapeHtml(b.preview || '')}</div>
+      </div>
+      <button class="btn-secondary note-history-restore" data-ts="${escapeHtmlAttr(b.ts)}" style="padding:6px 10px;font-size:12px;white-space:nowrap;">${t('恢复此版本')}</button>
+    </div>`).join('');
+}
+
+async function restoreNoteBackup(ts) {
+    if (!S.currentNote) return;
+    const ok = await showConfirmModal({
+        title: t('恢复历史版本'),
+        message: t('确定恢复到 {ts} 的版本吗？当前内容会先自动备份，可再次恢复。', { ts: formatBackupTs(ts) }),
+        confirmText: t('恢复'),
+    });
+    if (!ok) return;
+    const name = S.currentNote;
+    try {
+        await api('POST', `/api/vault/notes/${encodeURIComponent(name)}/restore-backup`, { ts });
+        removeNoteDraft(name);
+        closeNoteHistoryModal();
+        if (S.currentNote === name) await selectNote(name);
+        showToast(t('已恢复历史版本'));
+    } catch (e) {
+        console.error('Failed to restore note backup:', e);
+        showToast(t('恢复失败：{msg}', { msg: e.message || '' }), 'error');
+    }
+}
+
+// AI 修改完成后在对话消息下附加「撤销本次修改」按钮：恢复本次修改前自动创建的备份
+function addNoteChatUndoButton(msgDiv, noteName, sinceTs) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-secondary chat-undo-btn';
+    btn.textContent = t('撤销本次修改');
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+            const data = await api('GET', `/api/vault/notes/${encodeURIComponent(noteName)}/backups`);
+            const backups = data.backups || [];
+            // 取本次修改开始后创建的最早一份备份（= 修改前内容）；找不到则退化为最近一份
+            const pick = [...backups].reverse().find((b) => b.ts >= sinceTs) || backups[0];
+            if (!pick) { showToast(t('没有可回滚的备份')); btn.remove(); return; }
+            if (!(await showConfirmModal({ title: t('撤销 AI 修改'), message: t('将回滚到本次 AI 修改前的版本（当前内容会先自动备份）。确定吗？'), confirmText: t('撤销修改') }))) { btn.disabled = false; return; }
+            await api('POST', `/api/vault/notes/${encodeURIComponent(noteName)}/restore-backup`, { ts: pick.ts });
+            removeNoteDraft(noteName);
+            if (S.currentNote === noteName) await selectNote(noteName);
+            showToast(t('已撤销本次 AI 修改'));
+            btn.remove();
+        } catch (e) {
+            console.error('Failed to undo note chat:', e);
+            btn.disabled = false;
+            showToast(t('撤销失败：{msg}', { msg: e.message || '' }), 'error');
+        }
+    });
+    msgDiv.appendChild(btn);
 }
 
 // ============================================================
@@ -337,7 +538,7 @@ async function loadTags() {
         const data = await api('GET', '/api/vault/tags');
         S.vaultTags = data.tags || {};
         renderTagCloud(); renderTagDetail();
-    } catch (e) { console.error('Failed to load tags:', e); showToast('加载标签失败'); }
+    } catch (e) { console.error('Failed to load tags:', e); showToast(t('加载标签失败')); }
 }
 
 function renderTagCloud() {
@@ -345,7 +546,7 @@ function renderTagCloud() {
     const entries = Object.entries(S.vaultTags || {}).map(([tag, info]) => ({
         tag, count: (info.notes?.length || 0) + (info.cards?.length || 0) + (info.fragments?.length || 0)
     })).filter((e) => e.count > 0).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
-    if (!entries.length) { el.innerHTML = '<div style="opacity:0.5;font-size:13px;">暂无标签</div>'; return; }
+    if (!entries.length) { el.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('暂无标签')}</div>`; return; }
     const max = entries[0].count;
     el.innerHTML = entries.map((e) => {
         const ratio = e.count / max;
@@ -377,8 +578,8 @@ function tagItemInfo(item) {
 function renderTagColumn(elId, items, type) {
     const el = document.getElementById(elId);
     const list = Array.isArray(items) ? items : [];
-    if (!list.length) { el.innerHTML = '<div style="opacity:0.5;font-size:12px;">暂无</div>'; return; }
-    const badge = { note: '笔记', card: '卡片', fragment: '碎片' }[type];
+    if (!list.length) { el.innerHTML = `<div style="opacity:0.5;font-size:12px;">${t('暂无')}</div>`; return; }
+    const badge = t({ note: '笔记', card: '卡片', fragment: '碎片' }[type]);
     el.innerHTML = list.map((item) => {
         const { id, label } = tagItemInfo(item);
         return `<div class="tags-item" data-type="${type}" data-id="${escapeHtmlAttr(id)}">
@@ -394,7 +595,7 @@ function openTagItem(type, id) {
         if (_cb.loadCards) _cb.loadCards().then(() => { if (_cb.selectCard) _cb.selectCard(id); });
     } else if (type === 'fragment') {
         if (_cb.switchSidebarTab) _cb.switchSidebarTab('fragments');
-        showToast('已切换到速记');
+        showToast(t('已切换到速记'));
     }
 }
 
@@ -434,10 +635,10 @@ function updateNoteDirtyUI() {
     const base = els.vaultNoteTitle.dataset.baseTitle || els.vaultNoteTitle.textContent.replace(/ ●$/, '');
     els.vaultNoteTitle.dataset.baseTitle = base;
     els.vaultNoteTitle.textContent = S.noteDirty ? `${base} ●` : base;
-    els.vaultNoteTitle.title = S.noteDirty ? '有未保存的修改' : '';
+    els.vaultNoteTitle.title = S.noteDirty ? t('有未保存的修改') : '';
     if (els.btnVaultNoteSave) {
-        els.btnVaultNoteSave.textContent = S.noteDirty ? '保存 ●' : '保存';
-        els.btnVaultNoteSave.title = S.noteDirty ? '有未保存的修改' : '';
+        els.btnVaultNoteSave.textContent = S.noteDirty ? t('保存 ●') : t('保存');
+        els.btnVaultNoteSave.title = S.noteDirty ? t('有未保存的修改') : '';
     }
 }
 
@@ -472,7 +673,7 @@ async function saveNote(opts = {}) {
             body: JSON.stringify({ content })
         });
         if (res.ok) {
-            if (!auto) showToast('保存成功');
+            if (!auto) showToast(t('保存成功'));
             // 保存期间又有新输入则保持脏标记，交给下一次自动保存
             if (S.currentNote === name && els.vaultNoteFrontmatter.value + els.vaultNoteContent.value === content) {
                 S.noteDirty = false;
@@ -482,11 +683,11 @@ async function saveNote(opts = {}) {
             await loadNotes();
             if (S.currentNote === name) await loadNoteLinks(name);
         } else {
-            showToast(auto ? '自动保存失败，请检查网络后重试' : '保存失败', 'error');
+            showToast(auto ? t('自动保存失败，请检查网络后重试') : t('保存失败'), 'error');
         }
     } catch (e) {
         console.error('Failed to save note:', e);
-        showToast(auto ? '自动保存失败，请检查网络后重试' : '保存失败', 'error');
+        showToast(auto ? t('自动保存失败，请检查网络后重试') : t('保存失败'), 'error');
     } finally {
         noteSaving = false;
         if (noteSaveQueued) { noteSaveQueued = false; saveNote({ auto: true }); }
@@ -498,7 +699,7 @@ export function saveCurrentNote() { saveNote(); }
 
 async function deleteNote() {
     if (!S.currentNote) return;
-    if (!(await showConfirmModal({ title: '删除笔记', message: `确定要删除笔记「${S.currentNote}」吗？此操作不可恢复。`, confirmText: '删除', danger: true }))) return;
+    if (!(await showConfirmModal({ title: t('删除笔记'), message: t('确定要删除笔记「{name}」吗？此操作不可恢复。', { name: S.currentNote }), confirmText: t('删除'), danger: true }))) return;
     const els = getVaultEls();
     try {
         const res = await fetch(`/api/vault/notes/${encodeURIComponent(S.currentNote)}`, { method: 'DELETE' });
@@ -508,23 +709,113 @@ async function deleteNote() {
             resetNoteDirtyState();
             els.vaultNotePanel.classList.add('hidden');
             els.vaultEmptyState.classList.remove('hidden');
-            await loadNotes(); showToast('删除成功');
+            await loadNotes(); showToast(t('删除成功'));
         }
-    } catch (e) { console.error('Failed to delete note:', e); showToast('删除失败'); }
+    } catch (e) { console.error('Failed to delete note:', e); showToast(t('删除失败')); }
 }
 
 export async function createNewNote() {
-    const input = await showInputModal({ title: '新建笔记', label: '笔记名称', placeholder: '输入笔记名称' });
+    const input = await showInputModal({ title: t('新建笔记'), label: t('笔记名称'), placeholder: t('输入笔记名称') });
     if (input === null) return;
     const name = input.trim();
-    if (!name) { showToast('请输入笔记名称'); return; }
+    if (!name) { showToast(t('请输入笔记名称')); return; }
     try {
         const res = await fetch('/api/vault/notes', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
         });
-        if (res.ok) { showToast('创建成功'); await loadNotes(); selectNote(name); }
-    } catch (e) { console.error('Failed to create note:', e); showToast('创建失败'); }
+        if (res.ok) { showToast(t('创建成功')); await loadNotes(); selectNote(name); }
+    } catch (e) { console.error('Failed to create note:', e); showToast(t('创建失败')); }
+}
+
+// ============================================================
+// 编辑器：自定义撤销/重做栈（Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y）
+// 浏览器原生 undo 会被程序化修改（wikilink 补全、任务切换、插图）打断，
+// 这里对正文内容维护快照栈：连续输入 500ms 防抖合并为一步，程序化修改各自独立入栈。
+// ============================================================
+const NOTE_UNDO_LIMIT = 100;
+const NOTE_UNDO_DEBOUNCE = 500;
+let noteUndoStack = [];   // [{value, selStart, selEnd}]，栈顶 = 最近一次可撤销状态
+let noteRedoStack = [];
+let noteLastValue = '';   // 最近一次入栈/加载时的正文值（输入批的「批前内容」）
+let noteTypingTimer = null;
+
+function resetNoteUndoStack(value) {
+    clearTimeout(noteTypingTimer);
+    noteTypingTimer = null;
+    noteUndoStack = [];
+    noteRedoStack = [];
+    noteLastValue = value;
+}
+
+function pushNoteHistory(stack, entry) {
+    stack.push(entry);
+    if (stack.length > NOTE_UNDO_LIMIT) stack.shift();
+}
+
+// 新编辑（输入批结算 / 程序化修改）入栈，并使 redo 栈失效
+function pushNoteUndo(entry) {
+    pushNoteHistory(noteUndoStack, entry);
+    noteRedoStack = [];
+}
+
+// 连续输入：防抖 500ms，一批结束后把「批前内容」作为一步入栈
+function scheduleTypingUndo() {
+    if (S.imeComposing) return; // IME 组合期间不结算，compositionend 统一处理
+    clearTimeout(noteTypingTimer);
+    noteTypingTimer = setTimeout(commitTypingUndo, NOTE_UNDO_DEBOUNCE);
+}
+
+function commitTypingUndo() {
+    clearTimeout(noteTypingTimer);
+    noteTypingTimer = null;
+    const ta = getVaultEls().vaultNoteContent;
+    if (ta.value !== noteLastValue) {
+        pushNoteUndo({ value: noteLastValue, selStart: ta.selectionStart, selEnd: ta.selectionEnd });
+        noteLastValue = ta.value;
+    }
+}
+
+// 程序化修改前：先结算未完成的输入批，再把当前状态作为独立步进入栈
+function noteUndoPoint() {
+    commitTypingUndo();
+    const ta = getVaultEls().vaultNoteContent;
+    pushNoteUndo({ value: ta.value, selStart: ta.selectionStart, selEnd: ta.selectionEnd });
+}
+
+// 程序化修改后：同步批前基线，避免紧接的输入把这次修改合并掉
+function noteEdited() {
+    noteLastValue = getVaultEls().vaultNoteContent.value;
+}
+
+function applyNoteHistoryEntry(entry) {
+    const els = getVaultEls();
+    const ta = els.vaultNoteContent;
+    ta.value = entry.value;
+    const pos = Math.min(entry.selStart ?? entry.value.length, entry.value.length);
+    ta.selectionStart = ta.selectionEnd = pos;
+    noteLastValue = ta.value;
+    buildOutline();
+    if (S.notePreviewMode) renderNotePreview();
+    markNoteDirty();
+}
+
+function noteUndo() {
+    commitTypingUndo(); // 进行中的输入批先结算为一步
+    const entry = noteUndoStack.pop();
+    if (!entry) { showToast(t('没有可撤销的操作')); return; }
+    const ta = getVaultEls().vaultNoteContent;
+    pushNoteHistory(noteRedoStack, { value: ta.value, selStart: ta.selectionStart, selEnd: ta.selectionEnd });
+    applyNoteHistoryEntry(entry);
+}
+
+function noteRedo() {
+    commitTypingUndo();
+    const entry = noteRedoStack.pop();
+    if (!entry) { showToast(t('没有可重做的操作')); return; }
+    const ta = getVaultEls().vaultNoteContent;
+    pushNoteHistory(noteUndoStack, { value: ta.value, selStart: ta.selectionStart, selEnd: ta.selectionEnd });
+    applyNoteHistoryEntry(entry);
 }
 
 // ============================================================
@@ -545,7 +836,7 @@ function taskBadgeClass(status) {
 
 function pdfEmbedHtml(pdf) {
     const src = `/api/vault/assets/${encodeURIComponent(pdf.name)}` + (pdf.page ? `#page=${pdf.page}` : '');
-    return `<iframe class="pdf-embed" src="${escapeHtmlAttr(src)}" loading="lazy"></iframe><div class="pdf-embed-actions"><a href="${escapeHtmlAttr(src)}" target="_blank" rel="noopener">新窗口打开 ${escapeHtml(pdf.name)}</a></div>`;
+    return `<iframe class="pdf-embed" src="${escapeHtmlAttr(src)}" loading="lazy"></iframe><div class="pdf-embed-actions"><a href="${escapeHtmlAttr(src)}" target="_blank" rel="noopener">${t('新窗口打开 {name}', { name: escapeHtml(pdf.name) })}</a></div>`;
 }
 
 // 多媒体嵌入（图片/视频/音频/docx 链接），name 为 decodeHtmlEntities 后的原始文件名
@@ -566,7 +857,7 @@ function mediaEmbedHtml(name) {
         return `<audio class="note-media-audio" src="${src}" controls></audio>`;
     }
     // docx 等文档：复用 PDF 的链接式展示（新窗口打开，不嵌 iframe）
-    return `<div class="pdf-embed-actions"><a href="${src}" target="_blank" rel="noopener">新窗口打开 ${escapeHtml(name)}</a></div>`;
+    return `<div class="pdf-embed-actions"><a href="${src}" target="_blank" rel="noopener">${t('新窗口打开 {name}', { name: escapeHtml(name) })}</a></div>`;
 }
 
 // 渲染管线顺序即 XSS 防线：整体 escapeHtml → 各语法在转义后文本上替换
@@ -603,7 +894,7 @@ function renderNotePreview() {
     escaped = escaped.replace(/\[\[([^\[\]\n]+)\]\]/g, (_m, rawName) => {
         const exists = noteNameExists(decodeHtmlEntities(rawName));
         const cls = exists ? 'wiki-link' : 'wiki-link wiki-link-dead';
-        const title = exists ? '' : '待创建：';
+        const title = exists ? '' : t('待创建：');
         return `<a href="#" class="${cls}" data-note="${rawName}" title="${title}${rawName}">${rawName}</a>`;
     });
     escaped = escaped.replace(/^((?:&gt;\s?)+)/gm, m => m.replace(/&gt;/g, '>'));
@@ -618,13 +909,13 @@ function renderNotePreview() {
     let html = marked.parse(escaped);
     html = html.replace(/%%AIPPTPDF(\d+)%%/g, (_m, i) => pdfEmbedHtml(pending.pdfs[Number(i)]));
     html = html.replace(/%%AIPPTMEDIA(\d+)%%/g, (_m, i) => mediaEmbedHtml(pending.media[Number(i)]));
-    html = html.replace(/%%AIPPTBLOCK(\d+)%%/g, (_m, i) => `<blockquote class="block-ref" data-block-id="${pending.blocks[Number(i)]}"><span class="block-ref-loading">加载中…</span></blockquote>`);
-    html = html.replace(/%%AIPPTQUERY(\d+)%%/g, (_m, i) => `<div class="query-result" data-query="${escapeHtmlAttr(pending.queries[Number(i)])}"><span class="query-loading">查询中…</span></div>`);
+    html = html.replace(/%%AIPPTBLOCK(\d+)%%/g, (_m, i) => `<blockquote class="block-ref" data-block-id="${pending.blocks[Number(i)]}"><span class="block-ref-loading">${t('加载中…')}</span></blockquote>`);
+    html = html.replace(/%%AIPPTQUERY(\d+)%%/g, (_m, i) => `<div class="query-result" data-query="${escapeHtmlAttr(pending.queries[Number(i)])}"><span class="query-loading">${t('查询中…')}</span></div>`);
     els.vaultNotePreview.innerHTML = html;
     els.vaultNotePreview.querySelectorAll('img').forEach((img) => {
         const m = (img.getAttribute('alt') || '').match(/^(.*?)\|(\d{2,4})$/);
         if (m) { img.alt = m[1]; img.style.maxWidth = `${m[2]}px`; img.dataset.noteWidth = m[2]; }
-        img.title = '点击调整图片大小';
+        img.title = t('点击调整图片大小');
     });
     els.vaultNotePreview.querySelectorAll('h1, h2, h3').forEach((h, i) => { h.id = `note-h-${i}`; });
     els.vaultNotePreview.querySelectorAll('li').forEach((li) => {
@@ -641,9 +932,9 @@ function fillBlockRefs(previewEl) {
         api('GET', `/api/vault/blocks/${encodeURIComponent(id)}`).then((data) => {
             el.innerHTML = `<span class="block-ref-text">${escapeHtml(data.text || '')}</span>`;
             el.dataset.note = data.note || '';
-            el.title = data.note ? `来自笔记：${data.note}（点击跳转）` : '点击跳转来源';
+            el.title = data.note ? t('来自笔记：{note}（点击跳转）', { note: data.note }) : t('点击跳转来源');
         }).catch(() => {
-            el.outerHTML = `<span class="block-ref-missing">引用缺失 ((${escapeHtml(id)}))</span>`;
+            el.outerHTML = `<span class="block-ref-missing">${t('引用缺失 (({id}))', { id: escapeHtml(id) })}</span>`;
         });
     });
 }
@@ -654,10 +945,10 @@ function fillQueryBlocks(previewEl) {
         const query = el.dataset.query;
         api('POST', '/api/vault/query', { query }).then((data) => {
             const results = data.results || [];
-            if (!results.length) { el.innerHTML = '<div class="query-empty">无结果</div>'; return; }
+            if (!results.length) { el.innerHTML = `<div class="query-empty">${t('无结果')}</div>`; return; }
             el.innerHTML = results.map((r) => `<div class="query-item" data-note="${escapeHtmlAttr(r.note || '')}">${r.status ? `<span class="task-badge ${taskBadgeClass(r.status)}">${escapeHtml(String(r.status).toUpperCase())}</span>` : ''}${r.priority ? `<sup class="task-pri">${escapeHtml(String(r.priority).replace(/[#\[\]]/g, ''))}</sup>` : ''}<span class="query-item-note">${escapeHtml(r.note || '')}</span><span class="query-item-text">${escapeHtml(r.text || '')}</span></div>`).join('');
         }).catch((err) => {
-            el.innerHTML = `<div class="query-error">${escapeHtml(err.message || '查询失败')}</div>`;
+            el.innerHTML = `<div class="query-error">${escapeHtml(err.message || t('查询失败'))}</div>`;
         });
     });
 }
@@ -667,7 +958,7 @@ function setNotePreviewMode(on) {
     const els = getVaultEls();
     els.vaultNoteEditArea.classList.toggle('hidden', on);
     els.vaultNotePreview.classList.toggle('hidden', !on);
-    els.btnVaultNotePreview.textContent = on ? '编辑' : '预览';
+    els.btnVaultNotePreview.textContent = on ? t('编辑') : t('预览');
     els.btnVaultNotePreview.classList.toggle('active', on);
     if (on) renderNotePreview(); else hideWikiSuggest();
 }
@@ -678,9 +969,9 @@ async function createNoteFromWikiLink(name) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, content: `# ${name}\n` })
         });
-        if (res.ok) { showToast(`已创建笔记「${name}」`); await loadNotes(); selectNote(name); }
-        else { const err = await res.json(); showToast(err.error || '创建失败'); }
-    } catch (e) { console.error('Failed to create note from wikilink:', e); showToast('创建失败'); }
+        if (res.ok) { showToast(t('已创建笔记「{name}」', { name })); await loadNotes(); selectNote(name); }
+        else { const err = await res.json(); showToast(err.error || t('创建失败')); }
+    } catch (e) { console.error('Failed to create note from wikilink:', e); showToast(t('创建失败')); }
 }
 
 function getCaretPixelPos(textarea, caretIndex) {
@@ -772,9 +1063,11 @@ function applyWikiSuggest(index) {
     const ta = els.vaultNoteContent;
     const caret = ta.selectionStart;
     const inserted = S.wikiSuggest.mode === 'pdf' ? `![[${name}]]` : `[[${name}]]`;
+    noteUndoPoint();
     ta.value = ta.value.substring(0, S.wikiSuggest.startPos) + inserted + ta.value.substring(caret);
     const newCaret = S.wikiSuggest.startPos + inserted.length;
     ta.selectionStart = ta.selectionEnd = newCaret;
+    noteEdited();
     ta.focus(); hideWikiSuggest(); buildOutline();
     markNoteDirty();
 }
@@ -800,7 +1093,7 @@ function buildOutline() {
         if (m) S.outlineItems.push({ level: m[1].length, text: m[2].trim(), line: lineNo });
     });
     if (S.outlineItems.length === 0) {
-        els.vaultNoteOutlineList.innerHTML = '<div style="opacity:0.5;font-size:12px;padding:4px 0;">暂无标题</div>';
+        els.vaultNoteOutlineList.innerHTML = `<div style="opacity:0.5;font-size:12px;padding:4px 0;">${t('暂无标题')}</div>`;
         return;
     }
     els.vaultNoteOutlineList.innerHTML = S.outlineItems.map((item, i) =>
@@ -883,7 +1176,7 @@ function renderQuickOpenList() {
     const qo = getQuickOpenEls();
     S.quickOpen.items = filterQuickOpenItems(qo.input.value);
     if (S.quickOpen.activeIndex >= S.quickOpen.items.length) S.quickOpen.activeIndex = 0;
-    if (S.quickOpen.items.length === 0) { qo.list.innerHTML = '<div class="quick-open-empty">无匹配笔记</div>'; return; }
+    if (S.quickOpen.items.length === 0) { qo.list.innerHTML = `<div class="quick-open-empty">${t('无匹配笔记')}</div>`; return; }
     qo.list.innerHTML = S.quickOpen.items.map((n, i) =>
         `<div class="quick-open-item ${i === S.quickOpen.activeIndex ? 'active' : ''}" data-index="${i}">${escapeHtml(n.name)}</div>`
     ).join('');
@@ -931,11 +1224,11 @@ async function ensureTodayNote() {
         const dateStr = name.replace('journal-', '');
         const content = `---\ntype: journal\ntags: [日记]\n---\n\n# ${dateStr}\n`;
         const createRes = await fetch('/api/vault/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, content }) });
-        if (!createRes.ok) throw new Error('创建今日笔记失败');
+        if (!createRes.ok) throw new Error(t('创建今日笔记失败'));
         await loadNotes();
         return { name, content };
     }
-    if (!res.ok) throw new Error('读取今日笔记失败');
+    if (!res.ok) throw new Error(t('读取今日笔记失败'));
     const data = await res.json();
     return { name, content: data.content || '' };
 }
@@ -946,7 +1239,7 @@ export async function openTodayNote() {
         if (S.currentSidebarTab !== 'vault' && _cb.switchSidebarTab) _cb.switchSidebarTab('vault');
         document.getElementById('sidebar')?.classList.remove('collapsed');
         selectNote(name);
-    } catch (e) { console.error('Failed to open today note:', e); showToast(e.message || '打开今日笔记失败'); }
+    } catch (e) { console.error('Failed to open today note:', e); showToast(e.message || t('打开今日笔记失败')); }
 }
 
 export async function appendFragmentToToday(id) {
@@ -960,11 +1253,11 @@ export async function appendFragmentToToday(id) {
         const line = `- ${time} ${text}`;
         const newContent = (content.endsWith('\n') ? content : content + '\n') + line + '\n';
         const putRes = await fetch(`/api/vault/notes/${encodeURIComponent(name)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: newContent }) });
-        if (!putRes.ok) throw new Error('写入今日笔记失败');
+        if (!putRes.ok) throw new Error(t('写入今日笔记失败'));
         await api('PUT', `/api/vault/fragments/${encodeURIComponent(id)}`, { status: 'organized' });
-        showToast(`已附加到今日笔记（${name.replace('journal-', '')}）`);
+        showToast(t('已附加到今日笔记（{date}）', { date: name.replace('journal-', '') }));
         if (_cb.loadFragments) await _cb.loadFragments();
-    } catch (e) { console.error('Failed to append fragment to today note:', e); showToast(e.message || '操作失败'); }
+    } catch (e) { console.error('Failed to append fragment to today note:', e); showToast(e.message || t('操作失败')); }
 }
 
 // ============================================================
@@ -1005,8 +1298,9 @@ async function sendNoteChatMessage() {
     input.value = '';
     noteChatBusy = true;
     sendBtn.disabled = true;
-    const progressMsg = appendNoteChatMessage('修改已启动…', 'system');
+    const progressMsg = appendNoteChatMessage(t('修改已启动…'), 'system');
     const noteName = S.currentNote;
+    const chatStartTs = new Date().toISOString().replace(/[:.]/g, '-'); // 与 .snapshots/_vault 目录名同格式，用于定位本次修改前的备份
     try {
         const sessionApiKey = S.els.inputModelApiKey?.value.trim();
         await api('POST', `/api/vault/notes/${encodeURIComponent(noteName)}/chat`, {
@@ -1014,7 +1308,7 @@ async function sendNoteChatMessage() {
         });
     } catch (err) {
         progressMsg.remove();
-        appendNoteChatMessage('修改失败：' + withLlmSettingsHint(err.message), 'error');
+        appendNoteChatMessage(t('修改失败：{msg}', { msg: withLlmSettingsHint(err.message) }), 'error');
         noteChatBusy = false; sendBtn.disabled = false; return;
     }
     const finish = () => { noteChatBusy = false; sendBtn.disabled = false; };
@@ -1022,71 +1316,115 @@ async function sendNoteChatMessage() {
     es.onmessage = (e) => {
         let event;
         try { event = JSON.parse(e.data); } catch { event = { type: 'progress', message: e.data }; }
-        if (event.type === 'progress') { progressMsg.textContent = event.message || event.step || '修改中…'; }
+        if (event.type === 'progress') { progressMsg.textContent = event.message || event.step || t('修改中…'); }
         else if (event.type === 'done') {
             progressMsg.remove();
-            const content = (event.summary || '修改已完成.') + (event.details ? '\n\n' + event.details : '');
-            appendNoteChatMessage(content, 'assistant');
+            const content = (event.summary || t('修改已完成.')) + (event.details ? '\n\n' + event.details : '');
+            const msgDiv = appendNoteChatMessage(content, 'assistant');
+            addNoteChatUndoButton(msgDiv, noteName, chatStartTs);
             es.close(); finish();
             // AI 已直接改写服务端笔记：清除本地脏标记与草稿后重新加载
             removeNoteDraft(noteName);
             if (S.currentNote === noteName) selectNote(noteName);
         } else if (event.type === 'error') {
             progressMsg.remove();
-            appendNoteChatMessage('修改失败：' + withLlmSettingsHint(event.message), 'error');
+            appendNoteChatMessage(t('修改失败：{msg}', { msg: withLlmSettingsHint(event.message) }), 'error');
             es.close(); finish();
         }
     };
     es.onerror = () => {
         progressMsg.remove();
-        appendNoteChatMessage('进度连接中断，请稍后手动刷新笔记查看结果。', 'error');
+        appendNoteChatMessage(t('进度连接中断，请稍后手动刷新笔记查看结果。'), 'error');
         es.close(); finish();
     };
 }
 
 // ============================================================
-// AI 配图（笔记部分）
+// AI 配图（笔记 / 项目共用）：生成后结果区按上下文提供「插入笔记 / 插入幻灯片」
 // ============================================================
 let aiImageTarget = null;
+let lastAiImage = null; // { name, webPath, prompt, fromVault }
 
 export function openAiImageModal(target) {
     aiImageTarget = target;
+    lastAiImage = null;
     const input = document.getElementById('ai-image-prompt');
     const btn = document.getElementById('btn-confirm-ai-image');
-    document.getElementById('ai-image-modal-title').textContent = target === 'vault' ? '生成笔记配图' : '生成幻灯片配图';
-    input.value = ''; btn.disabled = false; btn.textContent = '生成';
+    document.getElementById('ai-image-modal-title').textContent = target === 'vault' ? t('生成笔记配图') : t('生成幻灯片配图');
+    input.value = ''; btn.disabled = false; btn.textContent = t('生成');
+    document.getElementById('ai-image-result').classList.add('hidden');
     document.getElementById('ai-image-modal').classList.remove('hidden');
     input.focus();
 }
 
 export async function confirmAiImage() {
     const prompt = document.getElementById('ai-image-prompt').value.trim();
-    if (!prompt) { showToast('请输入图片描述'); return; }
+    if (!prompt) { showToast(t('请输入图片描述')); return; }
     if (!aiImageTarget) return;
     const btn = document.getElementById('btn-confirm-ai-image');
-    btn.disabled = true; btn.textContent = '生成中…';
+    btn.disabled = true; btn.textContent = t('生成中…');
     try {
         const data = await api('POST', '/api/media/image', { prompt, target: aiImageTarget });
+        const webPath = data.webPath || '';
+        if (!webPath) { showToast(t('配图已生成，但未返回图片路径')); return; }
+        lastAiImage = {
+            webPath,
+            name: decodeURIComponent(webPath.split('/').pop()),
+            prompt,
+            fromVault: aiImageTarget === 'vault',
+        };
+        // 结果区按上下文显隐动作：打开笔记时可插入笔记，选中项目时可插入幻灯片
+        document.getElementById('ai-image-preview').src = webPath;
+        document.getElementById('btn-ai-image-insert-note').classList.toggle('hidden', !S.currentNote);
+        document.getElementById('btn-ai-image-insert-slide').classList.toggle('hidden', !S.currentProject);
+        document.getElementById('ai-image-result').classList.remove('hidden');
+    } catch (e) { console.error('Failed to generate image:', e); showToast(t('生成配图失败：{msg}', { msg: e.message })); }
+    finally { btn.disabled = false; btn.textContent = t('生成'); }
+}
+
+// 插入当前笔记光标处：vault 资产用 ![[name]] 嵌入（复用插入文本逻辑，触发脏标记 + 自动保存），
+// 项目资产无法按名嵌入，回退为 Markdown 图片链接
+export function insertAiImageIntoNote() {
+    if (!lastAiImage) { showToast(t('请先生成配图')); return; }
+    if (!S.currentNote) { showToast(t('请先选择一篇笔记')); return; }
+    if (!lastAiImage.fromVault) { insertImageIntoNote(lastAiImage); return; }
+    insertTextAtCursor(`![[${lastAiImage.name}]]`);
+    showToast(t('配图已插入笔记，记得保存'));
+    document.getElementById('ai-image-modal').classList.add('hidden');
+}
+
+// 插入选中项目：默认在末页前新建图片页（vault 产物由服务端先复制进项目 assets 并快照落盘）
+export async function insertAiImageIntoSlide() {
+    if (!lastAiImage) { showToast(t('请先生成配图')); return; }
+    if (!S.currentProject) { showToast(t('请先选择项目')); return; }
+    try {
+        const data = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/insert-image`, {
+            asset: lastAiImage.name,
+            from: lastAiImage.fromVault ? 'vault' : undefined,
+            title: lastAiImage.prompt.slice(0, 20),
+        });
+        showToast(data.mode === 'append' ? t('配图已追加到第 {page} 页', { page: data.slide }) : t('已新建图片页（第 {page} 页）', { page: data.slide }));
         document.getElementById('ai-image-modal').classList.add('hidden');
-        if (aiImageTarget === 'vault') insertImageIntoNote(data);
-        // else: PPT 配图由 projects.mjs 处理
-    } catch (e) { console.error('Failed to generate image:', e); showToast('生成配图失败：' + e.message); }
-    finally { btn.disabled = false; btn.textContent = '生成'; }
+        if (_cb.updatePreview) _cb.updatePreview();
+    } catch (e) { console.error('Failed to insert image into deck:', e); showToast(t('插入幻灯片失败：{msg}', { msg: e.message })); }
 }
 
 function insertImageIntoNote(data) {
     const webPath = data.webPath || '';
-    if (!webPath) { showToast('配图已生成，但未返回图片路径'); return; }
+    if (!webPath) { showToast(t('配图已生成，但未返回图片路径')); return; }
     const textarea = document.getElementById('vault-note-content');
     const md = `![配图|480](${webPath})`;
     const start = textarea.selectionStart ?? textarea.value.length;
     const end = textarea.selectionEnd ?? start;
+    noteUndoPoint();
     textarea.value = textarea.value.slice(0, start) + md + textarea.value.slice(end);
     const pos = start + md.length;
     textarea.focus(); textarea.setSelectionRange(pos, pos);
+    noteEdited();
     if (S.notePreviewMode) renderNotePreview();
     markNoteDirty();
-    showToast('配图已插入笔记，预览中点击图片可调整大小，记得保存');
+    showToast(t('配图已插入笔记，预览中点击图片可调整大小，记得保存'));
+    document.getElementById('ai-image-modal').classList.add('hidden');
 }
 
 function updateNoteImageWidth(src, width) {
@@ -1094,7 +1432,9 @@ function updateNoteImageWidth(src, width) {
     const ta = els.vaultNoteContent;
     const escSrc = src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp('(!\\[)([^\\]\\|]*)(\\|\\d{2,4})?(\\]\\(' + escSrc + '[^)]*\\))');
+    noteUndoPoint();
     ta.value = ta.value.replace(re, (_m, p1, alt, _w, p4) => width ? `${p1}${alt}|${width}${p4}` : `${p1}${alt}${p4}`);
+    noteEdited();
     markNoteDirty();
 }
 
@@ -1103,7 +1443,7 @@ function showImgResizeBar(img) {
     hideImgResizeBar();
     imgResizeFor = img;
     const bar = document.createElement('div'); bar.id = 'note-img-resize';
-    const sizes = [['小', 320], ['中', 480], ['大', 720], ['原始', null]];
+    const sizes = [[t('小'), 320], [t('中'), 480], [t('大'), 720], [t('原始'), null]];
     for (const [label, w] of sizes) {
         const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = label;
         const current = img.dataset.noteWidth || '';
@@ -1113,7 +1453,7 @@ function showImgResizeBar(img) {
             const src = img.getAttribute('src') || '';
             updateNoteImageWidth(src, w);
             renderNotePreview();
-            showToast(w ? `图片宽度已调整为 ${w}px，记得保存` : '图片已恢复原始大小，记得保存');
+            showToast(w ? t('图片宽度已调整为 {w}px，记得保存', { w }) : t('图片已恢复原始大小，记得保存'));
         });
         bar.appendChild(btn);
     }
@@ -1143,9 +1483,11 @@ function toggleTaskInTextarea(ta) {
     const newLine = next ? `${m[1]}${next} ${m[3]}` : `${m[1]}${m[3]}`;
     if (newLine === line) return;
     const delta = newLine.length - line.length;
+    noteUndoPoint();
     ta.setRangeText(newLine, lineStart, lineEnd, 'preserve');
     const newPos = Math.min(Math.max(lineStart, pos + delta), lineStart + newLine.length);
     ta.selectionStart = ta.selectionEnd = newPos;
+    noteEdited();
     buildOutline();
     markNoteDirty();
 }
@@ -1155,7 +1497,9 @@ function insertTextAtCursor(text) {
     const ta = els.vaultNoteContent;
     const start = ta.selectionStart ?? ta.value.length;
     const end = ta.selectionEnd ?? start;
+    noteUndoPoint();
     ta.setRangeText(text, start, end, 'end');
+    noteEdited();
     ta.focus();
     if (S.notePreviewMode) renderNotePreview();
     buildOutline();
@@ -1181,8 +1525,8 @@ function classifyAssetKind(file) {
 function handleAssetUpload(file) {
     if (!file) return;
     const kind = classifyAssetKind(file);
-    if (!kind) { showToast(`不支持的附件类型：${file.name}`, 'error'); return; }
-    if (file.size > ASSET_LIMITS[kind]) { showToast(`附件不能超过 ${ASSET_LIMIT_LABEL[kind]}`, 'error'); return; }
+    if (!kind) { showToast(t('不支持的附件类型：{name}', { name: file.name }), 'error'); return; }
+    if (file.size > ASSET_LIMITS[kind]) { showToast(t('附件不能超过 {limit}', { limit: ASSET_LIMIT_LABEL[kind] }), 'error'); return; }
     // multipart 流式上传（不再 base64 转 JSON）
     const fd = new FormData();
     fd.append('name', file.name);
@@ -1190,11 +1534,109 @@ function handleAssetUpload(file) {
     apiUpload('/api/vault/assets', fd).then((data) => {
         S.vaultAssets = null;
         insertTextAtCursor(`![[${data.name || file.name}]]`);
-        showToast(`附件已上传并插入：${data.name || file.name}`);
+        showToast(t('附件已上传并插入：{name}', { name: data.name || file.name }));
     }).catch((err) => {
         console.error('Failed to upload asset:', err);
-        showToast('附件上传失败：' + err.message, 'error');
+        showToast(t('附件上传失败：{msg}', { msg: err.message }), 'error');
     });
+}
+
+// ============================================================
+// 资产库（vault/assets 管理：列表 / 插入笔记 / 删除，删除有引用保护）
+// ============================================================
+const ASSET_KIND_ICON = { video: '🎬', audio: '🎵', doc: '📄', other: '📎' };
+
+function assetKindOf(name) {
+    const ext = (String(name).split('.').pop() || '').toLowerCase();
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'image';
+    if (['mp4', 'webm', 'mov'].includes(ext)) return 'video';
+    if (['mp3', 'wav', 'm4a', 'ogg'].includes(ext)) return 'audio';
+    if (['pdf', 'docx'].includes(ext)) return 'doc';
+    return 'other';
+}
+
+function formatAssetSize(bytes) {
+    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${bytes} B`;
+}
+
+export function openAssetsModal() {
+    document.getElementById('assets-modal').classList.remove('hidden');
+    loadAssetsIntoModal();
+}
+
+async function loadAssetsIntoModal() {
+    const list = document.getElementById('assets-list');
+    list.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('加载中…')}</div>`;
+    try {
+        const data = await api('GET', '/api/vault/assets?refs=1');
+        renderAssetsList(data.files || []);
+    } catch (e) {
+        console.error('Failed to load assets:', e);
+        list.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('加载失败：{msg}', { msg: escapeHtml(e.message) })}</div>`;
+    }
+}
+
+function renderAssetsList(files) {
+    const list = document.getElementById('assets-list');
+    if (!files.length) {
+        list.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('暂无资产，可通过「附件」上传或「生成配图」生成')}</div>`;
+        return;
+    }
+    list.innerHTML = files.map((f) => {
+        const kind = assetKindOf(f.name);
+        const thumb = kind === 'image'
+            ? `<img class="asset-thumb" src="/api/vault/assets/${encodeURIComponent(f.name)}" alt="">`
+            : `<div class="asset-thumb">${ASSET_KIND_ICON[kind]}</div>`;
+        const refBadge = f.referenced ? `<span class="asset-ref-badge">${t('被引用')}</span>` : t('未被引用');
+        return `<div class="asset-item" data-name="${escapeHtmlAttr(f.name)}">
+          ${thumb}
+          <div class="asset-info">
+            <div class="asset-name">${escapeHtml(f.name)}</div>
+            <div class="asset-meta">${formatAssetSize(f.size)} · ${refBadge}</div>
+          </div>
+          <div class="asset-actions">
+            <button class="btn-secondary asset-btn-insert">${t('插入')}</button>
+            <button class="btn-secondary asset-btn-delete" style="color:var(--danger);">${t('删除')}</button>
+          </div>
+        </div>`;
+    }).join('');
+    list.querySelectorAll('.asset-item').forEach((item) => {
+        const name = item.dataset.name;
+        item.querySelector('.asset-btn-insert').addEventListener('click', () => insertAssetIntoNote(name));
+        item.querySelector('.asset-btn-delete').addEventListener('click', () => deleteAsset(name));
+    });
+}
+
+function insertAssetIntoNote(name) {
+    if (!S.currentNote) { showToast(t('请先选择一篇笔记')); return; }
+    insertTextAtCursor(`![[${name}]]`);
+    showToast(t('已插入笔记：{name}，记得保存', { name }));
+    document.getElementById('assets-modal').classList.add('hidden');
+}
+
+// 删除资产：被引用时服务端返回 409 + 引用方列表，确认后带 force=true 重试
+async function deleteAsset(name, force = false) {
+    try {
+        await api('DELETE', `/api/vault/assets/${encodeURIComponent(name)}${force ? '?force=true' : ''}`);
+        showToast(t('已删除：{name}', { name }));
+        loadAssetsIntoModal();
+    } catch (e) {
+        if (e.status === 409 && e.data?.references) {
+            const refs = [...(e.data.references.notes || []), ...(e.data.references.fragments || [])];
+            const ok = await showConfirmModal({
+                title: t('资产仍被引用'),
+                message: t('「{name}」正被引用：{refs}。删除后这些嵌入将失效，确认强制删除？', { name, refs: refs.join('、') }),
+                confirmText: t('强制删除'),
+                danger: true,
+            });
+            if (ok) return deleteAsset(name, true);
+            return;
+        }
+        console.error('Failed to delete asset:', e);
+        showToast(t('删除失败：{msg}', { msg: e.message }), 'error');
+    }
 }
 
 // ============================================================
@@ -1214,25 +1656,25 @@ function hideTasksPanel() {
 async function loadTasks() {
     const body = document.getElementById('tasks-body');
     if (!body) return;
-    body.innerHTML = '<div style="opacity:0.5;font-size:13px;">加载中…</div>';
+    body.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('加载中…')}</div>`;
     try {
         const data = await api('GET', '/api/vault/tasks');
         renderTasks(data.tasks || []);
     } catch (e) {
         console.error('Failed to load tasks:', e);
-        body.innerHTML = '<div style="opacity:0.5;font-size:13px;">加载任务失败</div>';
+        body.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('加载任务失败')}</div>`;
     }
 }
 
 function renderTasks(tasks) {
     const body = document.getElementById('tasks-body');
-    if (!tasks.length) { body.innerHTML = '<div style="opacity:0.5;font-size:13px;">暂无任务，在笔记中写 - TODO 事项即可</div>'; return; }
+    if (!tasks.length) { body.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('暂无任务，在笔记中写 - TODO 事项即可')}</div>`; return; }
     const groups = [['DOING', '进行中'], ['TODO', '待办'], ['DONE', '已完成']];
     body.innerHTML = groups.map(([status, label]) => {
         const items = tasks.filter((t) => String(t.status || '').toUpperCase() === status);
         if (!items.length) return '';
         return `<div class="tasks-group">
-        <div class="tasks-group-title">${label}（${items.length}）</div>
+        <div class="tasks-group-title">${t(label)}（${items.length}）</div>
         <div class="tasks-group-list">${items.map((t) => `<div class="tasks-item" data-note="${escapeHtmlAttr(t.note || '')}">
           <span class="task-badge ${taskBadgeClass(status)}">${status}</span>${t.priority ? `<sup class="task-pri">${escapeHtml(String(t.priority).replace(/[#\[\]]/g, ''))}</sup>` : ''}
           <span class="tasks-item-text">${escapeHtml(t.text || '')}</span>
@@ -1266,9 +1708,9 @@ async function gotoJournal(offsetDays) {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, content })
             });
-            if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.error || '创建日记失败'); return; }
+            if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.error || t('创建日记失败')); return; }
             await loadNotes();
-        } catch (e) { console.error('Failed to create journal:', e); showToast('创建日记失败'); return; }
+        } catch (e) { console.error('Failed to create journal:', e); showToast(t('创建日记失败')); return; }
     }
     selectNote(name);
 }
@@ -1282,7 +1724,7 @@ function toggleJournalList() {
         .sort((a, b) => new Date(b.mtime || 0) - new Date(a.mtime || 0));
     dd.innerHTML = journals.length
         ? journals.map((n) => `<div class="journal-list-item ${n.name === S.currentNote ? 'active' : ''}" data-name="${escapeHtmlAttr(n.name)}">${escapeHtml(n.name.replace('journal-', ''))}</div>`).join('')
-        : '<div class="journal-list-empty">暂无日记</div>';
+        : `<div class="journal-list-empty">${t('暂无日记')}</div>`;
     dd.classList.remove('hidden');
 }
 
@@ -1343,7 +1785,7 @@ export function bindVaultEvents() {
         document.querySelector('#vault-note-more-dropdown .dropdown-menu')?.classList.add('hidden');
     });
     document.getElementById('btn-vault-note-pdf')?.addEventListener('click', () => {
-        if (!S.currentNote) { showToast('请先选择一篇笔记'); return; }
+        if (!S.currentNote) { showToast(t('请先选择一篇笔记')); return; }
         document.getElementById('input-vault-pdf')?.click();
     });
     document.getElementById('input-vault-pdf')?.addEventListener('change', (e) => {
@@ -1352,10 +1794,21 @@ export function bindVaultEvents() {
         handleAssetUpload(file);
     });
     document.getElementById('btn-note-gen-open')?.addEventListener('click', () => {
-        if (!S.selectedNotes.size) { showToast('请先勾选笔记'); return; }
+        if (!S.selectedNotes.size) { showToast(t('请先勾选笔记')); return; }
         if (_cb.openGenerateModal) _cb.openGenerateModal({ kind: 'notes', notes: [...S.selectedNotes], onDone: clearSelectedNotes });
     });
     document.getElementById('btn-note-select-clear')?.addEventListener('click', clearSelectedNotes);
+    document.getElementById('btn-note-batch-delete')?.addEventListener('click', batchDeleteNotes);
+    document.getElementById('btn-note-batch-tag')?.addEventListener('click', batchTagNotes);
+    bindNoteListDragEvents();
+    // 历史版本弹窗
+    document.getElementById('btn-vault-note-history')?.addEventListener('click', openNoteHistoryModal);
+    document.getElementById('btn-close-note-history')?.addEventListener('click', closeNoteHistoryModal);
+    document.querySelector('#note-history-modal .modal-backdrop')?.addEventListener('click', closeNoteHistoryModal);
+    document.getElementById('note-history-list')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.note-history-restore');
+        if (btn && btn.dataset.ts) restoreNoteBackup(btn.dataset.ts);
+    });
     for (const listEl of [els.vaultOutlinks, els.vaultBacklinks]) {
         listEl.addEventListener('click', (e) => { const item = e.target.closest('.vault-link-item'); if (item && item.dataset.name) selectNote(item.dataset.name); });
     }
@@ -1394,7 +1847,7 @@ export function bindVaultEvents() {
     els.btnVaultNotePreview.addEventListener('click', () => setNotePreviewMode(!S.notePreviewMode));
     els.btnVaultOutlineToggle.addEventListener('click', () => {
         const collapsed = els.vaultNoteOutline.classList.toggle('collapsed');
-        els.btnVaultOutlineToggle.textContent = collapsed ? '展开大纲' : '大纲';
+        els.btnVaultOutlineToggle.textContent = collapsed ? t('展开大纲') : t('大纲');
     });
     els.vaultNoteOutlineList.addEventListener('click', (e) => {
         const item = e.target.closest('.vault-outline-item');
@@ -1416,7 +1869,7 @@ export function bindVaultEvents() {
         if (link.classList.contains('wiki-link-dead')) createNoteFromWikiLink(name);
         else selectNote(name);
     });
-    els.vaultNoteContent.addEventListener('input', () => { buildOutline(); updateWikiSuggest(); markNoteDirty(); });
+    els.vaultNoteContent.addEventListener('input', () => { scheduleTypingUndo(); buildOutline(); updateWikiSuggest(); markNoteDirty(); });
     els.vaultNoteFrontmatter.addEventListener('input', markNoteDirty);
     window.addEventListener('beforeunload', (e) => {
         if (!S.noteDirty) return;
@@ -1424,11 +1877,19 @@ export function bindVaultEvents() {
         e.returnValue = '';
     });
     els.vaultNoteContent.addEventListener('keydown', (e) => {
+        // 自定义撤销/重做（阻止浏览器原生 undo，避免与自定义栈双重生效）
+        const key = e.key.toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && key === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) noteRedo(); else noteUndo();
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && key === 'y') { e.preventDefault(); noteRedo(); return; }
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); toggleTaskInTextarea(e.target); return; }
         if (handleWikiSuggestKeydown(e)) e.preventDefault();
     });
-    els.vaultNoteContent.addEventListener('compositionstart', () => { S.imeComposing = true; });
-    els.vaultNoteContent.addEventListener('compositionend', () => { S.imeComposing = false; updateWikiSuggest(); });
+    els.vaultNoteContent.addEventListener('compositionstart', () => { S.imeComposing = true; commitTypingUndo(); });
+    els.vaultNoteContent.addEventListener('compositionend', () => { S.imeComposing = false; commitTypingUndo(); updateWikiSuggest(); });
     els.vaultNoteContent.addEventListener('blur', () => { setTimeout(hideWikiSuggest, 150); });
     els.wikiSuggestEl.addEventListener('mousedown', (e) => {
         const item = e.target.closest('.wiki-suggest-item');

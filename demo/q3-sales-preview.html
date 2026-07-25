@@ -1,0 +1,4806 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Q3 销售队伍建设动员</title>
+  <style data-inlined-from="css/ppt.css">
+:root {
+  /* Deck design language = teal-editorial（原始默认主题）。
+     Brand is --teal #439288；--accent aliases to --teal。
+     配色见 MEMORY.md 设计系统表与 theme-ref/teal-editorial-preview.html。 */
+
+  /* Brand */
+  --teal: #439288;
+  --teal-light: #7DD3C0;
+  --accent: #439288;          /* deck accent = brand teal */
+  --accent-light: #EAF3F1;    /* teal tint for soft fills */
+  --accent-dark: #35766A;     /* darker teal for hover/press */
+
+  /* Ink + neutrals (teal-editorial values) */
+  --ink: #151A19;
+  --navy: #0B1413;
+  --slate: #6B8A83;
+  --muted: #6B8A83;
+  --cream: #FAFAF7;
+  --surface: #FFFFFF;
+  --surface-subtle: #EDF1F0;
+  --tile: #EDF1F0;
+  --tile-strong: #E3E9E7;
+  --border: #E3E9E7;          /* alias of --tile-strong for compat */
+  --border-strong: #CBD5D1;
+
+  /* Status (Web UI parity) */
+  --danger: #EF4444;
+  --success: #10B981;
+  --info: #3B82F6;
+
+  /* Typography: exact Web UI stack (sans-serif PingFang SC) */
+  --font-heading: "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-body: "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Menlo", monospace;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* 数据图表固定色（--chart-1 等品牌/中性色别名在 body 上声明，见下） */
+  --chart-2: #E8A33D;
+  --chart-3: #5B8DEF;
+  --chart-4: #D96C62;
+  --chart-5: #8B7BD8;
+  --chart-6: #53A06E;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--cream);
+  color: var(--ink);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* 数据图表调色板（.chart-line / .chart-pie / .chart-bars）。
+     必须声明在 body 而非 :root：var(--teal)/var(--muted) 等别名在声明处按
+     本元素的自定义属性求值，:root 上会被冻结成默认值；body 上才能跟随
+     body.theme-* 的主题变量。主题 css 可在 body.theme-<id> 覆盖任意一项。 */
+  --chart-1: var(--teal);
+  --chart-text: var(--muted);
+  --chart-text-strong: var(--ink);
+  --chart-axis: var(--border-strong);
+  --chart-grid: var(--tile-strong);
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.stage {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: clamp(2rem, 5vh, 4rem) clamp(5vw, 7vw, 9vw);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 20px, 0) scale(0.99);
+  transition: opacity 0.45s var(--ease-out-expo),
+              transform 0.45s var(--ease-out-expo);
+  z-index: 1;
+}
+
+.slide.active {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 2;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.slide.exit-forward {
+  opacity: 0;
+  transform: translate3d(30px, -16px, 0) scale(0.98);
+}
+
+.slide.exit-backward {
+  opacity: 0;
+  transform: translate3d(-30px, -16px, 0) scale(0.98);
+}
+
+.slide-content {
+  width: 100%;
+  max-width: clamp(960px, 90vw, 1200px);
+  min-height: 72vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.slide-content > .section-title,
+.slide-content > h1,
+.slide-content > h2 {
+  align-self: flex-start;
+  margin-bottom: 0;
+}
+
+.slide-content > *:not(.section-title):not(h1):not(h2):not(.hero-headline):not(.kicker):not(.lead):not(.badge-row):not(.hero-meta):not(.divider):not(.btn-primary):not(.btn-secondary) {
+  align-self: center;
+  justify-content: center;
+  margin: auto 0;
+  width: 100%;
+}
+
+.slide-content > .kicker,
+.slide-content > .lead,
+.slide-content > .badge-row,
+.slide-content > .hero-meta,
+.slide-content > .divider,
+.slide-content > .btn-primary,
+.slide-content > .btn-secondary {
+  align-self: flex-start;
+}
+
+/* ===== Typography ===== */
+
+.kicker {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: clamp(9px, 0.9vw, 11px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 999px;
+  margin-bottom: clamp(10px, 1.6vh, 16px);
+  line-height: 1.4;
+}
+
+.slide h1 {
+  font-family: var(--font-heading);
+  font-size: clamp(34px, 4.5vw, 60px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  margin: 0 0 clamp(14px, 2vh, 22px) 0;
+  color: var(--ink);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.slide h2 {
+  font-family: var(--font-heading);
+  font-size: clamp(28px, 3.6vw, 48px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 0 clamp(12px, 1.8vh, 18px) 0;
+  color: var(--ink);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.slide h3 {
+  font-family: var(--font-heading);
+  font-size: clamp(20px, 2.2vw, 28px);
+  font-weight: 600;
+  margin: 0 0 clamp(8px, 1vh, 12px) 0;
+  color: var(--ink);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.slide p {
+  font-size: clamp(15px, 1.4vw, 20px);
+  color: var(--slate);
+  max-width: 680px;
+  margin: 0 0 clamp(10px, 1vh, 16px) 0;
+  line-height: 1.7;
+}
+
+.slide p.lead {
+  font-size: clamp(18px, 1.8vw, 24px);
+  color: var(--muted);
+  margin-bottom: clamp(20px, 3vh, 32px);
+  line-height: 1.6;
+  max-width: 680px;
+}
+
+/* ===== Components ===== */
+
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: clamp(18px, 2.5vh, 24px) clamp(18px, 2.5vw, 24px);
+  margin-bottom: clamp(16px, 2vh, 24px);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: transform 0.25s var(--ease-out-expo),
+              box-shadow 0.25s ease,
+              border-color 0.25s ease;
+}
+
+.tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  border-color: var(--border-strong);
+}
+
+.tile-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: clamp(14px, 1.5vw, 20px);
+  margin-top: clamp(16px, 2vh, 24px);
+}
+
+.tile h3 {
+  font-size: clamp(17px, 1.6vw, 22px);
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 8px 0;
+}
+
+.tile p {
+  font-size: clamp(14px, 1.25vw, 17px);
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.7;
+}
+
+.btn-primary {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: clamp(13px, 1.1vw, 15px);
+  font-weight: 600;
+  padding: 11px 22px;
+  border-radius: 8px;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-primary:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(86, 179, 169, 0.28);
+}
+
+.btn-secondary {
+  display: inline-block;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: clamp(13px, 1.1vw, 15px);
+  font-weight: 600;
+  padding: 11px 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  margin-left: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--surface-subtle);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.code-block {
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: clamp(13px, 1.1vw, 15px);
+  padding: clamp(18px, 2.5vh, 24px);
+  border-radius: 10px;
+  overflow-x: auto;
+  margin: clamp(16px, 2vh, 24px) 0;
+  line-height: 1.65;
+}
+
+.code-block .comment { color: #9CA3AF; }
+.code-block .keyword { color: var(--accent); }
+.code-block .string { color: #6EE7B7; }
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: clamp(20px, 3vh, 32px) 0;
+}
+
+.section-title {
+  font-family: var(--font-heading);
+  font-size: clamp(10px, 1vw, 12px);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: clamp(10px, 1.5vh, 14px);
+}
+
+/* ===== Tables ===== */
+
+.ppt-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-body);
+  font-size: clamp(13px, 1.2vw, 16px);
+  margin: clamp(14px, 2vh, 24px) 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border: 1px solid var(--border);
+}
+
+.ppt-table th,
+.ppt-table td {
+  padding: clamp(10px, 1.2vh, 14px) clamp(12px, 1.3vw, 18px);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.ppt-table th {
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  font-size: clamp(11px, 1vw, 13px);
+  letter-spacing: 0.03em;
+}
+
+.ppt-table td {
+  background: var(--surface);
+  line-height: 1.65;
+  color: var(--slate);
+}
+
+.ppt-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ppt-table tr:nth-child(even) td {
+  background: var(--surface-subtle);
+}
+
+.ppt-table td strong {
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.ppt-table.small {
+  font-size: clamp(12px, 1.1vw, 14px);
+}
+
+.ppt-table.small th,
+.ppt-table.small td {
+  padding: clamp(8px, 1vh, 12px) clamp(10px, 1.1vw, 14px);
+}
+
+/* ===== Two Column ===== */
+
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: clamp(16px, 2vw, 24px);
+  margin-top: clamp(16px, 2vh, 24px);
+}
+
+/* ===== Highlight Box ===== */
+
+.highlight-box {
+  background: var(--ink);
+  color: #fff;
+  border-radius: 12px;
+  padding: clamp(20px, 2.5vh, 28px) clamp(22px, 2.5vw, 30px);
+  font-family: var(--font-heading);
+}
+
+.highlight-box .label {
+  font-size: clamp(10px, 1vw, 12px);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.55;
+  margin-bottom: 8px;
+}
+
+.highlight-box .value {
+  font-size: clamp(26px, 3vw, 44px);
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.highlight-box p {
+  color: rgba(255,255,255,0.75);
+}
+
+/* ===== Progress & HUD ===== */
+
+/* ===== Thumbnail Sidebar ===== */
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  transition: transform 0.3s var(--ease-out-expo);
+}
+
+.sidebar.collapsed {
+  transform: translateX(-100%);
+}
+
+.sidebar-toggle {
+  position: absolute;
+  right: -36px;
+  top: 16px;
+  width: 32px;
+  height: 48px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 16;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--surface-subtle);
+}
+
+.sidebar-toggle svg {
+  width: 16px;
+  height: 16px;
+  color: var(--ink);
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-title {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.sidebar-card {
+  aspect-ratio: 16 / 10;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.sidebar-card:hover {
+  border-color: var(--accent);
+  transform: scale(1.02);
+}
+
+.sidebar-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.sidebar-card .slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.sidebar-index {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--surface);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+/* Adjust stage to make room for sidebar */
+.stage.sidebar-open {
+  margin-left: 220px;
+}
+
+/* ===== Progress ===== */
+
+.progress {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.4s var(--ease-out-expo);
+  z-index: 10;
+}
+
+
+
+.hud {
+  position: fixed;
+  bottom: clamp(12px, 2vh, 20px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 1vw, 12px);
+  color: var(--muted);
+  opacity: 0.5;
+  z-index: 10;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* ===== Fullscreen Controls ===== */
+
+.fullscreen-btn {
+  position: fixed;
+  bottom: clamp(10px, 1.8vh, 18px);
+  right: clamp(16px, 2.5vw, 32px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--ink);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: clamp(10px, 0.9vw, 12px);
+  z-index: 24;
+  transition: opacity 0.3s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.fullscreen-btn:hover {
+  background: var(--slate);
+  transform: scale(1.05);
+}
+
+.fullscreen-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.fullscreen-btn .exit-icon {
+  display: none;
+}
+
+/* Fullscreen mode styles */
+:fullscreen .help,
+:fullscreen .theme-switcher,
+:fullscreen .theme-hint {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+:-webkit-full-screen .help,
+:-webkit-full-screen .theme-switcher,
+:-webkit-full-screen .theme-hint {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+:fullscreen .fullscreen-btn .enter-icon {
+  display: none;
+}
+
+:fullscreen .fullscreen-btn .exit-icon {
+  display: block;
+}
+
+:-webkit-full-screen .fullscreen-btn .enter-icon {
+  display: none;
+}
+
+:-webkit-full-screen .fullscreen-btn .exit-icon {
+  display: block;
+}
+
+/* Auto-hide UI in fullscreen after inactivity.
+   ppt.js toggles .fs-ui-visible on <html> on mousemove/touchstart in
+   fullscreen; after ~2s of inactivity the class is removed and the UI
+   fades out again. (The old :fullscreen:hover rules showed the panel
+   whenever the cursor was anywhere over the page, which read as
+   "always visible" — see v1.7.5.) */
+:fullscreen .help,
+:fullscreen .theme-switcher,
+:fullscreen .theme-hint,
+:fullscreen .hud,
+:fullscreen .fullscreen-btn,
+:-webkit-full-screen .help,
+:-webkit-full-screen .theme-switcher,
+:-webkit-full-screen .theme-hint,
+:-webkit-full-screen .hud,
+:-webkit-full-screen .fullscreen-btn {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+:fullscreen.fs-ui-visible .help,
+:fullscreen.fs-ui-visible .theme-switcher,
+:fullscreen.fs-ui-visible .theme-hint,
+:fullscreen.fs-ui-visible .hud,
+:fullscreen.fs-ui-visible .fullscreen-btn,
+:-webkit-full-screen.fs-ui-visible .help,
+:-webkit-full-screen.fs-ui-visible .theme-switcher,
+:-webkit-full-screen.fs-ui-visible .theme-hint,
+:-webkit-full-screen.fs-ui-visible .hud,
+:-webkit-full-screen.fs-ui-visible .fullscreen-btn {
+  opacity: 1;
+}
+
+:fullscreen.fs-ui-visible .help,
+:fullscreen.fs-ui-visible .theme-switcher,
+:-webkit-full-screen.fs-ui-visible .help,
+:-webkit-full-screen.fs-ui-visible .theme-switcher {
+  pointer-events: auto;
+}
+
+/* Touch/click zones for easy navigation in fullscreen */
+.fullscreen-click-zone-left,
+.fullscreen-click-zone-right {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 30%;
+  z-index: 5;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.fullscreen-click-zone-left {
+  left: 0;
+}
+
+.fullscreen-click-zone-right {
+  right: 0;
+}
+
+/* ===== Overview ===== */
+
+.overview {
+  position: fixed;
+  inset: 0;
+  background: rgba(249, 250, 251, 0.98);
+  padding: clamp(24px, 4vh, 48px) clamp(32px, 5vw, 64px);
+  overflow-y: auto;
+  z-index: 20;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+
+.overview.hidden {
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.overview-title {
+  font-family: var(--font-heading);
+  font-size: clamp(12px, 1.2vw, 14px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: clamp(20px, 3vh, 32px);
+  opacity: 0.45;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: clamp(16px, 2vw, 24px);
+}
+
+.overview-card {
+  aspect-ratio: 16 / 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  cursor: pointer;
+  overflow: hidden;
+  transform: scale(1);
+  transition: transform 0.25s var(--ease-out-expo),
+              box-shadow 0.25s ease,
+              border-color 0.25s ease;
+  position: relative;
+}
+
+.overview-card:hover {
+  transform: scale(1.03);
+  box-shadow: 0 12px 36px rgba(0,0,0,0.08);
+  border-color: var(--accent);
+}
+
+.overview-card .slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 1;
+  pointer-events: none;
+  /* width/height/transform are set by buildOverview(): the clone is laid out
+     at a fixed 1280x800 design size, then uniformly scaled into the card, so
+     the thumbnail matches the real slide instead of inheriting the base
+     .slide rules (opacity: 0 + viewport-relative paddings) that used to
+     render every card blank. */
+}
+
+.overview-index {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  font-family: var(--font-mono);
+  font-size: clamp(9px, 0.8vw, 11px);
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--surface-subtle);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+/* ===== Toast ===== */
+
+.toast {
+  position: fixed;
+  top: clamp(16px, 3vh, 28px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: clamp(12px, 1.1vw, 14px);
+  padding: 12px 24px;
+  border-radius: 8px;
+  z-index: 30;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s var(--ease-out-expo);
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ===== Help ===== */
+
+.help {
+  position: fixed;
+  top: clamp(12px, 2vh, 20px);
+  left: clamp(12px, 2vw, 24px);
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: clamp(11px, 0.9vw, 13px);
+  line-height: 1.6;
+  padding: 0;
+  border-radius: 14px;
+  z-index: 25;
+  opacity: 1;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.55);
+  min-width: 260px;
+  max-width: 340px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.help.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+}
+
+.help-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px 12px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.help-title {
+  font-weight: 700;
+  font-size: clamp(12px, 1vw, 14px);
+  letter-spacing: 0.02em;
+}
+
+.help-hint {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: clamp(10px, 0.85vw, 12px);
+}
+
+.help-content {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 14px 18px 16px 18px;
+}
+
+.help-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.help-group-title {
+  font-size: clamp(10px, 0.85vw, 12px);
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 2px;
+}
+
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-row kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.12);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: clamp(9px, 0.8vw, 11px);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset;
+  min-width: 22px;
+}
+
+.help-row span {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: clamp(11px, 0.88vw, 13px);
+}
+
+.help-footer {
+  padding: 10px 18px 14px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: clamp(10px, 0.85vw, 12px);
+}
+
+/* ===== Content Reveal Animation ===== */
+
+.slide.active .kicker {
+  animation: revealUp 0.55s var(--ease-out-expo) 0.1s both;
+}
+
+.slide.active h1,
+.slide.active h2 {
+  animation: revealUp 0.6s var(--ease-out-expo) 0.15s both;
+}
+
+.slide.active .lead {
+  animation: revealUp 0.6s var(--ease-out-expo) 0.22s both;
+}
+
+.slide.active .section-title {
+  animation: revealUp 0.5s var(--ease-out-expo) 0.08s both;
+}
+
+.slide.active .tile,
+.slide.active .two-col > * {
+  animation: revealUp 0.55s var(--ease-out-expo) both;
+}
+
+.slide.active .tile:nth-child(1),
+.slide.active .two-col > *:nth-child(1) { animation-delay: 0.22s; }
+.slide.active .tile:nth-child(2),
+.slide.active .two-col > *:nth-child(2) { animation-delay: 0.32s; }
+.slide.active .tile:nth-child(3),
+.slide.active .two-col > *:nth-child(3) { animation-delay: 0.42s; }
+.slide.active .tile:nth-child(4),
+.slide.active .two-col > *:nth-child(4) { animation-delay: 0.52s; }
+
+.slide.active table.ppt-table {
+  animation: revealUp 0.55s var(--ease-out-expo) 0.2s both;
+}
+
+@keyframes revealUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Cover Slide Special Styling ===== */
+
+.slide-content[style*="text-align: center"],
+.slide-content.centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* ===== Responsive Breakpoints ===== */
+
+@media (max-width: 1024px) {
+  .two-col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .slide {
+    padding: clamp(1.5rem, 3vh, 3rem) clamp(5vw, 6vw, 5rem);
+  }
+
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .tile-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ppt-table th,
+  .ppt-table td {
+    padding: clamp(8px, 0.9vh, 11px) clamp(10px, 1.1vw, 12px);
+  }
+}
+
+@media (max-width: 480px) {
+  .slide h1 {
+    font-size: clamp(26px, 7vw, 34px);
+  }
+
+  .slide p.lead {
+    font-size: clamp(15px, 4vw, 18px);
+  }
+}
+
+/* ===== Visual / Keynote Helpers ===== */
+
+.big-number {
+  font-family: var(--font-heading);
+  font-size: clamp(48px, 6vw, 92px);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.big-number-label {
+  font-family: var(--font-heading);
+  font-size: clamp(13px, 1.4vw, 18px);
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hero-stat {
+  text-align: center;
+  padding: clamp(16px, 2vh, 28px) clamp(12px, 1.5vw, 20px);
+}
+
+/* .slide p 有 max-width: 680px，块级盒子在 hero-stat 内默认靠左，
+   需 auto 水平居中才能与大数字对齐 */
+.hero-stat p {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.visual-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(16px, 2vw, 24px);
+  margin-top: clamp(20px, 3vh, 32px);
+}
+
+.visual-card {
+  flex: 0 1 clamp(200px, 22vw, 300px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: clamp(24px, 3vh, 32px) clamp(20px, 2vw, 28px);
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: transform 0.3s var(--ease-out-expo), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.visual-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.06);
+  border-color: var(--border-strong);
+}
+
+.visual-card .icon,
+.tile .icon {
+  width: clamp(48px, 6vw, 72px);
+  height: clamp(48px, 6vw, 72px);
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: clamp(14px, 1.4vw, 18px);
+  font-weight: 700;
+}
+
+.visual-card .icon {
+  font-size: clamp(20px, 2.2vw, 28px);
+}
+
+.visual-card h3 {
+  font-size: clamp(17px, 1.8vw, 24px);
+  margin-bottom: 8px;
+}
+
+.visual-card p {
+  font-size: clamp(13px, 1.3vw, 17px);
+  color: var(--muted);
+  margin: 0;
+}
+
+.quote-block {
+  position: relative;
+  padding: clamp(28px, 4vh, 40px) clamp(32px, 5vw, 48px);
+  border-left: 4px solid var(--accent);
+  background: var(--surface-subtle);
+  border-radius: 0 12px 12px 0;
+  margin: clamp(20px, 3vh, 32px) 0;
+}
+
+.quote-block,
+.quote-block p {
+  font-family: var(--font-heading);
+  font-size: clamp(22px, 3vw, 38px);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--ink);
+  margin: 0;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2vh, 22px);
+  margin-top: clamp(20px, 3vh, 32px);
+  padding-left: 20px;
+  border-left: 2px solid var(--border);
+}
+
+.timeline-item {
+  position: relative;
+  padding-left: 22px;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -27px;
+  top: 7px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--cream);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.timeline-item h3 {
+  font-size: clamp(17px, 1.8vw, 24px);
+  margin-bottom: 4px;
+}
+
+.timeline-item p {
+  font-size: clamp(13px, 1.3vw, 17px);
+  color: var(--muted);
+  margin: 0;
+}
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: clamp(16px, 2vh, 24px);
+  justify-content: flex-start;
+}
+
+.badge {
+  display: inline-block;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: clamp(12px, 1.1vw, 14px);
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.badge.outline {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+}
+
+.split-visual {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: clamp(20px, 3vw, 40px);
+  margin-top: clamp(20px, 3vh, 32px);
+}
+
+.split-visual > * {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 240px;
+  text-align: center;
+}
+
+.split-visual .visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(160px, 25vh, 260px);
+  background: var(--surface-subtle);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+}
+
+.split-visual .big-number {
+  text-align: center;
+}
+
+/* Deprecated: gradient text is banned by the ppt-design rules (impeccable
+   "absolute bans"). Class kept only for backward compatibility with existing
+   decks — do not use it in new content. */
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.section-hero {
+  text-align: center;
+  max-width: clamp(960px, 85vw, 1100px);
+  width: 100%;
+  min-height: 64vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(14px, 2.2vh, 24px);
+  padding: clamp(40px, 6vh, 80px) 0;
+}
+
+.section-hero .kicker {
+  margin-bottom: clamp(8px, 1.2vh, 14px);
+}
+
+/* ===== Chapter Progress (section dividers) ===== */
+/* Used on chapter divider slides: completed chapters are lit, the current
+   chapter is highlighted in accent, upcoming ones stay muted. */
+.chapter-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(18px, 2.5vw, 32px);
+  justify-content: center;
+  margin-top: clamp(32px, 4.5vh, 48px);
+}
+
+.chapter-progress-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-heading);
+  font-size: clamp(12px, 1.2vw, 15px);
+  font-weight: 600;
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.chapter-progress-item .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+
+.chapter-progress-item.done {
+  color: var(--ink);
+  opacity: 0.85;
+}
+
+.chapter-progress-item.done .dot {
+  background: var(--accent);
+}
+
+.chapter-progress-item.current {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.chapter-progress-item.current .dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+.section-hero h1 {
+  font-size: clamp(44px, 5.5vw, 80px);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: 0;
+}
+
+.section-hero .lead {
+  font-size: clamp(18px, 2.2vw, 30px);
+  color: var(--muted);
+  line-height: 1.55;
+  margin-bottom: 0;
+}
+
+.section-hero .badge-row {
+  margin-top: clamp(10px, 1.5vh, 20px);
+}
+
+.hero-headline {
+  display: inline-block;
+  width: max-content;
+  text-align: left;
+  align-self: center;
+  margin: 0 0 clamp(6px, 1vh, 12px) 0;
+}
+
+.hero-headline .kicker {
+  display: block;
+  width: max-content;
+  min-width: 35%;
+  max-width: 100%;
+  margin: 0 0 clamp(8px, 1.2vh, 14px) 0;
+  text-align: left;
+  white-space: nowrap;
+  line-height: 1.45;
+}
+
+.hero-headline h1 {
+  display: block;
+  text-align: left;
+  width: auto;
+  margin-bottom: 0;
+}
+
+.slide-content .hero-headline {
+  width: max-content;
+  margin: 0 0 clamp(6px, 1vh, 12px) 0;
+}
+
+.section-hero > .kicker,
+.section-hero > h1,
+.section-hero > h2,
+.section-hero > .hero-headline,
+.section-hero > .lead,
+.section-hero > .badge-row,
+.section-hero > .hero-meta,
+.section-hero > .divider,
+.section-hero > .btn-primary,
+.section-hero > .btn-secondary {
+  align-self: center;
+}
+
+.section-hero > .badge-row {
+  justify-content: center;
+}
+
+.hero-meta {
+  font-family: var(--font-heading);
+  font-size: clamp(13px, 1.2vw, 17px);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin-top: clamp(6px, 1vh, 10px);
+}
+
+@media (max-width: 768px) {
+  .split-visual {
+    flex-wrap: wrap;
+  }
+
+  .split-visual > * {
+    flex: 1 1 calc(50% - 20px);
+    max-width: none;
+  }
+}
+
+/* ===== Print / PDF Export ===== */
+
+@media print {
+  /* One slide per page: the @page box is exactly the 1280×800 design canvas
+     with zero margin, so a slide sized to the canvas fills the page
+     edge-to-edge — no overflow, no clipped content, no blank pages. */
+  @page {
+    size: 1280px 800px;
+    margin: 0;
+  }
+
+  html, body {
+    overflow: visible;
+    height: auto;
+    margin: 0;
+    padding: 0;
+  }
+
+  #app {
+    width: 100%;
+    height: auto;
+    position: static;
+  }
+
+  .stage {
+    position: static;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .slide {
+    position: relative !important;
+    opacity: 1 !important;
+    pointer-events: auto;
+    page-break-after: always;
+    break-after: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    width: 1280px !important;
+    height: 800px !important;
+    overflow: hidden;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .slide:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .slide-content,
+  .slide.active .slide-content,
+  .overview-card .slide-content {
+    max-width: none !important;
+    width: 100% !important;
+    padding: clamp(24px, 3vh, 48px) clamp(36px, 5vw, 72px) !important;
+  }
+
+  .slide h1 { font-size: clamp(34px, 4.5vw, 60px) !important; }
+  .slide h2 { font-size: clamp(28px, 3.6vw, 48px) !important; }
+
+  /* Entrance animations never run to completion when printing (and only the
+     active slide would have them at all), so force every animatable element
+     to its visible final state — mirrors the thumbnail/presenter final-state
+     logic in ppt.js. */
+  .slide .kicker,
+  .slide h1,
+  .slide h2,
+  .slide .lead,
+  .slide .section-title,
+  .slide .tile,
+  .slide .two-col > *,
+  .slide table.ppt-table,
+  .slide .visual-card,
+  .slide .data-metric,
+  .slide .chart-bar-item,
+  .slide .progress-ring-item,
+  .slide .chart-step,
+  .slide [data-chart],
+  .slide .reveal-item {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Progress ring: fill to the configured final offset (same formula as the
+     fillProgress keyframe; --progress legacy, --progress-pct preferred). */
+  .slide .progress-ring-circle {
+    stroke-dashoffset: var(--progress, calc(314 - (314 * var(--progress-pct, 0) / 100))) !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Waterfall: fill to the configured final width (same as fillWidth). */
+  .slide .waterfall-fill {
+    width: var(--width, 0%) !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .overview-card .slide {
+    opacity: 1 !important;
+    transform: none !important;
+    position: relative !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    page-break-after: avoid !important;
+    margin-bottom: 16px !important;
+  }
+
+  .overview-card .slide-content {
+    opacity: 1 !important;
+    transform: scale(0.22) !important;
+    width: 454.5% !important;
+    max-width: none !important;
+  }
+
+  /* UI chrome never prints */
+  .progress,
+  .hud,
+  .overview,
+  .toast,
+  .help,
+  .sidebar,
+  .fullscreen-btn,
+  .marker-toolbar,
+  .marker-overlay,
+  .theme-switcher,
+  .theme-hint,
+  #ai-ppt-edit-toolbar {
+    display: none !important;
+  }
+
+  .tile {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
+
+/* ===== Data Visualization Components ===== */
+
+/* ----- Bar Chart ----- */
+.chart-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(10px, 1.5vw, 16px);
+  padding: clamp(16px, 2vh, 24px) 0;
+}
+
+.chart-bar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-bar-bar {
+  width: 100%;
+  min-height: 60px;
+  background: linear-gradient(to top, var(--accent), var(--accent-light));
+  border-radius: 6px 6px 0 0;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.chart-bar-bar:hover {
+  transform: scaleY(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.chart-bar-label {
+  font-size: clamp(11px, 1vw, 13px);
+  color: var(--muted);
+  text-align: center;
+}
+
+.chart-bar-value {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: clamp(16px, 1.8vw, 20px);
+}
+
+/* ----- SVG 数据图表（.chart-line 折线/面积、.chart-pie 饼/环、.chart-bars 分组/堆叠柱）-----
+   声明式容器 + data-chart JSON；ppt.js 初始化时渲染为内联静态 SVG。
+   序列色 var(--chart-1..6)，文字/网格/轴线 var(--chart-*)，主题 css 可覆盖。 */
+.chart-line,
+.chart-pie,
+.chart-bars {
+  width: 100%;
+  max-width: 720px;
+  margin: clamp(8px, 1.5vh, 16px) auto 0;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-svg text {
+  font-family: var(--font-body);
+}
+
+.chart-svg .chart-grid {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+
+.chart-svg .chart-axis {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+}
+
+.chart-svg .chart-tick {
+  fill: var(--chart-text);
+  font-size: 11px;
+}
+
+.chart-svg .chart-value {
+  fill: var(--chart-text-strong);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chart-svg .chart-legend-text {
+  fill: var(--chart-text-strong);
+  font-size: 12px;
+}
+
+.chart-svg .chart-pct {
+  fill: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chart-svg .chart-center {
+  fill: var(--chart-text-strong);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.chart-error {
+  padding: clamp(12px, 2vh, 20px);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: clamp(12px, 1.2vw, 14px);
+  text-align: center;
+}
+
+/* ----- Progress Ring ----- */
+.progress-ring {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(20px, 3vw, 32px);
+}
+
+.progress-ring-item {
+  text-align: center;
+}
+
+.progress-ring-svg {
+  width: clamp(100px, 14vw, 140px);
+  height: clamp(100px, 14vw, 140px);
+  transform: rotate(-90deg);
+}
+
+.progress-ring-circle-bg {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 10;
+}
+
+.progress-ring-circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-dasharray: 314;
+  stroke-dashoffset: 314;
+  transition: stroke-dashoffset 1s ease-out;
+}
+
+.progress-ring-label {
+  margin-top: 8px;
+  font-weight: 600;
+  color: var(--ink);
+  font-size: clamp(12px, 1.2vw, 14px);
+}
+
+.progress-ring-value {
+  font-size: clamp(20px, 2.5vw, 28px);
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 4px;
+}
+
+/* ----- Step Chart ----- */
+.chart-steps {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.8vh, 18px);
+}
+
+.chart-step {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 1.5vw, 16px);
+}
+
+.chart-step-number {
+  width: clamp(36px, 5vw, 44px);
+  height: clamp(36px, 5vw, 44px);
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+  font-size: clamp(14px, 1.5vw, 18px);
+}
+
+.chart-step-content {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: clamp(14px, 2vh, 18px) clamp(16px, 2.5vw, 22px);
+}
+
+.chart-step-title {
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+  font-size: clamp(14px, 1.5vw, 18px);
+}
+
+.chart-step-desc {
+  font-size: clamp(12px, 1.2vw, 15px);
+  color: var(--muted);
+}
+
+/* ----- Data Metric ----- */
+.data-metric {
+  text-align: center;
+  padding: clamp(16px, 2.5vh, 28px);
+}
+
+.data-metric-value {
+  font-size: clamp(44px, 6vw, 72px);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.data-metric-unit {
+  font-size: 0.4em;
+  color: var(--muted);
+  -webkit-text-fill-color: var(--muted);
+}
+
+.data-metric-label {
+  margin-top: 12px;
+  font-size: clamp(12px, 1.3vw, 16px);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.data-metric-trend {
+  margin-top: 8px;
+  font-size: clamp(13px, 1.2vw, 15px);
+  font-weight: 600;
+}
+
+.data-metric-trend.up {
+  color: var(--success);
+}
+
+.data-metric-trend.down {
+  color: var(--danger);
+}
+
+/* ----- Data Compare ----- */
+.data-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: clamp(12px, 1.5vw, 16px);
+}
+
+.data-compare-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: clamp(16px, 2.5vh, 22px);
+  text-align: center;
+  transition: transform 0.3s ease, border-color 0.3s ease;
+}
+
+.data-compare-item:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+}
+
+.data-compare-title {
+  font-size: clamp(11px, 1.2vw, 13px);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.data-compare-value {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.data-compare-sub {
+  font-size: clamp(12px, 1.2vw, 14px);
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ----- Data Matrix ----- */
+.data-matrix {
+  display: grid;
+  gap: clamp(8px, 1vw, 12px);
+}
+
+.data-matrix-2x2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.data-matrix-3x3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.data-matrix-cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: clamp(14px, 2vh, 20px);
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.data-matrix-cell:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.data-matrix-value {
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.data-matrix-label {
+  font-size: clamp(11px, 1.1vw, 13px);
+  color: var(--muted);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.data-matrix-cell.hot {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+}
+
+.data-matrix-cell.warm {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+/* ----- Horizontal Timeline ----- */
+.timeline-horizontal {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  position: relative;
+  padding-top: 24px;
+}
+
+.timeline-horizontal::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 40px;
+  right: 40px;
+  height: 2px;
+  background: var(--border);
+}
+
+.timeline-horizontal-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.timeline-horizontal-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--cream);
+  box-shadow: 0 0 0 2px var(--accent-light);
+  flex-shrink: 0;
+}
+
+.timeline-horizontal-content {
+  text-align: center;
+}
+
+.timeline-horizontal-title {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: clamp(12px, 1.4vw, 16px);
+}
+
+.timeline-horizontal-desc {
+  font-size: clamp(11px, 1.1vw, 13px);
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ----- Waterfall Chart ----- */
+.waterfall {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.5vh, 14px);
+}
+
+.waterfall-item {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 1.5vw, 16px);
+}
+
+.waterfall-label {
+  width: clamp(90px, 12vw, 120px);
+  text-align: right;
+  font-weight: 500;
+  color: var(--ink);
+  flex-shrink: 0;
+  font-size: clamp(12px, 1.2vw, 14px);
+}
+
+.waterfall-bar {
+  flex: 1;
+  height: clamp(32px, 4.5vh, 44px);
+  background: var(--surface-subtle);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.waterfall-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.8s ease-out;
+}
+
+.waterfall-fill.positive {
+  background: linear-gradient(to right, var(--success), #a7f3d0);
+}
+
+.waterfall-fill.negative {
+  background: linear-gradient(to right, var(--danger), #fecaca);
+}
+
+.waterfall-fill.neutral {
+  background: linear-gradient(to right, var(--accent), var(--accent-light));
+}
+
+.waterfall-value {
+  width: clamp(70px, 10vw, 90px);
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink);
+  font-size: clamp(13px, 1.3vw, 16px);
+}
+
+/* ===== Animation Effects ===== */
+
+/* Reveal Up (already exists, keeping for reference) */
+@keyframes revealUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Reveal Left */
+@keyframes revealLeft {
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Reveal Right */
+@keyframes revealRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Fade In */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Scale In */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Zoom In */
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Blur In */
+@keyframes blurIn {
+  from { opacity: 0; filter: blur(8px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+/* Flip In */
+@keyframes flipIn {
+  from { opacity: 0; transform: perspective(800px) rotateY(-45deg); }
+  to { opacity: 1; transform: perspective(800px) rotateY(0); }
+}
+
+/* Staggered Reveal Items */
+.reveal-item {
+  opacity: 0;
+  animation: revealUp 0.5s ease forwards;
+}
+
+.reveal-item:nth-child(1) { animation-delay: 0.1s; }
+.reveal-item:nth-child(2) { animation-delay: 0.2s; }
+.reveal-item:nth-child(3) { animation-delay: 0.3s; }
+.reveal-item:nth-child(4) { animation-delay: 0.4s; }
+.reveal-item:nth-child(5) { animation-delay: 0.5s; }
+.reveal-item:nth-child(6) { animation-delay: 0.6s; }
+
+/* ===== Animation Presets ===== */
+
+/* No animation */
+.anim-none * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Fade in */
+.anim-fade .slide.active .kicker,
+.anim-fade .slide.active h1,
+.anim-fade .slide.active h2,
+.anim-fade .slide.active .lead,
+.anim-fade .slide.active .tile,
+.anim-fade .slide.active .visual-card,
+.anim-fade .slide.active .data-metric,
+.anim-fade .slide.active .chart-bar-item,
+.anim-fade .slide.active .progress-ring-item,
+.anim-fade .slide.active .chart-step,
+.anim-fade .slide.active [data-chart] {
+  opacity: 0;
+  animation: fadeIn 0.5s ease forwards;
+}
+
+.anim-fade .slide.active .kicker { animation-delay: 0.1s; }
+.anim-fade .slide.active h1,
+.anim-fade .slide.active h2 { animation-delay: 0.15s; }
+.anim-fade .slide.active .lead { animation-delay: 0.22s; }
+
+/* Slide in (default behavior - already uses revealUp) */
+.anim-slide .slide.active .kicker,
+.anim-slide .slide.active h1,
+.anim-slide .slide.active h2,
+.anim-slide .slide.active .lead,
+.anim-slide .slide.active .tile,
+.anim-slide .slide.active .visual-card,
+.anim-slide .slide.active .data-metric,
+.anim-slide .slide.active .chart-bar-item,
+.anim-slide .slide.active .progress-ring-item,
+.anim-slide .slide.active .chart-step,
+.anim-slide .slide.active [data-chart] {
+  opacity: 0;
+  animation: revealUp 0.6s ease forwards;
+}
+
+.anim-slide .slide.active .kicker { animation-delay: 0.1s; }
+.anim-slide .slide.active h1,
+.anim-slide .slide.active h2 { animation-delay: 0.15s; }
+.anim-slide .slide.active .lead { animation-delay: 0.22s; }
+
+/* Bounce / Spring */
+.anim-bounce .slide.active .kicker,
+.anim-bounce .slide.active h1,
+.anim-bounce .slide.active h2,
+.anim-bounce .slide.active .lead,
+.anim-bounce .slide.active .tile,
+.anim-bounce .slide.active .visual-card,
+.anim-bounce .slide.active .data-metric,
+.anim-bounce .slide.active .chart-bar-item,
+.anim-bounce .slide.active .progress-ring-item,
+.anim-bounce .slide.active .chart-step,
+.anim-bounce .slide.active [data-chart] {
+  opacity: 0;
+  animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.anim-bounce .slide.active .kicker { animation-delay: 0.1s; }
+.anim-bounce .slide.active h1,
+.anim-bounce .slide.active h2 { animation-delay: 0.15s; }
+.anim-bounce .slide.active .lead { animation-delay: 0.22s; }
+
+/* Zoom */
+.anim-zoom .slide.active .kicker,
+.anim-zoom .slide.active h1,
+.anim-zoom .slide.active h2,
+.anim-zoom .slide.active .lead,
+.anim-zoom .slide.active .tile,
+.anim-zoom .slide.active .visual-card,
+.anim-zoom .slide.active .data-metric,
+.anim-zoom .slide.active .chart-bar-item,
+.anim-zoom .slide.active .progress-ring-item,
+.anim-zoom .slide.active .chart-step,
+.anim-zoom .slide.active [data-chart] {
+  opacity: 0;
+  animation: zoomIn 0.5s ease forwards;
+}
+
+.anim-zoom .slide.active .kicker { animation-delay: 0.1s; }
+.anim-zoom .slide.active h1,
+.anim-zoom .slide.active h2 { animation-delay: 0.15s; }
+.anim-zoom .slide.active .lead { animation-delay: 0.22s; }
+
+/* Blur */
+.anim-blur .slide.active .kicker,
+.anim-blur .slide.active h1,
+.anim-blur .slide.active h2,
+.anim-blur .slide.active .lead,
+.anim-blur .slide.active .tile,
+.anim-blur .slide.active .visual-card,
+.anim-blur .slide.active .data-metric,
+.anim-blur .slide.active .chart-bar-item,
+.anim-blur .slide.active .progress-ring-item,
+.anim-blur .slide.active .chart-step,
+.anim-blur .slide.active [data-chart] {
+  opacity: 0;
+  animation: blurIn 0.6s ease forwards;
+}
+
+.anim-blur .slide.active .kicker { animation-delay: 0.1s; }
+.anim-blur .slide.active h1,
+.anim-blur .slide.active h2 { animation-delay: 0.15s; }
+.anim-blur .slide.active .lead { animation-delay: 0.22s; }
+
+/* Flip */
+.anim-flip .slide.active .kicker,
+.anim-flip .slide.active h1,
+.anim-flip .slide.active h2,
+.anim-flip .slide.active .lead,
+.anim-flip .slide.active .tile,
+.anim-flip .slide.active .visual-card,
+.anim-flip .slide.active .data-metric,
+.anim-flip .slide.active .chart-bar-item,
+.anim-flip .slide.active .progress-ring-item,
+.anim-flip .slide.active .chart-step,
+.anim-flip .slide.active [data-chart] {
+  opacity: 0;
+  animation: flipIn 0.6s ease forwards;
+}
+
+.anim-flip .slide.active .kicker { animation-delay: 0.1s; }
+.anim-flip .slide.active h1,
+.anim-flip .slide.active h2 { animation-delay: 0.15s; }
+.anim-flip .slide.active .lead { animation-delay: 0.22s; }
+
+/* ===== Speaker Notes ===== */
+/* Authored inside a slide as <div class="speaker-note">; never rendered in
+   normal view — ppt.js extracts it for the presenter window (S key). */
+.speaker-note {
+  display: none;
+}
+
+/* Progress Ring Animation on Slide Active.
+   --progress = final stroke-dashoffset (legacy, 0..314);
+   --progress-pct = fill percentage 0..100 (preferred, intuitive). */
+.slide.active .progress-ring-circle {
+  stroke-dashoffset: 314;
+  animation: fillProgress 1s ease-out forwards;
+}
+
+@keyframes fillProgress {
+  to { stroke-dashoffset: var(--progress, calc(314 - (314 * var(--progress-pct, 0) / 100))); }
+}
+
+/* Waterfall Bar Animation */
+.slide.active .waterfall-fill {
+  width: 0;
+  animation: fillWidth 1s ease-out forwards;
+}
+
+@keyframes fillWidth {
+  to { width: var(--width, 0%); }
+}
+
+/* ===== Theme Classes ===== */
+
+/* Web UI (default): values come from :root; the explicit class is a marker so
+   ppt.js initThemes can distinguish "configured as web-ui" from "no theme info"
+   and not fall back to a stale localStorage theme. */
+body.theme-web-ui {}
+
+/* Business Blue */
+.theme-business-blue {
+  --teal: #2563EB;
+  --teal-light: #3B82F6;
+  --accent: #2563EB;
+  --accent-light: #EFF6FF;
+  --accent-dark: #1D4ED8;
+}
+
+/* Elegant Purple */
+.theme-elegant-purple {
+  --teal: #7C3AED;
+  --teal-light: #8B5CF6;
+  --accent: #7C3AED;
+  --accent-light: #FAF5FF;
+  --accent-dark: #6D28D9;
+}
+
+/* Warm Orange */
+.theme-warm-orange {
+  --teal: #EA580C;
+  --teal-light: #F97316;
+  --accent: #EA580C;
+  --accent-light: #FFF7ED;
+  --accent-dark: #C2410C;
+}
+
+/* Sunset Red */
+.theme-sunset-red {
+  --teal: #E11D48;
+  --teal-light: #F43F5E;
+  --accent: #E11D48;
+  --accent-light: #FFF1F2;
+  --accent-dark: #BE123C;
+}
+
+/* Tech Green */
+.theme-tech-green {
+  --teal: #65A30D;
+  --teal-light: #84CC16;
+  --accent: #65A30D;
+  --accent-light: #F7FEE7;
+  --accent-dark: #4D7C0F;
+}
+
+/* Minimal Gray */
+.theme-minimal-gray {
+  --teal: #171717;
+  --teal-light: #404040;
+  --accent: #171717;
+  --accent-light: #FAFAFA;
+  --accent-dark: #0A0A0A;
+}
+
+/* Dark Mode */
+.theme-dark-mode {
+  --teal: #22D3EE;
+  --teal-light: #67E8F9;
+  --accent: #22D3EE;
+  --accent-light: #111827;
+  --accent-dark: #06B6D4;
+  --ink: #E5E7EB;
+  --navy: #F9FAFB;
+  --slate: #D1D5DB;
+  --muted: #9CA3AF;
+  --cream: #0F172A;
+  --surface: #1E293B;
+  --surface-subtle: #334155;
+  --tile: #334155;
+  --tile-strong: #475569;
+  --border: #334155;
+  --border-strong: #475569;
+}
+
+/* ===== Reduced Motion ===== */
+/* Required by ppt-design rules (impeccable "motion"): every animation needs a
+   reduced-motion alternative. Slide transitions collapse to an instant
+   crossfade; per-element reveal / fill animations render the final state. */
+@media (prefers-reduced-motion: reduce) {
+  .slide,
+  .slide.exit-forward,
+  .slide.exit-backward,
+  .slide.active {
+    transition: opacity 0.01s linear;
+    transform: none;
+  }
+
+  .anim-fade .slide.active .kicker,
+  .anim-fade .slide.active h1,
+  .anim-fade .slide.active h2,
+  .anim-fade .slide.active .lead,
+  .anim-fade .slide.active .tile,
+  .anim-fade .slide.active .visual-card,
+  .anim-fade .slide.active .data-metric,
+  .anim-fade .slide.active .chart-bar-item,
+  .anim-fade .slide.active .progress-ring-item,
+  .anim-fade .slide.active .chart-step,
+  .anim-slide .slide.active .kicker,
+  .anim-slide .slide.active h1,
+  .anim-slide .slide.active h2,
+  .anim-slide .slide.active .lead,
+  .anim-slide .slide.active .tile,
+  .anim-slide .slide.active .visual-card,
+  .anim-slide .slide.active .data-metric,
+  .anim-slide .slide.active .chart-bar-item,
+  .anim-slide .slide.active .progress-ring-item,
+  .anim-slide .slide.active .chart-step,
+  .anim-bounce .slide.active .kicker,
+  .anim-bounce .slide.active h1,
+  .anim-bounce .slide.active h2,
+  .anim-bounce .slide.active .lead,
+  .anim-bounce .slide.active .tile,
+  .anim-bounce .slide.active .visual-card,
+  .anim-bounce .slide.active .data-metric,
+  .anim-bounce .slide.active .chart-bar-item,
+  .anim-bounce .slide.active .progress-ring-item,
+  .anim-bounce .slide.active .chart-step,
+  .anim-zoom .slide.active .kicker,
+  .anim-zoom .slide.active h1,
+  .anim-zoom .slide.active h2,
+  .anim-zoom .slide.active .lead,
+  .anim-zoom .slide.active .tile,
+  .anim-zoom .slide.active .visual-card,
+  .anim-zoom .slide.active .data-metric,
+  .anim-zoom .slide.active .chart-bar-item,
+  .anim-zoom .slide.active .progress-ring-item,
+  .anim-zoom .slide.active .chart-step,
+  .anim-blur .slide.active .kicker,
+  .anim-blur .slide.active h1,
+  .anim-blur .slide.active h2,
+  .anim-blur .slide.active .lead,
+  .anim-blur .slide.active .tile,
+  .anim-blur .slide.active .visual-card,
+  .anim-blur .slide.active .data-metric,
+  .anim-blur .slide.active .chart-bar-item,
+  .anim-blur .slide.active .progress-ring-item,
+  .anim-blur .slide.active .chart-step,
+  .anim-flip .slide.active .kicker,
+  .anim-flip .slide.active h1,
+  .anim-flip .slide.active h2,
+  .anim-flip .slide.active .lead,
+  .anim-flip .slide.active .tile,
+  .anim-flip .slide.active .visual-card,
+  .anim-flip .slide.active .data-metric,
+  .anim-flip .slide.active .chart-bar-item,
+  .anim-flip .slide.active .progress-ring-item,
+  .anim-flip .slide.active .chart-step {
+    opacity: 1;
+    animation: none;
+  }
+
+  .slide.active .progress-ring-circle,
+  .slide.active .waterfall-fill {
+    animation-duration: 0.01s;
+  }
+
+  /* SVG 图表入场动画直接落到终态（SVG 本身是静态的） */
+  .slide.active [data-chart] {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+/* ===== Visual edit mode toolbar ===== */
+#ai-ppt-edit-toolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--navy, #0F172A);
+  color: var(--cream, #FAFAF7);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-family: var(--font-body);
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 4px;
+  opacity: 0.9;
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-save {
+  background: var(--teal, #439288);
+  color: white;
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-cancel {
+  background: var(--tile-strong, #E0E4EA);
+  color: var(--ink, #1A2332);
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.slide [contenteditable="true"] {
+  outline: 2px dashed var(--teal, #439288);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.slide [contenteditable="true"]:focus,
+.slide [contenteditable="true"]:hover {
+  outline-style: solid;
+  background: rgba(13, 148, 136, 0.06);
+}
+
+/* ===== Marker pen ===== */
+/* The toolbar is hidden by default; in marker mode it appears on pointer
+   activity (.visible) and auto-hides after ~2s. */
+.marker-toolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.92);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.marker-toolbar.active {
+  display: flex;
+}
+
+.marker-toolbar.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.marker-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.marker-tool-btn,
+.marker-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: rgba(250, 250, 247, 0.85);
+  background: transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.marker-tool-btn:hover,
+.marker-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.marker-tool-btn.active {
+  background: var(--teal, #439288);
+  color: white;
+}
+
+.marker-tool-btn svg,
+.marker-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.marker-colors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.marker-color-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.marker-color-btn.active {
+  border-color: white;
+  transform: scale(1.15);
+}
+
+.marker-hint {
+  font-size: 11px;
+  color: rgba(250, 250, 247, 0.55);
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  white-space: nowrap;
+}
+
+.marker-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 60;
+}
+
+html.marker-mode .marker-overlay {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+/* Fullscreen: hide help panel, slide sidebar, and prevent them from appearing */
+html:fullscreen .help,
+html:fullscreen .sidebar {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .marker-toolbar {
+    bottom: 16px;
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  .marker-hint {
+    display: none;
+  }
+}
+
+</style>
+  <style data-inlined-from="css/themes/theme-switcher.css">
+/* ===========================================
+   Theme Switcher UI
+   =========================================== */
+
+.theme-switcher {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.theme-switcher-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.theme-switcher-toggle:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.theme-switcher-toggle svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.theme-switcher-panel {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  min-width: 200px;
+}
+
+.theme-switcher-panel.open {
+  display: block;
+  animation: slideIn 0.2s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.theme-switcher-title {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+
+.theme-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.theme-option:hover {
+  background: var(--surface-subtle);
+}
+
+.theme-option.active {
+  background: var(--accent-light);
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+.theme-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+}
+
+.theme-option.active .theme-swatch {
+  border-color: var(--accent);
+}
+
+.theme-name {
+  flex: 1;
+}
+
+.theme-hint {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.6;
+  z-index: 50;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .theme-switcher {
+    top: 10px;
+    right: 10px;
+  }
+
+  .theme-switcher-toggle {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .theme-switcher-panel {
+    min-width: 170px;
+  }
+
+  .theme-hint {
+    display: none;
+  }
+}
+
+</style>
+  <style data-inlined-from="css/themes/web-ui.css">
+/* ===========================================
+   Theme: Web UI (Default)
+   - 原始 teal-editorial 配色
+   - 专业、克制、现代
+   =========================================== */
+
+:root,
+body.theme-web-ui {
+  /* Brand / Accent */
+  --teal: #439288;
+  --teal-light: #7DD3C0;
+  --accent: #439288;
+  --accent-light: #EAF3F1;
+  --accent-dark: #35766A;
+
+  /* Ink + Neutrals */
+  --ink: #151A19;
+  --navy: #0B1413;
+  --slate: #6B8A83;
+  --muted: #6B8A83;
+  --cream: #FAFAF7;
+  --surface: #FFFFFF;
+  --surface-subtle: #EDF1F0;
+  --tile: #EDF1F0;
+  --tile-strong: #E3E9E7;
+  --border: #E3E9E7;
+  --border-strong: #CBD5D1;
+
+  /* Status */
+  --danger: #EF4444;
+  --success: #10B981;
+  --info: #3B82F6;
+}
+
+</style>
+  <style data-inlined-from="css/themes/business-blue.css">
+/* ===========================================
+   Theme: Business Blue
+   - 商务蓝调
+   - 稳重、专业、可信
+   - 适合金融、咨询、B2B
+   =========================================== */
+
+body.theme-business-blue {
+  /* Brand / Accent */
+  --teal: #2563EB;
+  --teal-light: #3B82F6;
+  --accent: #2563EB;
+  --accent-light: #EFF6FF;
+  --accent-dark: #1D4ED8;
+
+  /* Ink + Neutrals */
+  --ink: #0F172A;
+  --navy: #020617;
+  --slate: #334155;
+  --muted: #64748B;
+  --cream: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-subtle: #F1F5F9;
+  --tile: #F1F5F9;
+  --tile-strong: #E2E8F0;
+  --border: #E2E8F0;
+  --border-strong: #CBD5E1;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #16A34A;
+  --info: #2563EB;
+}
+
+</style>
+  <style data-inlined-from="css/themes/elegant-purple.css">
+/* ===========================================
+   Theme: Elegant Purple
+   - 优雅紫调
+   - 高端、创意、有格调
+   - 适合设计、时尚、高端服务
+   =========================================== */
+
+body.theme-elegant-purple {
+  /* Brand / Accent */
+  --teal: #7C3AED;
+  --teal-light: #8B5CF6;
+  --accent: #7C3AED;
+  --accent-light: #F5F3FF;
+  --accent-dark: #6D28D9;
+
+  /* Ink + Neutrals */
+  --ink: #1E1B4B;
+  --navy: #0C0A1D;
+  --slate: #4C4660;
+  --muted: #6D6480;
+  --cream: #FAFAFF;
+  --surface: #FFFFFF;
+  --surface-subtle: #F5F3FF;
+  --tile: #F5F3FF;
+  --tile-strong: #EDE9FE;
+  --border: #EDE9FE;
+  --border-strong: #DDD6FE;
+
+  /* Status */
+  --danger: #DB2777;
+  --success: #10B981;
+  --info: #7C3AED;
+}
+
+</style>
+  <style data-inlined-from="css/themes/warm-orange.css">
+/* ===========================================
+   Theme: Warm Orange
+   - 温暖橙调
+   - 活力、亲切、有温度
+   - 适合消费、零售、生活方式
+   =========================================== */
+
+body.theme-warm-orange {
+  /* Brand / Accent */
+  --teal: #EA580C;
+  --teal-light: #F97316;
+  --accent: #EA580C;
+  --accent-light: #FFF7ED;
+  --accent-dark: #C2410C;
+
+  /* Ink + Neutrals */
+  --ink: #1C1917;
+  --navy: #0C0A09;
+  --slate: #44403C;
+  --muted: #78716C;
+  --cream: #FFFBF5;
+  --surface: #FFFFFF;
+  --surface-subtle: #FFF7ED;
+  --tile: #FFF7ED;
+  --tile-strong: #FFEDD5;
+  --border: #FFEDD5;
+  --border-strong: #FED7AA;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #059669;
+  --info: #2563EB;
+}
+
+</style>
+  <style data-inlined-from="css/themes/sunset-red.css">
+/* ===========================================
+   Theme: Sunset Red
+   - 日落红调
+   - 热情、活力、有冲击力
+   - 适合营销、活动、消费品
+   =========================================== */
+
+body.theme-sunset-red {
+  /* Brand / Accent */
+  --teal: #E11D48;
+  --teal-light: #F43F5E;
+  --accent: #E11D48;
+  --accent-light: #FFF1F2;
+  --accent-dark: #BE123C;
+
+  /* Ink + Neutrals */
+  --ink: #1C1917;
+  --navy: #0C0A09;
+  --slate: #44403C;
+  --muted: #78716C;
+  --cream: #FFFBFA;
+  --surface: #FFFFFF;
+  --surface-subtle: #FFF1F2;
+  --tile: #FFF1F2;
+  --tile-strong: #FECDD3;
+  --border: #FECDD3;
+  --border-strong: #FDA4AF;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #16A34A;
+  --info: #F59E0B;
+}
+
+</style>
+  <style data-inlined-from="css/themes/tech-green.css">
+/* ===========================================
+   Theme: Tech Green
+   - 科技绿
+   - 环保、可持续、科技感
+   - 适合新能源、环保、科技初创
+   =========================================== */
+
+body.theme-tech-green {
+  /* Brand / Accent */
+  --teal: #65A30D;
+  --teal-light: #84CC16;
+  --accent: #65A30D;
+  --accent-light: #F7FEE7;
+  --accent-dark: #4D7C0F;
+
+  /* Ink + Neutrals */
+  --ink: #052E16;
+  --navy: #022C22;
+  --slate: #365314;
+  --muted: #71717A;
+  --cream: #F0FDF4;
+  --surface: #FFFFFF;
+  --surface-subtle: #F0FDF4;
+  --tile: #F0FDF4;
+  --tile-strong: #D9F99D;
+  --border: #D9F99D;
+  --border-strong: #BEF264;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #22C55E;
+  --info: #0EA5E9;
+}
+
+</style>
+  <style data-inlined-from="css/themes/minimal-gray.css">
+/* ===========================================
+   Theme: Minimal Gray
+   - 极简灰调
+   - 克制、高级、无印风
+   - 适合设计工作室、极简品牌
+   =========================================== */
+
+body.theme-minimal-gray {
+  /* Brand / Accent */
+  --teal: #171717;
+  --teal-light: #404040;
+  --accent: #171717;
+  --accent-light: #F5F5F5;
+  --accent-dark: #0A0A0A;
+
+  /* Ink + Neutrals */
+  --ink: #171717;
+  --navy: #0A0A0A;
+  --slate: #525252;
+  --muted: #737373;
+  --cream: #FAFAFA;
+  --surface: #FFFFFF;
+  --surface-subtle: #F5F5F5;
+  --tile: #F5F5F5;
+  --tile-strong: #E5E5E5;
+  --border: #E5E5E5;
+  --border-strong: #D4D4D4;
+
+  /* Status */
+  --danger: #DC2626;
+  --success: #16A34A;
+  --info: #2563EB;
+}
+
+</style>
+  <style data-inlined-from="css/themes/dark-mode.css">
+/* ===========================================
+   Theme: Dark Mode
+   - 暗黑模式
+   - 高端、沉浸、护眼
+   - 适合科技产品、发布会、夜间展示
+   =========================================== */
+
+body.theme-dark-mode {
+  /* Brand / Accent */
+  --teal: #22D3EE;
+  --teal-light: #67E8F9;
+  --accent: #22D3EE;
+  --accent-light: #164E63;
+  --accent-dark: #06B6D4;
+
+  /* Ink + Neutrals (inverted for dark mode) */
+  --ink: #F8FAFC;
+  --navy: #020617;
+  --slate: #CBD5E1;
+  --muted: #94A3B8;
+  --cream: #020617;
+  --surface: #0F172A;
+  --surface-subtle: #1E293B;
+  --tile: #1E293B;
+  --tile-strong: #334155;
+  --border: #334155;
+  --border-strong: #475569;
+
+  /* Status */
+  --danger: #FB7185;
+  --success: #4ADE80;
+  --info: #60A5FA;
+}
+
+/* Dark mode specific overrides */
+body.theme-dark-mode {
+  -webkit-font-smoothing: antialiased;
+}
+
+body.theme-dark-mode .tile,
+body.theme-dark-mode .visual-card {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+body.theme-dark-mode .tile:hover,
+body.theme-dark-mode .visual-card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+body.theme-dark-mode .overview {
+  background: rgba(2, 6, 23, 0.98);
+}
+
+</style>
+</head>
+<body class=" anim-slide">
+  <div id="app">
+    <main id="stage" class="stage">
+<section class="slide active"><div class="slide-content section-hero"><h1>Q3 销售队伍建设动员</h1><div class="lead">回到基本功，打赢持久战</div><div class="divider"></div><div>销售部 · 2024 Q3</div></div></section>
+<section class="slide"><div class="slide-content"><h2>销售的本质顺序</h2><p>首先是体力活，再是技术活，最后才是艺术活</p><p>找捷径靠运气走不远，回到基本功才是正路</p></div></section>
+<section class="slide"><div class="slide-content"><h2>基本动作，交给时间</h2><div class="tile-row"><div class="tile"><h3>足量获客</h3><p>量化动作，足够勤奋，不打折扣</p></div><div class="tile"><h3>管好漏斗</h3><p>清楚每个流失，对数据门清</p></div></div><p>坚持重复，时间会给你复利</p></div></section>
+<section class="slide"><div class="slide-content"><h2>强者从不抱怨，气运自带能量</h2><div class="badge-row"><span class="badge">市场不好 不抱怨</span><span class="badge">产品不完美 不抱怨</span><span class="badge">客户难搞 不抱怨</span><span class="badge">竞品低价 不抱怨</span></div><p>Q3要求：任何场合不说一句负能量的话</p></div></section>
+<section class="slide"><div class="slide-content"><h2>建立自己领域，拒绝被动应答</h2><div class="two-col"><div><h3>被动应答型</h3><p>客户问什么答什么</p><p>永远在自证防守</p></div><div><h3>主动专家型</h3><p>定义问题和战场</p><p>引导客户跟着你走</p></div></div></div></section>
+<section class="slide"><div class="slide-content"><h2>复盘是跑赢多数人的捷径</h2><div class="big-number">99<sup>%</sup></div><div class="big-number-label">不第三次犯同样错，就能跑赢99%的人</div><p>第一次错是探索，第三次错是习惯</p></div></section>
+<section class="slide"><div class="slide-content"><h2>Q3复盘执行标准</h2><table class="ppt-table"><tbody><tr><td>每周</td><td>一篇300字，记录动作、失误、反馈、判断</td></tr><tr><td>每月</td><td>整体回顾，总结错误、沉淀有效方法</td></tr></tbody></table></div></section>
+<section class="slide"><div class="slide-content"><h2>输出能力分四层，差距巨大</h2><div class="chart-steps"><div class="chart-step-item"><div class="step-num">1</div><div>自己懂</div></div><div class="chart-step-item"><div class="step-num">2</div><div>能写清楚</div></div><div class="chart-step-item"><div class="step-num">3</div><div>能讲明白</div></div><div class="chart-step-item"><div class="step-num">4</div><div>能让人认同</div></div></div></div></section>
+<section class="slide"><div class="slide-content"><h2>直播是最好的练兵场</h2><p>直播不是带货，是练影响人、赢信任的能力</p><p>Q3要求：每周至少一次直播或公开分享</p></div></section>
+<section class="slide"><div class="slide-content"><h2>把AI变成你的销售外挂</h2><div class="split-visual"><div class="hero-stat"><div class="big-number">10<sup>倍</sup></div><div class="big-number-label">写邮件效率提升</div></div><div class="hero-stat"><div class="big-number">3</div><div class="big-number-label">一人能干三人活</div></div></div><p>不会用AI，就像十年前不会用Excel</p></div></section>
+<section class="slide"><div class="slide-content"><h2>AI可以帮你做这四件事</h2><div class="tile-row"><div class="tile"><p>写跟进邮件</p></div><div class="tile"><p>整理客户画像</p></div><div class="tile"><p>模拟谈判演练</p></div><div class="tile"><p>优化复盘内容</p></div></div><p>AI不替代你，只会放大你的能力</p></div></section>
+<section class="slide"><div class="slide-content section-hero"><h2>Q3，做笨而透的销售人</h2><div class="lead">把简单的事做到底，把基本功练到透</div><div class="divider"></div><p>销售是长跑，时间是我们最忠诚的队友</p><h3>Q3，一起干！</h3></div></section>    </main>
+
+    <div id="overview" class="overview hidden">
+      <div class="overview-title">幻灯片预览 · 点击跳转</div>
+      <div class="overview-grid"></div>
+    </div>
+
+    <div id="help" class="help">
+      <div class="help-header">
+        <div class="help-title">快捷键</div>
+        <div class="help-hint">按 <kbd>?</kbd> 隐藏/显示</div>
+      </div>
+      <div class="help-content">
+        <div class="help-group">
+          <div class="help-group-title">导航</div>
+          <div class="help-row"><kbd>←</kbd><span>上一页</span></div>
+          <div class="help-row"><kbd>→</kbd><span>下一页</span></div>
+          <div class="help-row"><kbd>Cmd</kbd>+<kbd>←</kbd><span>首页</span></div>
+          <div class="help-row"><kbd>Cmd</kbd>+<kbd>→</kbd><span>尾页</span></div>
+        </div>
+        <div class="help-group">
+          <div class="help-group-title">视图</div>
+          <div class="help-row"><kbd>↑</kbd><span>幻灯片预览</span></div>
+          <div class="help-row"><kbd>F</kbd><span>全屏模式</span></div>
+          <div class="help-row"><kbd>T</kbd><span>切换主题</span></div>
+        </div>
+        <div class="help-group">
+          <div class="help-group-title">导出</div>
+          <div class="help-row"><kbd>↓</kbd><span>导出 PDF</span></div>
+          <div class="help-row"><kbd>Ctrl</kbd>+<kbd>P</kbd><span>打印/导出面板</span></div>
+        </div>
+        <div class="help-group">
+          <div class="help-group-title">标识笔</div>
+          <div class="help-row"><kbd>M</kbd><span>开启/退出标识笔</span></div>
+          <div class="help-row"><kbd>1</kbd>-<kbd>5</kbd><span>画笔/箭头/矩形/圆/椭圆</span></div>
+          <div class="help-row"><kbd>C</kbd><span>清除本页标记</span></div>
+        </div>
+      </div>
+      <div class="help-footer">
+        <span>全屏时：点击左侧/右侧翻页</span>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <div id="progress" class="progress"></div>
+    <div id="hud" class="hud"></div>
+  </div>
+  <script data-inlined-from="js/ppt.js">
+(function () {
+  'use strict';
+
+  const state = {
+    current: 0,
+    slides: [],
+    overview: false,
+    help: true,
+    transitioning: false,
+    currentTheme: 'web-ui',
+    sidebarOpen: true,
+    presenter: false,
+    editMode: false,
+    editOriginalHtml: '',
+    markerMode: false,
+    markerDrawing: false,
+    markerTool: 'pen',
+    markerColor: '#EF4444',
+    markerStrokes: new Map(),
+  };
+
+  // Theme definitions — 运行时优先从 /api/themes 拉取（数据源 ai-ppt-base/themes.json）。
+  // 下面这份仅是离线兜底（如 file:// 直接打开 deck 时 fetch 失败）：
+  // 新增主题只需改 themes.json + 加一个 css/themes/<id>.css，本列表不必同步，
+  // 顶多离线打开时主题切换器里缺少新主题，不影响已应用主题的渲染。
+  let themes = [
+    { id: 'web-ui', name: 'Web UI', color: '#439288' },
+    { id: 'business-blue', name: '商务蓝', color: '#2563EB' },
+    { id: 'elegant-purple', name: '优雅紫', color: '#7C3AED' },
+    { id: 'warm-orange', name: '温暖橙', color: '#EA580C' },
+    { id: 'sunset-red', name: '日落红', color: '#E11D48' },
+    { id: 'tech-green', name: '科技绿', color: '#65A30D' },
+    { id: 'minimal-gray', name: '极简灰', color: '#171717' },
+    { id: 'dark-mode', name: '暗黑模式', color: '#22D3EE' },
+  ];
+
+  async function loadThemes() {
+    try {
+      const res = await fetch('/api/themes');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) themes = data;
+      }
+    } catch { /* keep fallback */ }
+  }
+
+  // hasDOM：浏览器运行时为 true。Node（单测 import 本文件取纯函数）下为 false，
+  // 顶层 DOM 查询与启动逻辑全部跳过，只做函数定义。
+  const hasDOM = typeof document !== 'undefined' && typeof window !== 'undefined';
+
+  const stage = hasDOM ? document.getElementById('stage') : null;
+  const overviewEl = hasDOM ? document.getElementById('overview') : null;
+  const overviewGrid = hasDOM ? overviewEl.querySelector('.overview-grid') : null;
+  const progressEl = hasDOM ? document.getElementById('progress') : null;
+  const hudEl = hasDOM ? document.getElementById('hud') : null;
+  const toastEl = hasDOM ? document.getElementById('toast') : null;
+  const helpEl = hasDOM ? document.getElementById('help') : null;
+  const originalTitle = hasDOM ? (document.title || 'ai-ppt') : 'ai-ppt';
+
+  let sidebarEl = null;
+  let sidebarContentEl = null;
+
+  let themeLink = null;
+  let themeSwitcherEl = null;
+  let themePanelEl = null;
+  let fullscreenBtn = null;
+  let fullscreenTimeout = null;
+
+  // Presenter (speaker) mode
+  let presenterWin = null;
+  let presenterTimer = null;
+  let presenterStart = 0;
+
+  // Marker (laser pen / annotation) mode
+  let markerToolbarEl = null;
+  let markerCurrentPath = null;
+
+  // ===== SVG 数据图表渲染器（.chart-line / .chart-pie / .chart-bars）=====
+  // 以下为纯函数（不触碰 DOM）：输入 data-chart 配置对象，输出内联 SVG 字符串。
+  // 序列色用 CSS 变量 var(--chart-1..6)（ppt.css :root 定义，主题 css 可覆盖），
+  // 文字/网格/轴线用 var(--chart-text*) / var(--chart-grid) / var(--chart-axis)。
+  // 渲染结果是静态 SVG：打印、导出截图、overview/sidebar/presenter 缩略图
+  // （都是 DOM 克隆）天然正确，无需终态补偿。
+  // Node 单测经文件尾部 module.exports 引用这些函数（浏览器下 module 未定义，自动跳过）。
+
+  const CHART_W = 640;
+  const CHART_H = 360;
+
+  function chartNum(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function chartEsc(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function chartFmt(v) {
+    const n = chartNum(v);
+    if (Math.abs(n) >= 10000) {
+      const k = n / 1000;
+      return `${Math.round(k * 10) / 10}k`;
+    }
+    return String(Math.round(n * 100) / 100);
+  }
+
+  function chartColor(i) {
+    return `var(--chart-${(i % 6) + 1})`;
+  }
+
+  // 顶部居中水平图例（宽度按字符数估算，CJK 约 13px/字）
+  function chartLegend(names) {
+    const items = names.map((n, i) => {
+      const name = String(n ?? `系列${i + 1}`);
+      return { name, color: chartColor(i), w: name.length * 13 + 26 };
+    });
+    const total = items.reduce((s, it) => s + it.w, 0);
+    let x = Math.max(8, (CHART_W - total) / 2);
+    return items.map((it) => {
+      const out = `<rect x="${x}" y="8" width="12" height="12" rx="3" style="fill:${it.color}"/>`
+        + `<text x="${x + 18}" y="19" class="chart-legend-text">${chartEsc(it.name)}</text>`;
+      x += it.w;
+      return out;
+    }).join('');
+  }
+
+  // 归一化 labels / series；series 元素为 { name, data[] }
+  function chartSeries(cfg) {
+    const labels = Array.isArray(cfg && cfg.labels) ? cfg.labels.map(String) : [];
+    const series = (Array.isArray(cfg && cfg.series) ? cfg.series : [])
+      .filter((s) => s && Array.isArray(s.data) && s.data.length > 0)
+      .map((s) => ({ name: String(s.name ?? ''), data: s.data.map(chartNum) }));
+    return { labels, series };
+  }
+
+  // y 轴刻度：把 min..max 外扩到「好看」边界（1/2/2.5/5×10^n 步进），返回刻度数组
+  function chartTicks(min, max) {
+    const span = max - min || 1;
+    const rawStep = span / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    let step = mag * 10;
+    for (const m of [1, 2, 2.5, 5, 10]) {
+      if (rawStep <= m * mag) { step = m * mag; break; }
+    }
+    const niceMin = Math.floor(min / step) * step;
+    const niceMax = Math.ceil(max / step) * step;
+    const ticks = [];
+    for (let t = niceMin; t <= niceMax + step * 1e-6; t += step) {
+      ticks.push(Math.round(t * 1e6) / 1e6);
+    }
+    return ticks;
+  }
+
+  function chartSvgOpen(cls) {
+    return `<svg class="chart-svg ${cls}" viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="xMidYMid meet" role="img" xmlns="http://www.w3.org/2000/svg">`;
+  }
+
+  // 折线/面积图：cfg = { labels, series:[{name,data}], area?, points?, valueLabels? }
+  function renderLineChart(cfg) {
+    const { labels, series } = chartSeries(cfg);
+    if (!labels.length || !series.length) return '';
+    const area = !!cfg.area;
+    const showPoints = cfg.points !== false;
+    const showValues = !!cfg.valueLabels;
+    const withLegend = series.length > 1;
+
+    const pad = { l: 52, r: 20, t: withLegend ? 34 : 20, b: 34 };
+    const iw = CHART_W - pad.l - pad.r;
+    const ih = CHART_H - pad.t - pad.b;
+
+    const all = series.flatMap((s) => s.data);
+    let min = Math.min(0, ...all);
+    let max = Math.max(...all);
+    if (max <= min) max = min + 1;
+    const ticks = chartTicks(min, max);
+    min = ticks[0];
+    max = ticks[ticks.length - 1];
+
+    const x = (i) => pad.l + (labels.length === 1 ? iw / 2 : (i / (labels.length - 1)) * iw);
+    const y = (v) => pad.t + ih - ((v - min) / (max - min)) * ih;
+    const y0 = y(Math.max(0, min));
+
+    const parts = [];
+    for (const t of ticks) {
+      const ty = y(t);
+      parts.push(`<line x1="${pad.l}" y1="${ty.toFixed(1)}" x2="${CHART_W - pad.r}" y2="${ty.toFixed(1)}" class="chart-grid"/>`);
+      parts.push(`<text x="${pad.l - 8}" y="${ty.toFixed(1)}" dy="0.35em" text-anchor="end" class="chart-tick">${chartFmt(t)}</text>`);
+    }
+    parts.push(`<line x1="${pad.l}" y1="${y0.toFixed(1)}" x2="${CHART_W - pad.r}" y2="${y0.toFixed(1)}" class="chart-axis"/>`);
+    labels.forEach((label, i) => {
+      parts.push(`<text x="${x(i).toFixed(1)}" y="${CHART_H - 10}" text-anchor="middle" class="chart-tick">${chartEsc(label)}</text>`);
+    });
+
+    series.forEach((s, si) => {
+      const color = chartColor(si);
+      const pts = labels.map((_, i) => [x(i), y(s.data[i] ?? 0)]);
+      const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+      if (area) {
+        parts.push(`<path d="${line} L ${pts[pts.length - 1][0].toFixed(1)} ${y0.toFixed(1)} L ${pts[0][0].toFixed(1)} ${y0.toFixed(1)} Z" style="fill:${color};fill-opacity:0.12;stroke:none"/>`);
+      }
+      parts.push(`<path d="${line}" style="fill:none;stroke:${color};stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round"/>`);
+      if (showPoints) {
+        pts.forEach((p) => {
+          parts.push(`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" style="fill:${color};stroke:var(--surface);stroke-width:1.5"/>`);
+        });
+      }
+      if (showValues) {
+        pts.forEach((p, i) => {
+          parts.push(`<text x="${p[0].toFixed(1)}" y="${(p[1] - 10).toFixed(1)}" text-anchor="middle" class="chart-value">${chartFmt(s.data[i] ?? 0)}</text>`);
+        });
+      }
+    });
+
+    if (withLegend) parts.push(chartLegend(series.map((s) => s.name)));
+    return chartSvgOpen('chart-svg-line') + parts.join('') + '</svg>';
+  }
+
+  // 饼/环图：cfg = { labels, data }（或 series[0].data）；donut?、centerLabel?
+  function renderPieChart(cfg) {
+    const labels = Array.isArray(cfg && cfg.labels) ? cfg.labels.map(String) : [];
+    const raw = Array.isArray(cfg && cfg.data)
+      ? cfg.data
+      : (cfg && Array.isArray(cfg.series) && cfg.series[0] && Array.isArray(cfg.series[0].data) ? cfg.series[0].data : []);
+    const items = labels
+      .map((label, i) => ({ label, value: chartNum(raw[i]) }))
+      .filter((it) => it.value > 0);
+    if (!items.length) return '';
+    const total = items.reduce((s, it) => s + it.value, 0);
+    if (total <= 0) return '';
+
+    const donut = !!cfg.donut;
+    const cx = 175;
+    const cy = CHART_H / 2;
+    const r = 128;
+    const innerR = donut ? 66 : 0;
+
+    const pt = (radius, a) => `${(cx + radius * Math.cos(a)).toFixed(1)} ${(cy + radius * Math.sin(a)).toFixed(1)}`;
+    const parts = [];
+    let angle = -Math.PI / 2;
+    items.forEach((it, i) => {
+      const pct = it.value / total;
+      const a1 = angle + pct * Math.PI * 2;
+      const large = pct > 0.5 ? 1 : 0;
+      let d;
+      if (innerR) {
+        d = `M ${pt(r, angle)} A ${r} ${r} 0 ${large} 1 ${pt(r, a1)} L ${pt(innerR, a1)} A ${innerR} ${innerR} 0 ${large} 0 ${pt(innerR, angle)} Z`;
+      } else {
+        d = `M ${cx} ${cy} L ${pt(r, angle)} A ${r} ${r} 0 ${large} 1 ${pt(r, a1)} Z`;
+      }
+      parts.push(`<path d="${d}" style="fill:${chartColor(i)};stroke:var(--surface);stroke-width:2"/>`);
+      if (pct >= 0.06) {
+        const mid = (angle + a1) / 2;
+        const lr = innerR ? (r + innerR) / 2 : r * 0.62;
+        parts.push(`<text x="${(cx + lr * Math.cos(mid)).toFixed(1)}" y="${(cy + lr * Math.sin(mid)).toFixed(1)}" dy="0.35em" text-anchor="middle" class="chart-pct">${Math.round(pct * 100)}%</text>`);
+      }
+      angle = a1;
+    });
+
+    if (donut && cfg.centerLabel) {
+      parts.push(`<text x="${cx}" y="${cy}" dy="0.35em" text-anchor="middle" class="chart-center">${chartEsc(cfg.centerLabel)}</text>`);
+    }
+
+    // 右侧纵向图例：色块 + 名称 + 占比
+    const lx = 370;
+    const rowH = 26;
+    const ly0 = cy - ((items.length - 1) * rowH) / 2;
+    items.forEach((it, i) => {
+      const yRow = ly0 + i * rowH;
+      const pctText = `${Math.round((it.value / total) * 100)}%`;
+      parts.push(`<rect x="${lx}" y="${(yRow - 6).toFixed(1)}" width="12" height="12" rx="3" style="fill:${chartColor(i)}"/>`);
+      parts.push(`<text x="${lx + 18}" y="${yRow.toFixed(1)}" dy="0.35em" class="chart-legend-text">${chartEsc(it.label)}</text>`);
+      parts.push(`<text x="${CHART_W - 16}" y="${yRow.toFixed(1)}" dy="0.35em" text-anchor="end" class="chart-value">${pctText}</text>`);
+    });
+
+    return chartSvgOpen('chart-svg-pie') + parts.join('') + '</svg>';
+  }
+
+  // 柱状图（分组/堆叠）：cfg = { labels, series:[{name,data}], stacked?, valueLabels? }
+  function renderBarsChart(cfg) {
+    const { labels, series } = chartSeries(cfg);
+    if (!labels.length || !series.length) return '';
+    const stacked = !!cfg.stacked;
+    const showValues = cfg.valueLabels !== false;
+    const withLegend = series.length > 1;
+
+    const pad = { l: 52, r: 20, t: withLegend ? 34 : 20, b: 34 };
+    const iw = CHART_W - pad.l - pad.r;
+    const ih = CHART_H - pad.t - pad.b;
+
+    let min = 0;
+    let max = 0;
+    if (stacked) {
+      labels.forEach((_, i) => {
+        max = Math.max(max, series.reduce((s, sr) => s + Math.max(0, sr.data[i] ?? 0), 0));
+      });
+    } else {
+      const all = series.flatMap((s) => s.data);
+      min = Math.min(0, ...all);
+      max = Math.max(0, ...all);
+    }
+    if (max <= min) max = min + 1;
+    const ticks = chartTicks(min, max);
+    min = ticks[0];
+    max = ticks[ticks.length - 1];
+
+    const y = (v) => pad.t + ih - ((v - min) / (max - min)) * ih;
+    const y0 = y(Math.max(0, min));
+    const slot = iw / labels.length;
+
+    const parts = [];
+    for (const t of ticks) {
+      const ty = y(t);
+      parts.push(`<line x1="${pad.l}" y1="${ty.toFixed(1)}" x2="${CHART_W - pad.r}" y2="${ty.toFixed(1)}" class="chart-grid"/>`);
+      parts.push(`<text x="${pad.l - 8}" y="${ty.toFixed(1)}" dy="0.35em" text-anchor="end" class="chart-tick">${chartFmt(t)}</text>`);
+    }
+    parts.push(`<line x1="${pad.l}" y1="${y0.toFixed(1)}" x2="${CHART_W - pad.r}" y2="${y0.toFixed(1)}" class="chart-axis"/>`);
+
+    labels.forEach((label, i) => {
+      const cx = pad.l + slot * (i + 0.5);
+      parts.push(`<text x="${cx.toFixed(1)}" y="${CHART_H - 10}" text-anchor="middle" class="chart-tick">${chartEsc(label)}</text>`);
+
+      if (stacked) {
+        const bw = Math.min(56, slot * 0.5);
+        let acc = 0;
+        series.forEach((s, si) => {
+          const v = Math.max(0, s.data[i] ?? 0);
+          if (v <= 0) return;
+          const top = y(acc + v);
+          const bottom = y(acc);
+          parts.push(`<rect x="${(cx - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${(bottom - top).toFixed(1)}" style="fill:${chartColor(si)}"/>`);
+          if (cfg.segmentLabels && bottom - top >= 16) {
+            parts.push(`<text x="${cx.toFixed(1)}" y="${((top + bottom) / 2).toFixed(1)}" dy="0.35em" text-anchor="middle" class="chart-pct">${chartFmt(v)}</text>`);
+          }
+          acc += v;
+        });
+        if (showValues && acc > 0) {
+          parts.push(`<text x="${cx.toFixed(1)}" y="${(y(acc) - 8).toFixed(1)}" text-anchor="middle" class="chart-value">${chartFmt(acc)}</text>`);
+        }
+      } else {
+        const bw = Math.min(48, (slot * 0.62) / series.length);
+        const gx = cx - (bw * series.length) / 2;
+        series.forEach((s, si) => {
+          const v = s.data[i] ?? 0;
+          const vy = y(v);
+          const top = Math.min(vy, y0);
+          const h = Math.abs(y0 - vy);
+          const bx = gx + si * bw;
+          parts.push(`<rect x="${bx.toFixed(1)}" y="${top.toFixed(1)}" width="${Math.max(1, bw - 3).toFixed(1)}" height="${h.toFixed(1)}" rx="2" style="fill:${chartColor(si)}"/>`);
+          if (showValues) {
+            const ly = v >= 0 ? top - 6 : top + h + 12;
+            parts.push(`<text x="${(bx + bw / 2).toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" class="chart-value">${chartFmt(v)}</text>`);
+          }
+        });
+      }
+    });
+
+    if (withLegend) parts.push(chartLegend(series.map((s) => s.name)));
+    return chartSvgOpen('chart-svg-bars') + parts.join('') + '</svg>';
+  }
+
+  function renderChart(type, cfg) {
+    if (type === 'line') return renderLineChart(cfg);
+    if (type === 'pie') return renderPieChart(cfg);
+    if (type === 'bars') return renderBarsChart(cfg);
+    return '';
+  }
+
+  // DOM 包装：扫描声明式 data-chart 容器并注入 SVG（init 时调用一次，
+  // 必须在 buildSidebar/buildOverview 之前，保证缩略图克隆到已渲染的 SVG）。
+  function initCharts() {
+    if (!hasDOM) return;
+    document.querySelectorAll('.chart-line[data-chart], .chart-pie[data-chart], .chart-bars[data-chart]').forEach((el) => {
+      const type = el.classList.contains('chart-line') ? 'line' : el.classList.contains('chart-pie') ? 'pie' : 'bars';
+      let cfg = null;
+      try {
+        cfg = JSON.parse(el.getAttribute('data-chart'));
+      } catch {
+        cfg = null;
+      }
+      const svg = cfg && renderChart(type, cfg);
+      if (svg) {
+        el.innerHTML = svg;
+      } else {
+        el.classList.add('chart-error');
+        if (!el.textContent.trim()) el.textContent = '图表数据无效';
+      }
+    });
+  }
+
+  async function init() {
+    await loadThemes();
+    state.slides = Array.from(document.querySelectorAll('.slide'));
+    if (state.slides.length === 0) return;
+
+    initThemes();
+    initCharts();
+    buildSidebar();
+    buildOverview();
+    buildFullscreenBtn();
+    buildMarkerToolbar();
+    initEditMode();
+    updateSlide();
+    bindEvents();
+
+    window.addEventListener('resize', onResize);
+    onResize();
+  }
+
+  function initThemes() {
+    // A theme class hard-coded on <body> (set by generate-deck wrapSlides from
+    // ai-ppt.json `theme`) takes precedence; otherwise fall back to the theme
+    // the user last picked in this browser.
+    const preset = themes.map(t => t.id).find((id) => document.body.classList.contains(`theme-${id}`));
+    if (preset) {
+      state.currentTheme = preset;
+    } else {
+      const savedTheme = localStorage.getItem('ai-ppt-theme');
+      if (savedTheme) {
+        state.currentTheme = savedTheme;
+      }
+    }
+
+    // Apply initial theme
+    applyTheme(state.currentTheme);
+
+    // Build theme switcher UI
+    buildThemeSwitcher();
+  }
+
+  function buildThemeSwitcher() {
+    themeSwitcherEl = document.createElement('div');
+    themeSwitcherEl.className = 'theme-switcher';
+    themeSwitcherEl.innerHTML = `
+      <button class="theme-switcher-toggle" type="button" aria-label="切换主题">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2"></path>
+          <path d="M12 20v2"></path>
+          <path d="m4.93 4.93 1.41 1.41"></path>
+          <path d="m17.66 17.66 1.41 1.41"></path>
+          <path d="M2 12h2"></path>
+          <path d="M20 12h2"></path>
+          <path d="m6.34 17.66-1.41 1.41"></path>
+          <path d="m19.07 4.93-1.41 1.41"></path>
+        </svg>
+        <span>主题</span>
+      </button>
+      <div class="theme-switcher-panel">
+        <div class="theme-switcher-title">选择主题</div>
+        <div class="theme-list"></div>
+      </div>
+    `;
+
+    themePanelEl = themeSwitcherEl.querySelector('.theme-switcher-panel');
+    const themeList = themeSwitcherEl.querySelector('.theme-list');
+
+    themes.forEach((theme) => {
+      const option = document.createElement('div');
+      option.className = 'theme-option' + (theme.id === state.currentTheme ? ' active' : '');
+      option.dataset.themeId = theme.id;
+      option.innerHTML = `
+        <span class="theme-swatch" style="background: ${theme.color};"></span>
+        <span class="theme-name">${theme.name}</span>
+      `;
+      option.addEventListener('click', () => selectTheme(theme.id));
+      themeList.appendChild(option);
+    });
+
+    const toggleBtn = themeSwitcherEl.querySelector('.theme-switcher-toggle');
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleThemePanel();
+    });
+
+    document.addEventListener('click', () => {
+      closeThemePanel();
+    });
+
+    themePanelEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    document.body.appendChild(themeSwitcherEl);
+
+    // Add hint
+    const hint = document.createElement('div');
+    hint.className = 'theme-hint';
+    hint.textContent = '按 T 键快速切换主题';
+    document.body.appendChild(hint);
+  }
+
+  function toggleThemePanel() {
+    const isOpen = themePanelEl.classList.contains('open');
+    if (isOpen) {
+      closeThemePanel();
+    } else {
+      openThemePanel();
+    }
+  }
+
+  function openThemePanel() {
+    themePanelEl.classList.add('open');
+  }
+
+  function closeThemePanel() {
+    themePanelEl.classList.remove('open');
+  }
+
+  function selectTheme(themeId) {
+    if (themeId === state.currentTheme) {
+      closeThemePanel();
+      return;
+    }
+
+    state.currentTheme = themeId;
+    applyTheme(themeId);
+    localStorage.setItem('ai-ppt-theme', themeId);
+
+    // Update UI
+    const options = themeSwitcherEl.querySelectorAll('.theme-option');
+    options.forEach((option) => {
+      option.classList.toggle('active', option.dataset.themeId === themeId);
+    });
+
+    closeThemePanel();
+
+    const theme = themes.find((t) => t.id === themeId);
+    showToast(`已切换到「${theme?.name || themeId}」主题`);
+  }
+
+  function applyTheme(themeId) {
+    document.body.classList.remove(...themes.map(t => `theme-${t.id}`));
+    // web-ui 也写显式 class（纯标记，变量与 :root 默认一致）：
+    // 让 initThemes 能区分「配置为 web-ui」和「无主题信息」，避免回退到 localStorage 的旧主题
+    document.body.classList.add(`theme-${themeId}`);
+  }
+
+  function buildSidebar() {
+    sidebarEl = document.createElement('div');
+    sidebarEl.className = 'sidebar';
+    sidebarEl.innerHTML = `
+      <button class="sidebar-toggle" type="button" aria-label="切换侧边栏">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"></path>
+        </svg>
+      </button>
+      <div class="sidebar-header">
+        <div class="sidebar-title">幻灯片</div>
+      </div>
+      <div class="sidebar-content"></div>
+    `;
+
+    sidebarContentEl = sidebarEl.querySelector('.sidebar-content');
+
+    const toggleBtn = sidebarEl.querySelector('.sidebar-toggle');
+    toggleBtn.addEventListener('click', () => toggleSidebar());
+
+    // Build sidebar thumbnails
+    buildSidebarThumbnails();
+
+    // Insert sidebar into DOM (before stage)
+    stage.parentNode.insertBefore(sidebarEl, stage);
+
+    // Apply initial sidebar state
+    updateSidebarState();
+  }
+
+  function buildSidebarThumbnails() {
+    if (!sidebarContentEl) return;
+    sidebarContentEl.innerHTML = '';
+    const BASE_W = 1280;
+    const BASE_H = 800;
+
+    state.slides.forEach((slide, i) => {
+      const card = document.createElement('div');
+      card.className = 'sidebar-card';
+      card.dataset.index = String(i);
+
+      const indexBadge = document.createElement('div');
+      indexBadge.className = 'sidebar-index';
+      indexBadge.textContent = String(i + 1);
+
+      const clone = slide.cloneNode(true);
+      clone.classList.remove('active');
+      clone.removeAttribute('id');
+      clone.style.width = `${BASE_W}px`;
+      clone.style.height = `${BASE_H}px`;
+
+      // Render animated components at their final state in the thumbnail
+      clone.querySelectorAll('.progress-ring-circle').forEach((c) => {
+        const legacy = parseFloat(c.style.getPropertyValue('--progress'));
+        const pct = parseFloat(c.style.getPropertyValue('--progress-pct'));
+        c.style.strokeDashoffset = Number.isFinite(legacy)
+          ? legacy
+          : 314 - (314 * (Number.isFinite(pct) ? pct : 0)) / 100;
+      });
+      clone.querySelectorAll('.waterfall-fill').forEach((f) => {
+        f.style.width = f.style.getPropertyValue('--width') || '0%';
+      });
+
+      card.appendChild(indexBadge);
+      card.appendChild(clone);
+      sidebarContentEl.appendChild(card);
+
+      requestAnimationFrame(() => {
+        const scale = card.clientWidth / BASE_W;
+        clone.style.transform = `scale(${scale})`;
+        clone.style.transformOrigin = 'top left';
+      });
+
+      card.addEventListener('click', () => {
+        goTo(i);
+      });
+    });
+  }
+
+  function toggleSidebar(open) {
+    if (typeof open === 'boolean') {
+      state.sidebarOpen = open;
+    } else {
+      state.sidebarOpen = !state.sidebarOpen;
+    }
+    updateSidebarState();
+  }
+
+  function updateSidebarState() {
+    if (!sidebarEl) return;
+    sidebarEl.classList.toggle('collapsed', !state.sidebarOpen);
+    stage.classList.toggle('sidebar-open', state.sidebarOpen);
+
+    // Adjust positions of other UI elements
+    const leftOffset = state.sidebarOpen ? '220px' : '0px';
+    progressEl.style.left = leftOffset;
+    hudEl.style.left = `calc(50% + ${state.sidebarOpen ? '110px' : '0px'})`;
+
+    const toggleBtn = sidebarEl.querySelector('.sidebar-toggle');
+    if (toggleBtn) {
+      toggleBtn.innerHTML = state.sidebarOpen
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <path d="M15 18l-6-6 6-6"></path>
+           </svg>`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <path d="M9 18l6-6-6-6"></path>
+           </svg>`;
+    }
+  }
+
+  function buildFullscreenBtn() {
+    fullscreenBtn = document.createElement('button');
+    fullscreenBtn.className = 'fullscreen-btn';
+    fullscreenBtn.innerHTML = `
+      <svg class="enter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 3H3v5"></path>
+        <path d="M21 8V3h-5"></path>
+        <path d="M3 16v5h5"></path>
+        <path d="M16 21h5v-5"></path>
+      </svg>
+      <svg class="exit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 14h6v6"></path>
+        <path d="M14 4h6v6"></path>
+        <path d="M14 14h6v6"></path>
+        <path d="M4 4h6v6"></path>
+        <path d="M14 14l6-6"></path>
+        <path d="M4 20l6-6"></path>
+      </svg>
+      <span>全屏</span>
+    `;
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+    document.body.appendChild(fullscreenBtn);
+  }
+
+  // ===== Marker pen (per-slide annotations) =====
+  // Tools: pen (freehand), arrow, rect, circle, ellipse. Strokes are stored
+  // per slide index as SVG element strings and re-rendered on slide change.
+  // The floating toolbar is hidden by default; in marker mode it appears on
+  // mouse activity and auto-hides after ~2s of inactivity.
+
+  let markerUiTimeout = null;
+  let markerStartPoint = null;
+
+  function buildMarkerToolbar() {
+    markerToolbarEl = document.createElement('div');
+    markerToolbarEl.className = 'marker-toolbar';
+    markerToolbarEl.innerHTML = `
+      <div class="marker-tools">
+        <button class="marker-tool-btn active" data-tool="pen" title="画笔 (1/P)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+          </svg>
+        </button>
+        <button class="marker-tool-btn" data-tool="arrow" title="箭头 (2/A)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="19" x2="19" y2="5"></line>
+            <polyline points="12 5 19 5 19 12"></polyline>
+          </svg>
+        </button>
+        <button class="marker-tool-btn" data-tool="rect" title="矩形 (3/R)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="6" width="16" height="12" rx="1"></rect>
+          </svg>
+        </button>
+        <button class="marker-tool-btn" data-tool="circle" title="圆形 (4/O)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="8"></circle>
+          </svg>
+        </button>
+        <button class="marker-tool-btn" data-tool="ellipse" title="椭圆 (5/E)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="12" rx="9" ry="6"></ellipse>
+          </svg>
+        </button>
+      </div>
+      <div class="marker-colors">
+        <button class="marker-color-btn active" data-color="#EF4444" style="background: #EF4444;" title="红色"></button>
+        <button class="marker-color-btn" data-color="#2563EB" style="background: #2563EB;" title="蓝色"></button>
+        <button class="marker-color-btn" data-color="#22C55E" style="background: #22C55E;" title="绿色"></button>
+        <button class="marker-color-btn" data-color="#111827" style="background: #111827;" title="黑色"></button>
+      </div>
+      <button class="marker-btn marker-clear" type="button" title="清除本页标记 (C)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"></path>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+      <button class="marker-btn marker-exit" type="button" title="退出标识笔 (M / Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <div class="marker-hint">1画笔 2箭头 3矩形 4圆 5椭圆 · C清除 · M/Esc 退出</div>
+    `;
+
+    markerToolbarEl.querySelector('.marker-clear').addEventListener('click', clearCurrentSlideMarkers);
+    markerToolbarEl.querySelector('.marker-exit').addEventListener('click', toggleMarkerMode);
+    markerToolbarEl.querySelectorAll('.marker-color-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setMarkerColor(btn.dataset.color));
+    });
+    markerToolbarEl.querySelectorAll('.marker-tool-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setMarkerTool(btn.dataset.tool));
+    });
+
+    document.body.appendChild(markerToolbarEl);
+    updateMarkerUI();
+  }
+
+  function toggleMarkerMode() {
+    state.markerMode = !state.markerMode;
+    document.documentElement.classList.toggle('marker-mode', state.markerMode);
+    clearTimeout(markerUiTimeout);
+    updateMarkerUI();
+    if (state.markerMode) {
+      showMarkerUi();
+      showToast('标识笔已开启：1画笔 2箭头 3矩形 4圆 5椭圆，C 清除本页，M/Esc 退出');
+    } else {
+      showToast('标识笔已关闭');
+    }
+  }
+
+  function setMarkerColor(color) {
+    state.markerColor = color;
+    markerToolbarEl.querySelectorAll('.marker-color-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.color === color);
+    });
+  }
+
+  function setMarkerTool(tool) {
+    state.markerTool = tool;
+    markerToolbarEl.querySelectorAll('.marker-tool-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.tool === tool);
+    });
+    const names = { pen: '画笔', arrow: '箭头', rect: '矩形', circle: '圆形', ellipse: '椭圆' };
+    showToast(`已切换到「${names[tool] || tool}」`);
+    showMarkerUi();
+  }
+
+  function updateMarkerUI() {
+    if (!markerToolbarEl) return;
+    markerToolbarEl.classList.toggle('active', state.markerMode);
+    markerToolbarEl.classList.remove('visible');
+    if (state.markerMode) showMarkerUi();
+  }
+
+  function showMarkerUi() {
+    if (!state.markerMode || !markerToolbarEl) return;
+    markerToolbarEl.classList.add('visible');
+    clearTimeout(markerUiTimeout);
+    markerUiTimeout = setTimeout(() => {
+      markerToolbarEl.classList.remove('visible');
+    }, 2000);
+  }
+
+  function ensureMarkerOverlay(slide) {
+    let overlay = slide.querySelector(':scope > .marker-overlay');
+    if (!overlay) {
+      overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      overlay.classList.add('marker-overlay');
+      overlay.setAttribute('viewBox', '0 0 1280 800');
+      overlay.setAttribute('preserveAspectRatio', 'none');
+      slide.appendChild(overlay);
+
+      overlay.addEventListener('pointerdown', onMarkerPointerDown);
+      overlay.addEventListener('pointermove', onMarkerPointerMove);
+      overlay.addEventListener('pointerup', onMarkerPointerUp);
+      overlay.addEventListener('pointerleave', onMarkerPointerUp);
+    }
+    return overlay;
+  }
+
+  function getSlideMarkers() {
+    return state.markerStrokes.get(state.current) || [];
+  }
+
+  function setSlideMarkers(strokes) {
+    state.markerStrokes.set(state.current, strokes);
+  }
+
+  function shapeSvg(tool, start, end) {
+    const color = state.markerColor;
+    const attrs = `stroke="${color}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+    const x1 = parseFloat(start.x), y1 = parseFloat(start.y);
+    const x2 = parseFloat(end.x), y2 = parseFloat(end.y);
+
+    if (tool === 'arrow') {
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+      const headLen = 18;
+      const a1 = angle + Math.PI / 6;
+      const a2 = angle - Math.PI / 6;
+      const hx1 = x2 - headLen * Math.cos(a1);
+      const hy1 = y2 - headLen * Math.sin(a1);
+      const hx2 = x2 - headLen * Math.cos(a2);
+      const hy2 = y2 - headLen * Math.sin(a2);
+      return `<path d="M ${x1} ${y1} L ${x2} ${y2} M ${hx1.toFixed(1)} ${hy1.toFixed(1)} L ${x2} ${y2} L ${hx2.toFixed(1)} ${hy2.toFixed(1)}" ${attrs}/>`;
+    }
+    if (tool === 'rect') {
+      const x = Math.min(x1, x2), y = Math.min(y1, y2);
+      const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+      return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" ${attrs}/>`;
+    }
+    if (tool === 'circle') {
+      const r = Math.hypot(x2 - x1, y2 - y1);
+      return `<circle cx="${x1}" cy="${y1}" r="${r}" ${attrs}/>`;
+    }
+    if (tool === 'ellipse') {
+      const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+      const rx = Math.abs(x2 - x1) / 2 || 1, ry = Math.abs(y2 - y1) / 2 || 1;
+      return `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" ${attrs}/>`;
+    }
+    return '';
+  }
+
+  function svgFromString(str) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg">${str}</svg>`;
+    return tpl.content.firstChild.firstChild;
+  }
+
+  function onMarkerPointerDown(e) {
+    if (!state.markerMode) return;
+    const overlay = e.currentTarget;
+    const slide = overlay.closest('.slide');
+    if (!slide || !slide.classList.contains('active')) return;
+
+    e.preventDefault();
+    state.markerDrawing = true;
+    const pt = getSvgPoint(overlay, e);
+    markerStartPoint = pt;
+
+    if (state.markerTool === 'pen') {
+      markerCurrentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      markerCurrentPath.setAttribute('d', `M ${pt.x} ${pt.y}`);
+      markerCurrentPath.setAttribute('stroke', state.markerColor);
+      markerCurrentPath.setAttribute('stroke-width', '3');
+      markerCurrentPath.setAttribute('stroke-linecap', 'round');
+      markerCurrentPath.setAttribute('stroke-linejoin', 'round');
+      markerCurrentPath.setAttribute('fill', 'none');
+      overlay.appendChild(markerCurrentPath);
+    } else {
+      markerCurrentPath = svgFromString(shapeSvg(state.markerTool, pt, pt));
+      if (markerCurrentPath) overlay.appendChild(markerCurrentPath);
+    }
+  }
+
+  function onMarkerPointerMove(e) {
+    showMarkerUi();
+    if (!state.markerDrawing || !markerCurrentPath) return;
+    const overlay = e.currentTarget;
+    const pt = getSvgPoint(overlay, e);
+
+    if (state.markerTool === 'pen') {
+      const d = markerCurrentPath.getAttribute('d');
+      markerCurrentPath.setAttribute('d', `${d} L ${pt.x} ${pt.y}`);
+    } else {
+      const fresh = svgFromString(shapeSvg(state.markerTool, markerStartPoint, pt));
+      if (fresh && markerCurrentPath.parentNode === overlay) {
+        overlay.replaceChild(fresh, markerCurrentPath);
+        markerCurrentPath = fresh;
+      }
+    }
+  }
+
+  function onMarkerPointerUp() {
+    if (!state.markerDrawing || !markerCurrentPath) return;
+    state.markerDrawing = false;
+    // The temp element already holds the final shape; serialize it.
+    const strokes = getSlideMarkers();
+    strokes.push(markerCurrentPath.outerHTML);
+    setSlideMarkers(strokes);
+    markerCurrentPath = null;
+    markerStartPoint = null;
+  }
+
+  function getSvgPoint(svg, e) {
+    const rect = svg.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 1280;
+    const y = ((e.clientY - rect.top) / rect.height) * 800;
+    return { x: x.toFixed(1), y: y.toFixed(1) };
+  }
+
+  function renderSlideMarkers(slideIndex) {
+    const slide = state.slides[slideIndex];
+    if (!slide) return;
+    const overlay = ensureMarkerOverlay(slide);
+    const strokes = state.markerStrokes.get(slideIndex) || [];
+    overlay.innerHTML = '';
+    strokes.forEach((str) => {
+      const el = svgFromString(str);
+      if (el) overlay.appendChild(el);
+    });
+  }
+
+  function clearCurrentSlideMarkers() {
+    const overlay = state.slides[state.current]?.querySelector(':scope > .marker-overlay');
+    if (overlay) overlay.innerHTML = '';
+    state.markerStrokes.delete(state.current);
+    showToast('已清除本页标记');
+    showMarkerUi();
+  }
+
+  function cycleTheme() {
+    const currentIndex = themes.findIndex((t) => t.id === state.currentTheme);
+    const nextIndex = (currentIndex + 1) % themes.length;
+    selectTheme(themes[nextIndex].id);
+  }
+
+  function bindEvents() {
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('click', onClick);
+    overviewEl.addEventListener('click', onOverviewClick);
+
+    helpEl.addEventListener('mouseenter', () => {
+      if (state.help) toggleHelp();
+    });
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    document.addEventListener('mousemove', onFullscreenActivity);
+    document.addEventListener('touchstart', onFullscreenActivity, { passive: true });
+
+    // Reveal the marker toolbar on any pointer activity while marker mode is on.
+    document.addEventListener('mousemove', () => { if (state.markerMode) showMarkerUi(); });
+    document.addEventListener('touchstart', () => { if (state.markerMode) showMarkerUi(); }, { passive: true });
+
+    window.addEventListener('beforeunload', closePresenter);
+  }
+
+  // In fullscreen the overlay UI (help panel, theme switcher, hud,
+  // fullscreen button) stays hidden; any pointer activity reveals it
+  // briefly, then a timer hides it again.
+  function onFullscreenActivity() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      document.documentElement.classList.add('fs-ui-visible');
+      clearTimeout(fullscreenTimeout);
+      fullscreenTimeout = setTimeout(() => {
+        document.documentElement.classList.remove('fs-ui-visible');
+      }, 2000);
+    }
+  }
+
+  function onKeyDown(e) {
+    if (state.overview || state.transitioning) return;
+    if (state.editMode) return;
+    if (e.target && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName))) return;
+
+    // Marker mode shortcuts take priority over navigation.
+    if (state.markerMode) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        toggleMarkerMode();
+        return;
+      }
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleMarkerMode();
+        return;
+      }
+      if (e.key === '1' || e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        setMarkerTool('pen');
+        return;
+      }
+      if (e.key === '2' || e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        setMarkerTool('arrow');
+        return;
+      }
+      if (e.key === '3' || e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        setMarkerTool('rect');
+        return;
+      }
+      if (e.key === '4' || e.key === 'o' || e.key === 'O') {
+        e.preventDefault();
+        setMarkerTool('circle');
+        return;
+      }
+      if (e.key === '5' || e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        setMarkerTool('ellipse');
+        return;
+      }
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        clearCurrentSlideMarkers();
+        return;
+      }
+      // In marker mode, still allow slide navigation with arrows.
+    }
+
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      if (e.metaKey || e.ctrlKey) {
+        goTo(state.slides.length - 1);
+      } else {
+        next();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (e.metaKey || e.ctrlKey) {
+        goTo(0);
+      } else {
+        prev();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      exportPdf();
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      toggleOverview(true);
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (state.overview) {
+        toggleOverview(false);
+      } else if (document.fullscreenElement) {
+        exitFullscreen();
+      } else if (themePanelEl && themePanelEl.classList.contains('open')) {
+        closeThemePanel();
+      }
+      return;
+    }
+
+    if (e.key === 'f' || e.key === 'F') {
+      e.preventDefault();
+      toggleFullscreen();
+      return;
+    }
+
+    if (e.key === 't' || e.key === 'T') {
+      e.preventDefault();
+      cycleTheme();
+      return;
+    }
+
+    if (e.key === 's') {
+      e.preventDefault();
+      if (!(document.fullscreenElement || document.webkitFullscreenElement)) {
+        toggleSidebar();
+      }
+      return;
+    }
+
+    if (e.key === 'S') {
+      e.preventDefault();
+      togglePresenter();
+      return;
+    }
+
+    if (e.key === 'm' || e.key === 'M') {
+      e.preventDefault();
+      toggleMarkerMode();
+      return;
+    }
+
+    if (e.key === '?') {
+      e.preventDefault();
+      if (!(document.fullscreenElement || document.webkitFullscreenElement)) {
+        toggleHelp();
+      }
+      return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+      e.preventDefault();
+      exportPdf();
+      return;
+    }
+  }
+
+  function onClick(e) {
+    if (state.overview || state.transitioning) return;
+
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (!isFullscreen) return;
+
+    const target = e.target;
+    if (target.closest('a') || target.closest('button') || target.closest('.help') || target.closest('.theme-switcher') || target.closest('.fullscreen-btn') || target.closest('.marker-toolbar') || target.closest('.marker-overlay')) return;
+
+    if (e.button === 0) {
+      const x = e.clientX;
+      const w = window.innerWidth;
+      if (x < w * 0.3) {
+        prev();
+      } else if (x > w * 0.7) {
+        next();
+      }
+    }
+  }
+
+  function onOverviewClick(e) {
+    const card = e.target.closest('.overview-card');
+    if (!card) {
+      toggleOverview(false);
+      return;
+    }
+
+    const index = parseInt(card.dataset.index, 10);
+    if (!Number.isNaN(index)) {
+      goTo(index);
+      toggleOverview(false);
+    }
+  }
+
+  function next() {
+    animateTransition(state.current + 1, 'forward');
+  }
+
+  function prev() {
+    animateTransition(state.current - 1, 'backward');
+  }
+
+  function animateTransition(targetIndex, direction) {
+    if (targetIndex < 0 || targetIndex >= state.slides.length) return;
+    if (state.transitioning) return;
+
+    const currentSlide = state.slides[state.current];
+    currentSlide.classList.remove('active');
+    currentSlide.classList.add(direction === 'forward' ? 'exit-forward' : 'exit-backward');
+
+    state.transitioning = true;
+
+    setTimeout(() => {
+      currentSlide.classList.remove('exit-forward', 'exit-backward');
+      goTo(targetIndex);
+      state.transitioning = false;
+    }, 350);
+  }
+
+  function goTo(index) {
+    if (index < 0 || index >= state.slides.length) return;
+    state.current = index;
+    updateSlide();
+  }
+
+  if (hasDOM) window.goTo = goTo;
+
+  function updateSlide() {
+    state.slides.forEach((slide, i) => {
+      slide.classList.toggle('active', i === state.current);
+    });
+
+    const pct = ((state.current + 1) / state.slides.length) * 100;
+    progressEl.style.width = pct + '%';
+    hudEl.textContent = `${state.current + 1} / ${state.slides.length}`;
+
+    document.title = `${originalTitle} · ${state.current + 1} / ${state.slides.length}`;
+
+    updateOverviewActive();
+    updateSidebarActive();
+    renderSlideMarkers(state.current);
+    syncPresenter();
+  }
+
+  function updateSidebarActive() {
+    if (!sidebarContentEl) return;
+    const cards = sidebarContentEl.querySelectorAll('.sidebar-card');
+    cards.forEach((card, i) => {
+      card.classList.toggle('active', i === state.current);
+    });
+    // Scroll the active card into view
+    const activeCard = sidebarContentEl.querySelector('.sidebar-card.active');
+    if (activeCard) {
+      activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  // ===== Presenter (speaker) mode =====
+  // Shift+S opens a presenter window with the current slide's speaker notes
+  // (<div class="speaker-note">), a scaled preview of the next slide, and an
+  // elapsed-time timer. Shift+S again or closing the window exits.
+
+  function togglePresenter() {
+    if (state.presenter) {
+      closePresenter();
+    } else {
+      openPresenter();
+    }
+  }
+
+  function openPresenter() {
+    const win = window.open('about:blank', 'ai-ppt-presenter', 'width=980,height=680');
+    if (!win) {
+      showToast('演讲者窗口被浏览器拦截，请允许弹出窗口后重试');
+      return;
+    }
+
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"], style[id="theme-overrides"]'))
+      .map((node) => {
+        if (node.tagName === 'LINK') {
+          return `<link rel="stylesheet" href="${new URL(node.getAttribute('href'), location.href).href}">`;
+        }
+        return `<style id="theme-overrides">${node.innerHTML}</style>`;
+      })
+      .join('\n');
+
+    win.document.open();
+    win.document.write(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>演讲者模式</title>
+${links}
+<style>
+  html, body { margin: 0; height: 100%; }
+  body.pv-body {
+    overflow: auto;
+    background: #0B1413;
+    color: #FAFAF7;
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  .pv-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(250, 250, 247, 0.12);
+  }
+  .pv-title { font-weight: 600; letter-spacing: 0.05em; }
+  .pv-counter { color: rgba(250, 250, 247, 0.6); font-size: 14px; }
+  .pv-timer {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    font-size: 20px;
+    color: var(--teal, #439288);
+  }
+  .pv-main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    padding: 20px;
+    min-height: 0;
+  }
+  .pv-main h2 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(250, 250, 247, 0.5);
+  }
+  .pv-notes, .pv-next { min-width: 0; }
+  .pv-notes-content {
+    font-size: 18px;
+    line-height: 1.7;
+  }
+  .pv-notes-content p { margin: 0 0 0.8em; }
+  .pv-notes-empty { color: rgba(250, 250, 247, 0.4); font-size: 15px; }
+  .pv-next-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1280 / 800;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--cream, #FAFAF7);
+  }
+  .pv-next-frame .slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 1;
+    pointer-events: none;
+  }
+  .pv-next-end { color: rgba(250, 250, 247, 0.4); font-size: 15px; }
+  .pv-footer {
+    padding: 10px 20px;
+    border-top: 1px solid rgba(250, 250, 247, 0.12);
+    color: rgba(250, 250, 247, 0.5);
+    font-size: 13px;
+  }
+  .pv-footer kbd {
+    padding: 1px 6px;
+    border: 1px solid rgba(250, 250, 247, 0.3);
+    border-radius: 4px;
+    font-family: inherit;
+  }
+</style>
+</head>
+<body class="pv-body ${document.body.className}">
+<header class="pv-header">
+  <span class="pv-title">演讲者模式</span>
+  <span class="pv-counter" id="pv-counter"></span>
+  <span class="pv-timer" id="pv-timer">00:00</span>
+</header>
+<main class="pv-main">
+  <section class="pv-notes">
+    <h2>演讲备注</h2>
+    <div class="pv-notes-content" id="pv-notes-content"></div>
+  </section>
+  <section class="pv-next">
+    <h2>下一页预览</h2>
+    <div class="pv-next-frame" id="pv-next-frame"></div>
+    <div class="pv-next-end" id="pv-next-end" hidden>已是最后一页</div>
+  </section>
+</main>
+<footer class="pv-footer">按 <kbd>Shift</kbd>+<kbd>S</kbd>（主窗口或本窗口）或关闭本窗口退出演讲者模式</footer>
+</body>
+</html>`);
+    win.document.close();
+
+    presenterWin = win;
+    state.presenter = true;
+    presenterStart = Date.now();
+
+    win.document.addEventListener('keydown', (e) => {
+      if (e.key === 'S') {
+        e.preventDefault();
+        closePresenter();
+      }
+    });
+
+    presenterTimer = setInterval(tickPresenter, 1000);
+    syncPresenter();
+    showToast('演讲者模式已开启（Shift+S 退出）');
+  }
+
+  function closePresenter() {
+    state.presenter = false;
+    clearInterval(presenterTimer);
+    presenterTimer = null;
+    if (presenterWin && !presenterWin.closed) {
+      presenterWin.close();
+    }
+    presenterWin = null;
+  }
+
+  function tickPresenter() {
+    if (!presenterWin || presenterWin.closed) {
+      closePresenter();
+      return;
+    }
+    const elapsed = Math.floor((Date.now() - presenterStart) / 1000);
+    const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const ss = String(elapsed % 60).padStart(2, '0');
+    const timerEl = presenterWin.document.getElementById('pv-timer');
+    if (timerEl) {
+      timerEl.textContent = `${mm}:${ss}`;
+    }
+  }
+
+  // Keep the presenter window in sync with the deck; called from updateSlide().
+  function syncPresenter() {
+    if (!state.presenter || !presenterWin || presenterWin.closed) return;
+
+    const doc = presenterWin.document;
+    const counterEl = doc.getElementById('pv-counter');
+    const notesEl = doc.getElementById('pv-notes-content');
+    const frameEl = doc.getElementById('pv-next-frame');
+    const endEl = doc.getElementById('pv-next-end');
+    if (!counterEl || !notesEl || !frameEl || !endEl) return;
+
+    counterEl.textContent = `${state.current + 1} / ${state.slides.length}`;
+
+    const notes = state.slides[state.current].querySelectorAll('.speaker-note');
+    notesEl.innerHTML = notes.length
+      ? Array.from(notes).map((note) => `<p>${note.innerHTML}</p>`).join('')
+      : '<p class="pv-notes-empty">（本页无演讲备注）</p>';
+
+    // Next-slide preview: clone at a fixed design size, then scale into the
+    // frame — same approach as buildSidebarThumbnails().
+    frameEl.innerHTML = '';
+    const nextSlide = state.slides[state.current + 1];
+    endEl.hidden = !!nextSlide;
+    if (!nextSlide) return;
+
+    const BASE_W = 1280;
+    const BASE_H = 800;
+    const clone = nextSlide.cloneNode(true);
+    clone.classList.remove('active');
+    clone.removeAttribute('id');
+    clone.style.width = `${BASE_W}px`;
+    clone.style.height = `${BASE_H}px`;
+
+    // Render animated components at their final state in the preview.
+    clone.querySelectorAll('.progress-ring-circle').forEach((c) => {
+      const legacy = parseFloat(c.style.getPropertyValue('--progress'));
+      const pct = parseFloat(c.style.getPropertyValue('--progress-pct'));
+      c.style.strokeDashoffset = Number.isFinite(legacy)
+        ? legacy
+        : 314 - (314 * (Number.isFinite(pct) ? pct : 0)) / 100;
+    });
+    clone.querySelectorAll('.waterfall-fill').forEach((f) => {
+      f.style.width = f.style.getPropertyValue('--width') || '0%';
+    });
+
+    frameEl.appendChild(clone);
+    const scale = frameEl.clientWidth / BASE_W;
+    clone.style.transform = `scale(${scale})`;
+    clone.style.transformOrigin = 'top left';
+  }
+
+  function toggleOverview(show) {
+    state.overview = show;
+    overviewEl.classList.toggle('hidden', !show);
+    if (show) {
+      buildOverview();
+      updateOverviewActive();
+    }
+  }
+
+  function buildOverview() {
+    overviewGrid.innerHTML = '';
+    // Thumbnails: clone each slide at a fixed design size, then scale the
+    // whole clone to the card width (uniform transform), preserving the
+    // slide's real layout.
+    const BASE_W = 1280;
+    const BASE_H = 800;
+
+    state.slides.forEach((slide, i) => {
+      const card = document.createElement('div');
+      card.className = 'overview-card';
+      card.dataset.index = String(i);
+
+      const indexBadge = document.createElement('div');
+      indexBadge.className = 'overview-index';
+      indexBadge.textContent = String(i + 1);
+
+      const clone = slide.cloneNode(true);
+      clone.classList.remove('active');
+      clone.removeAttribute('id');
+      clone.style.width = `${BASE_W}px`;
+      clone.style.height = `${BASE_H}px`;
+
+      // Render animated components at their final state in the thumbnail
+      // (the fill animations only run on .slide.active in the live deck).
+      clone.querySelectorAll('.progress-ring-circle').forEach((c) => {
+        const legacy = parseFloat(c.style.getPropertyValue('--progress'));
+        const pct = parseFloat(c.style.getPropertyValue('--progress-pct'));
+        c.style.strokeDashoffset = Number.isFinite(legacy)
+          ? legacy
+          : 314 - (314 * (Number.isFinite(pct) ? pct : 0)) / 100;
+      });
+      clone.querySelectorAll('.waterfall-fill').forEach((f) => {
+        f.style.width = f.style.getPropertyValue('--width') || '0%';
+      });
+
+      card.appendChild(indexBadge);
+      card.appendChild(clone);
+      overviewGrid.appendChild(card);
+
+      requestAnimationFrame(() => {
+        const scale = card.clientWidth / BASE_W;
+        clone.style.transform = `scale(${scale})`;
+        clone.style.transformOrigin = 'top left';
+      });
+    });
+  }
+
+  function updateOverviewActive() {
+    const cards = overviewGrid.querySelectorAll('.overview-card');
+    cards.forEach((card, i) => {
+      card.style.outline = i === state.current ? '2px solid var(--teal)' : 'none';
+    });
+  }
+
+  function exportPdf() {
+    showToast('正在打开打印对话框，请选择"存储为 PDF"并指定保存位置');
+
+    requestAnimationFrame(() => {
+      window.print();
+    });
+  }
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      exitFullscreen();
+    } else {
+      requestFullscreen(document.documentElement);
+    }
+  }
+
+  function requestFullscreen(el) {
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => { });
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    }
+  }
+
+  function exitFullscreen() {
+    if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => { });
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    }
+  }
+
+  function onFullscreenChange() {
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    clearTimeout(fullscreenTimeout);
+    document.documentElement.classList.remove('fs-ui-visible');
+    if (isFullscreen) {
+      // Hide help panel and slide thumbnail sidebar completely in fullscreen.
+      state.help = false;
+      helpEl.classList.add('hidden');
+      if (sidebarEl) sidebarEl.classList.add('collapsed');
+      stage.classList.remove('sidebar-open');
+      showToast('全屏模式：点击右侧翻下页，左侧翻上页，M 标识笔，ESC 退出');
+      if (fullscreenBtn) {
+        fullscreenBtn.querySelector('span').textContent = '退出';
+      }
+    } else {
+      if (fullscreenBtn) {
+        fullscreenBtn.querySelector('span').textContent = '全屏';
+      }
+    }
+  }
+
+  function toggleHelp() {
+    state.help = !state.help;
+    helpEl.classList.toggle('hidden', !state.help);
+  }
+
+  function showToast(message) {
+    toastEl.textContent = message;
+    toastEl.classList.add('show');
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => {
+      toastEl.classList.remove('show');
+    }, 2500);
+  }
+
+  // ===== Visual edit mode =====
+  // The parent Web UI can send postMessage to enter/exit edit mode. Inside the
+  // iframe we enable contenteditable on textual slide elements and provide a
+  // floating save/cancel toolbar. Saving sends the full document HTML back to
+  // the parent so it can persist via /api/projects/:name/save-edits.
+
+  function editableSelector() {
+    return '.slide h1, .slide h2, .slide h3, .slide p, .slide li, .slide td, .slide th, .slide .lead, .slide .kicker, .slide .section-title, .slide .big-number-label, .slide .visual-card p, .slide .timeline-horizontal-title, .slide .timeline-horizontal-desc, .slide .chart-step-title, .slide .chart-step-desc, .slide .speaker-note';
+  }
+
+  function initEditMode() {
+    window.addEventListener('message', onEditMessage);
+  }
+
+  function onEditMessage(e) {
+    const data = e.data || {};
+    if (data.type === 'ai-ppt:edit-start') {
+      enableEditMode();
+    } else if (data.type === 'ai-ppt:edit-cancel') {
+      cancelEditMode();
+    }
+  }
+
+  function enableEditMode() {
+    if (state.editMode) return;
+    state.editMode = true;
+    state.editOriginalHtml = document.documentElement.outerHTML;
+
+    const editable = document.querySelectorAll(editableSelector());
+    editable.forEach((el) => {
+      el.setAttribute('contenteditable', 'true');
+      el.dataset.wasEditable = 'true';
+    });
+
+    createEditToolbar();
+    showToast('已进入编辑模式：点击文字即可修改');
+  }
+
+  function cancelEditMode() {
+    if (!state.editMode) return;
+    if (confirm('确定放弃本次编辑？未保存的修改将丢失。')) {
+      window.parent.postMessage({ type: 'ai-ppt:edit-cancelled' }, '*');
+      state.editMode = false;
+      state.editOriginalHtml = '';
+      removeEditToolbar();
+      // The parent will reload the iframe src to restore the original content.
+    }
+  }
+
+  function saveEditMode() {
+    if (!state.editMode) return;
+    // Disable contenteditable before serializing so attributes are clean.
+    document.querySelectorAll('[contenteditable="true"]').forEach((el) => {
+      el.removeAttribute('contenteditable');
+    });
+    const html = document.documentElement.outerHTML;
+    window.parent.postMessage({ type: 'ai-ppt:edit-saved', html }, '*');
+    state.editMode = false;
+    state.editOriginalHtml = '';
+    removeEditToolbar();
+    showToast('编辑内容已发送，正在保存…');
+  }
+
+  function createEditToolbar() {
+    removeEditToolbar();
+    const toolbar = document.createElement('div');
+    toolbar.id = 'ai-ppt-edit-toolbar';
+    toolbar.innerHTML = `
+      <span class="edit-toolbar-label">编辑模式</span>
+      <button class="edit-toolbar-btn edit-toolbar-save" type="button">保存</button>
+      <button class="edit-toolbar-btn edit-toolbar-cancel" type="button">取消</button>
+    `;
+    document.body.appendChild(toolbar);
+    toolbar.querySelector('.edit-toolbar-save').addEventListener('click', saveEditMode);
+    toolbar.querySelector('.edit-toolbar-cancel').addEventListener('click', cancelEditMode);
+  }
+
+  function removeEditToolbar() {
+    const toolbar = document.getElementById('ai-ppt-edit-toolbar');
+    if (toolbar) toolbar.remove();
+  }
+
+  function onResize() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // Use the smaller dimension as base for better coverage on ultrawide/short screens
+    // Base matches the 1280×800 design canvas used by thumbnails/presenter preview.
+    const base = Math.min(vw / 1280, vh / 800, 1);
+    document.documentElement.style.fontSize = `${16 * Math.max(base, 0.5)}px`;
+  }
+
+  if (hasDOM) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  }
+
+  // Node 单测入口：仅导出图表渲染纯函数（浏览器下 module 未定义，跳过）。
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      renderChart,
+      renderLineChart,
+      renderPieChart,
+      renderBarsChart,
+    };
+  }
+})();
+
+</script>
+
+</body></html>

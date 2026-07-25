@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ai-ppt · 知识库 → PPT / 视频 / 报告</title>
+<meta name="description" content="ai-ppt：个人知识中枢。速记碎片 → AI 整理 → 一键生成 PPT / 配图 / 视频 / 报告，支持测验、错题集与复习训练。">
+<style>
+  :root {
+    --teal: #0D9488;
+    --teal-light: #14B8A6;
+    --teal-pale: #EAF3F1;
+    --ink: #1A2332;
+    --ink-soft: #4B5A6E;
+    --cream: #F7F8FA;
+    --line: #E0E4EA;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  .hero {
+    padding: 96px 0 72px;
+    text-align: center;
+    background: linear-gradient(180deg, #fff 0%, var(--cream) 100%);
+    border-bottom: 1px solid var(--line);
+  }
+  .hero .eyebrow {
+    display: inline-block;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    color: var(--teal);
+    border: 1px solid var(--teal-light);
+    border-radius: 999px;
+    padding: 4px 14px;
+    margin-bottom: 24px;
+    background: var(--teal-pale);
+  }
+  .hero h1 {
+    font-size: clamp(36px, 5vw, 56px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 em { font-style: normal; color: var(--teal); }
+  .hero .tagline {
+    margin-top: 16px;
+    font-size: clamp(16px, 2vw, 20px);
+    color: var(--ink-soft);
+  }
+  .hero .tagline strong { color: var(--teal); font-weight: 600; }
+  .hero .actions { margin-top: 36px; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block;
+    padding: 12px 28px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary { background: var(--teal); color: #fff; box-shadow: 0 4px 14px rgba(13,148,136,.3); }
+  .btn-ghost { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+
+  /* Sections */
+  section { padding: 72px 0; }
+  .section-title { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
+  .section-sub { margin-top: 8px; color: var(--ink-soft); font-size: 15px; }
+  .section-head { text-align: center; margin-bottom: 48px; }
+
+  /* Feature cards */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 24px;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(26,35,50,.08); }
+  .card .icon {
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    background: var(--teal-pale);
+    color: var(--teal);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+  .card h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  .card p { font-size: 14px; color: var(--ink-soft); }
+
+  /* Demo decks */
+  .demos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+  .demo-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: transform .15s ease, box-shadow .15s ease;
+    display: block;
+  }
+  .demo-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(26,35,50,.1); }
+  .demo-card img { width: 100%; aspect-ratio: 8 / 5; object-fit: cover; display: block; border-bottom: 1px solid var(--line); }
+  .demo-card .body { padding: 18px 20px 22px; }
+  .demo-card h3 { font-size: 16px; font-weight: 600; }
+  .demo-card p { margin-top: 6px; font-size: 13px; color: var(--ink-soft); }
+  .demo-card .open {
+    margin-top: 12px;
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--teal);
+  }
+
+  /* Pipeline */
+  .pipeline {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    flex-wrap: wrap;
+    font-size: 15px; font-weight: 600;
+  }
+  .pipeline .step {
+    background: #fff; border: 1px solid var(--line); border-radius: 999px;
+    padding: 10px 22px;
+  }
+  .pipeline .arrow { color: var(--teal); font-weight: 700; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 32px 0 48px;
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+  footer a { color: var(--teal); font-weight: 600; }
+
+  @media (max-width: 768px) {
+    .features { grid-template-columns: 1fr; }
+    .hero { padding: 64px 0 48px; }
+    section { padding: 48px 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">开源 · 个人知识中枢</span>
+    <h1>ai-<em>ppt</em></h1>
+    <p class="tagline">知识库 → <strong>PPT / 视频 / 报告</strong>：速记碎片进，成品幻灯片出</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="#demos">查看在线演示</a>
+      <a class="btn btn-ghost" href="https://github.com/DrDragonIsMe/ai-ppt">GitHub 仓库</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <h2 class="section-title">特性</h2>
+      <p class="section-sub">从记录到呈现的完整闭环，全部在本地完成</p>
+    </div>
+    <div class="features">
+      <div class="card">
+        <div class="icon">✎</div>
+        <h3>速记碎片收件箱</h3>
+        <p>Ctrl+Shift+N 随时记录灵感与会议片段，#标签 自动提取，AI 整理建议升格为笔记或卡片。</p>
+      </div>
+      <div class="card">
+        <div class="icon">◎</div>
+        <h3>双链知识库</h3>
+        <p>[[wikilink]] 双链笔记、知识卡片、加权星图，一眼看清知识之间的连接与高频核心。</p>
+      </div>
+      <div class="card">
+        <div class="icon">▦</div>
+        <h3>一键生成 PPT</h3>
+        <p>从笔记、星图选区、URL 或粘贴文章生成完整 deck，版式轮换、设计检查护栏，拒绝"一眼 AI"。</p>
+      </div>
+      <div class="card">
+        <div class="icon">✦</div>
+        <h3>AI 对话修改</h3>
+        <p>自然语言指令局部改稿，未修改页原样保留；也支持可视化编辑，手动修改不会被 AI 覆盖。</p>
+      </div>
+      <div class="card">
+        <div class="icon">⤓</div>
+        <h3>多格式导出发布</h3>
+        <p>PPTX（可编辑文字）、高清图片 PPTX、PDF、单文件 HTML、MP4 视频、静态站点包，一键发布带二维码。</p>
+      </div>
+      <div class="card">
+        <div class="icon">✓</div>
+        <h3>测验与复习训练</h3>
+        <p>知识卡片智能组卷、错题集、到期复习，卡片与错题可一键生成复习课件，形成学习闭环。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="demos" style="background:#fff; border-top:1px solid var(--line); border-bottom:1px solid var(--line);">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 class="section-title">在线演示</h2>
+      <p class="section-sub">以下 deck 由 ai-ppt 生成并导出为单文件 HTML，方向键翻页、T 切换主题</p>
+    </div>
+    <div class="demos">
+      <a class="demo-card" href="./xinrenxinshi-intro.html">
+        <img src="./cover-xinrenxinshi-intro.png" alt="薪人薪事产品介绍 deck 封面" loading="lazy">
+        <div class="body">
+          <h3>薪人薪事产品介绍</h3>
+          <p>产品介绍类 deck：公司简介、核心模块、行业方案与客户价值。</p>
+          <span class="open">打开放映 →</span>
+        </div>
+      </a>
+      <a class="demo-card" href="./q3-sales-preview.html">
+        <img src="./cover-q3-sales-preview.png" alt="Q3 销售队伍建设动员 deck 封面" loading="lazy">
+        <div class="body">
+          <h3>Q3 销售队伍建设动员</h3>
+          <p>内部动员类 deck：方法论拆解、执行标准与 AI 辅助销售。</p>
+          <span class="open">打开放映 →</span>
+        </div>
+      </a>
+      <a class="demo-card" href="./ai-ppt-intro.html">
+        <img src="./cover-ai-ppt-intro.png" alt="ai-ppt 产品介绍 deck 封面" loading="lazy">
+        <div class="body">
+          <h3>ai-ppt 产品介绍</h3>
+          <p>自产自销：用 ai-ppt 自身的生成管线，从 README 生成的产品 deck。</p>
+          <span class="open">打开放映 →</span>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <h2 class="section-title">工作流</h2>
+      <p class="section-sub">一条流水线，四步出片</p>
+    </div>
+    <div class="pipeline">
+      <span class="step">① 选材</span><span class="arrow">→</span>
+      <span class="step">② 生成</span><span class="arrow">→</span>
+      <span class="step">③ 修改</span><span class="arrow">→</span>
+      <span class="step">④ 发布</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>ai-ppt · MIT License · <a href="https://github.com/DrDragonIsMe/ai-ppt">github.com/DrDragonIsMe/ai-ppt</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

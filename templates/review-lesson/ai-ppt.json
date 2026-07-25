@@ -1,0 +1,19 @@
+{
+  "name": "review-lesson",
+  "sourceType": "article",
+  "sourceUrl": "",
+  "articleText": "",
+  "params": {
+    "title": "复习课件",
+    "audience": "学生",
+    "style": "复习课件",
+    "slideCount": 7,
+    "language": "zh-CN"
+  },
+  "theme": "web-ui",
+  "animation": "slide",
+  "status": "draft",
+  "lastGeneratedAt": null,
+  "errorMessage": null,
+  "template": "review-lesson"
+}

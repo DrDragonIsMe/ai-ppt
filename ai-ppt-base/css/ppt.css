@@ -35,6 +35,13 @@
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* 数据图表固定色（--chart-1 等品牌/中性色别名在 body 上声明，见下） */
+  --chart-2: #E8A33D;
+  --chart-3: #5B8DEF;
+  --chart-4: #D96C62;
+  --chart-5: #8B7BD8;
+  --chart-6: #53A06E;
 }
 
 * {
@@ -56,6 +63,16 @@ body {
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* 数据图表调色板（.chart-line / .chart-pie / .chart-bars）。
+     必须声明在 body 而非 :root：var(--teal)/var(--muted) 等别名在声明处按
+     本元素的自定义属性求值，:root 上会被冻结成默认值；body 上才能跟随
+     body.theme-* 的主题变量。主题 css 可在 body.theme-<id> 覆盖任意一项。 */
+  --chart-1: var(--teal);
+  --chart-text: var(--muted);
+  --chart-text-strong: var(--ink);
+  --chart-axis: var(--border-strong);
+  --chart-grid: var(--tile-strong);
 }
 
 #app {
@@ -1448,6 +1465,7 @@ body {
   .slide .chart-bar-item,
   .slide .progress-ring-item,
   .slide .chart-step,
+  .slide [data-chart],
   .slide .reveal-item {
     opacity: 1 !important;
     transform: none !important;
@@ -1553,6 +1571,74 @@ body {
   font-weight: 700;
   color: var(--accent);
   font-size: clamp(16px, 1.8vw, 20px);
+}
+
+/* ----- SVG 数据图表（.chart-line 折线/面积、.chart-pie 饼/环、.chart-bars 分组/堆叠柱）-----
+   声明式容器 + data-chart JSON；ppt.js 初始化时渲染为内联静态 SVG。
+   序列色 var(--chart-1..6)，文字/网格/轴线 var(--chart-*)，主题 css 可覆盖。 */
+.chart-line,
+.chart-pie,
+.chart-bars {
+  width: 100%;
+  max-width: 720px;
+  margin: clamp(8px, 1.5vh, 16px) auto 0;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-svg text {
+  font-family: var(--font-body);
+}
+
+.chart-svg .chart-grid {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+
+.chart-svg .chart-axis {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+}
+
+.chart-svg .chart-tick {
+  fill: var(--chart-text);
+  font-size: 11px;
+}
+
+.chart-svg .chart-value {
+  fill: var(--chart-text-strong);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chart-svg .chart-legend-text {
+  fill: var(--chart-text-strong);
+  font-size: 12px;
+}
+
+.chart-svg .chart-pct {
+  fill: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chart-svg .chart-center {
+  fill: var(--chart-text-strong);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.chart-error {
+  padding: clamp(12px, 2vh, 20px);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: clamp(12px, 1.2vw, 14px);
+  text-align: center;
 }
 
 /* ----- Progress Ring ----- */
@@ -1979,7 +2065,8 @@ body {
 .anim-fade .slide.active .data-metric,
 .anim-fade .slide.active .chart-bar-item,
 .anim-fade .slide.active .progress-ring-item,
-.anim-fade .slide.active .chart-step {
+.anim-fade .slide.active .chart-step,
+.anim-fade .slide.active [data-chart] {
   opacity: 0;
   animation: fadeIn 0.5s ease forwards;
 }
@@ -1999,7 +2086,8 @@ body {
 .anim-slide .slide.active .data-metric,
 .anim-slide .slide.active .chart-bar-item,
 .anim-slide .slide.active .progress-ring-item,
-.anim-slide .slide.active .chart-step {
+.anim-slide .slide.active .chart-step,
+.anim-slide .slide.active [data-chart] {
   opacity: 0;
   animation: revealUp 0.6s ease forwards;
 }
@@ -2019,7 +2107,8 @@ body {
 .anim-bounce .slide.active .data-metric,
 .anim-bounce .slide.active .chart-bar-item,
 .anim-bounce .slide.active .progress-ring-item,
-.anim-bounce .slide.active .chart-step {
+.anim-bounce .slide.active .chart-step,
+.anim-bounce .slide.active [data-chart] {
   opacity: 0;
   animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
@@ -2039,7 +2128,8 @@ body {
 .anim-zoom .slide.active .data-metric,
 .anim-zoom .slide.active .chart-bar-item,
 .anim-zoom .slide.active .progress-ring-item,
-.anim-zoom .slide.active .chart-step {
+.anim-zoom .slide.active .chart-step,
+.anim-zoom .slide.active [data-chart] {
   opacity: 0;
   animation: zoomIn 0.5s ease forwards;
 }
@@ -2059,7 +2149,8 @@ body {
 .anim-blur .slide.active .data-metric,
 .anim-blur .slide.active .chart-bar-item,
 .anim-blur .slide.active .progress-ring-item,
-.anim-blur .slide.active .chart-step {
+.anim-blur .slide.active .chart-step,
+.anim-blur .slide.active [data-chart] {
   opacity: 0;
   animation: blurIn 0.6s ease forwards;
 }
@@ -2079,7 +2170,8 @@ body {
 .anim-flip .slide.active .data-metric,
 .anim-flip .slide.active .chart-bar-item,
 .anim-flip .slide.active .progress-ring-item,
-.anim-flip .slide.active .chart-step {
+.anim-flip .slide.active .chart-step,
+.anim-flip .slide.active [data-chart] {
   opacity: 0;
   animation: flipIn 0.6s ease forwards;
 }
@@ -2279,6 +2371,12 @@ body.theme-web-ui {}
   .slide.active .progress-ring-circle,
   .slide.active .waterfall-fill {
     animation-duration: 0.01s;
+  }
+
+  /* SVG 图表入场动画直接落到终态（SVG 本身是静态的） */
+  .slide.active [data-chart] {
+    opacity: 1;
+    animation: none;
   }
 }
 

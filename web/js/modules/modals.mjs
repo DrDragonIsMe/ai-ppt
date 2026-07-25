@@ -1,5 +1,6 @@
 // web/js/modules/modals.mjs — 通用输入/确认弹窗（Promise 风格，替代原生 prompt/confirm）
 // 复用 index.html 中的 #input-modal / #confirm-modal，Esc 与点遮罩关闭行为与现有 modal 一致
+import { t } from './i18n.mjs';
 
 // ============================================================
 // 输入弹窗：showInputModal({ title, label, placeholder, defaultValue, confirmText })
@@ -20,12 +21,12 @@ function getInputModalEls() {
 
 export function showInputModal(opts = {}) {
     const e = getInputModalEls();
-    e.title.textContent = opts.title || '输入';
+    e.title.textContent = opts.title || t('输入');
     e.label.textContent = opts.label || '';
     e.label.style.display = opts.label ? '' : 'none';
     e.input.placeholder = opts.placeholder || '';
     e.input.value = opts.defaultValue || '';
-    e.btnConfirm.textContent = opts.confirmText || '确定';
+    e.btnConfirm.textContent = opts.confirmText || t('确定');
     return new Promise((resolve) => {
         inputModalResolve = resolve;
         e.modal.classList.remove('hidden');
@@ -60,9 +61,9 @@ function getConfirmModalEls() {
 
 export function showConfirmModal(opts = {}) {
     const e = getConfirmModalEls();
-    e.title.textContent = opts.title || '确认操作';
+    e.title.textContent = opts.title || t('确认操作');
     e.message.textContent = opts.message || '';
-    e.btnConfirm.textContent = opts.confirmText || '确定';
+    e.btnConfirm.textContent = opts.confirmText || t('确定');
     e.btnConfirm.classList.toggle('btn-danger', !!opts.danger);
     return new Promise((resolve) => {
         confirmModalResolve = resolve;

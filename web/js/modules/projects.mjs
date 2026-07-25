@@ -1,6 +1,7 @@
 // web/js/modules/projects.mjs — 项目管理、配置、生成、导出、标签、Dashboard
 import { S, animations, THEME_VAR_DEFAULTS, steps, api, showToast, escapeHtml, escapeHtmlAttr, withLlmSettingsHint, statusLabel } from './state.mjs';
 import { showConfirmModal } from './modals.mjs';
+import { t } from './i18n.mjs';
 
 const _cb = {};
 export function initProjectsModule(callbacks) { Object.assign(_cb, callbacks); }
@@ -12,34 +13,34 @@ let editModeActive = false;
 let vaultSourceSelection = { notes: [], cards: [], fragments: [], mistakes: [] };
 const els = () => S.els;
 
-const SOURCE_BADGE_LABELS = { article: '文章', url: '网页', 'vault-note': '笔记', 'vault-cards': '卡片', 'vault-mistakes': '错题', 'vault-graph': '星图' };
+const SOURCE_BADGE_LABELS = { article: t('文章'), url: t('网页'), 'vault-note': t('笔记'), 'vault-cards': t('卡片'), 'vault-mistakes': t('错题'), 'vault-graph': t('星图') };
 const VAULT_SOURCE_GROUPS = [
     { key: 'notes', label: '笔记' }, { key: 'cards', label: '知识卡片' },
     { key: 'fragments', label: '碎片' }, { key: 'mistakes', label: '错题' }
 ];
 
 const components = [
-    { id: 'cover', name: '封面页', desc: 'kicker + 大标题 + 副标题', html: '<section class="slide">\n  <div class="slide-content" style="text-align:center;"><div class="kicker">Section</div><h1>封面标题</h1><p class="lead">一句话副标题说明</p><div class="divider" style="margin:32px auto;max-width:120px;"></div><p style="font-size:16px;opacity:0.55;">补充说明文字</p></div>\n</section>' },
-    { id: 'hero-stats', name: '大数字统计', desc: 'split-visual + 4 个 hero-stat', html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Data</div><h2>关键数据</h2><div class="split-visual" style="margin-top:32px;"><div class="hero-stat"><div class="big-number">0%</div><div class="big-number-label">指标一</div></div><div class="hero-stat"><div class="big-number">0%</div><div class="big-number-label">指标二</div></div><div class="hero-stat"><div class="big-number">0</div><div class="big-number-label">指标三</div></div><div class="hero-stat"><div class="big-number">0</div><div class="big-number-label">指标四</div></div></div></div>\n</section>' },
-    { id: 'table', name: '表格页', desc: '三列 ppt-table 数据表', html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Table</div><h2>数据表格</h2><table class="ppt-table small"><thead><tr><th style="width:30%">项目</th><th style="width:40%">说明</th><th style="width:30%">备注</th></tr></thead><tbody><tr><td><strong>项目一</strong></td><td>说明文字</td><td>备注</td></tr><tr><td><strong>项目二</strong></td><td>说明文字</td><td>备注</td></tr><tr><td><strong>项目三</strong></td><td>说明文字</td><td>备注</td></tr></tbody></table></div>\n</section>' },
-    { id: 'progress-ring', name: '进度环', desc: '3 个 progress-ring', html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Progress</div><h2>完成度概览</h2><div class="progress-ring"><div class="progress-ring-item"><svg class="progress-ring-svg" viewBox="0 0 120 120"><circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle><circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct:75"></circle></svg><div class="progress-ring-value">75%</div><div class="progress-ring-label">维度一</div></div><div class="progress-ring-item"><svg class="progress-ring-svg" viewBox="0 0 120 120"><circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle><circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct:60"></circle></svg><div class="progress-ring-value">60%</div><div class="progress-ring-label">维度二</div></div><div class="progress-ring-item"><svg class="progress-ring-svg" viewBox="0 0 120 120"><circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle><circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct:45"></circle></svg><div class="progress-ring-value">45%</div><div class="progress-ring-label">维度三</div></div></div></div>\n</section>' },
-    { id: 'timeline', name: '时间线', desc: 'timeline-horizontal', html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Roadmap</div><h2>发展里程碑</h2><div class="timeline-horizontal"><div class="timeline-horizontal-item"><div class="timeline-horizontal-dot"></div><div class="timeline-horizontal-content"><div class="timeline-horizontal-title">阶段一</div><div class="timeline-horizontal-desc">里程碑事件</div></div></div><div class="timeline-horizontal-item"><div class="timeline-horizontal-dot"></div><div class="timeline-horizontal-content"><div class="timeline-horizontal-title">阶段二</div><div class="timeline-horizontal-desc">里程碑事件</div></div></div><div class="timeline-horizontal-item"><div class="timeline-horizontal-dot"></div><div class="timeline-horizontal-content"><div class="timeline-horizontal-title">阶段三</div><div class="timeline-horizontal-desc">里程碑事件</div></div></div><div class="timeline-horizontal-item"><div class="timeline-horizontal-dot"></div><div class="timeline-horizontal-content"><div class="timeline-horizontal-title">阶段四</div><div class="timeline-horizontal-desc">里程碑事件</div></div></div></div></div>\n</section>' },
-    { id: 'waterfall', name: '瀑布图', desc: 'waterfall 增减构成', html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Analysis</div><h2>构成分析</h2><div class="waterfall"><div class="waterfall-item"><div class="waterfall-label">初始值</div><div class="waterfall-bar"><div class="waterfall-fill neutral" style="--width:40%;width:40%"></div></div><div class="waterfall-value">100</div></div><div class="waterfall-item"><div class="waterfall-label">因素一</div><div class="waterfall-bar"><div class="waterfall-fill negative" style="--width:25%;width:25%"></div></div><div class="waterfall-value">-40</div></div><div class="waterfall-item"><div class="waterfall-label">因素二</div><div class="waterfall-bar"><div class="waterfall-fill negative" style="--width:18%;width:18%"></div></div><div class="waterfall-value">-30</div></div><div class="waterfall-item"><div class="waterfall-label">因素三</div><div class="waterfall-bar"><div class="waterfall-fill negative" style="--width:12%;width:12%"></div></div><div class="waterfall-value">-20</div></div><div class="waterfall-item"><div class="waterfall-label">最终值</div><div class="waterfall-bar"><div class="waterfall-fill positive" style="--width:10%;width:10%"></div></div><div class="waterfall-value">10</div></div></div></div>\n</section>' },
-    { id: 'steps', name: '步骤流程', desc: 'chart-steps 四步', html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Workflow</div><h2>实施流程</h2><div class="chart-steps"><div class="chart-step"><div class="chart-step-number">1</div><div class="chart-step-content"><div class="chart-step-title">步骤一</div><div class="chart-step-desc">步骤说明</div></div></div><div class="chart-step"><div class="chart-step-number">2</div><div class="chart-step-content"><div class="chart-step-title">步骤二</div><div class="chart-step-desc">步骤说明</div></div></div><div class="chart-step"><div class="chart-step-number">3</div><div class="chart-step-content"><div class="chart-step-title">步骤三</div><div class="chart-step-desc">步骤说明</div></div></div><div class="chart-step"><div class="chart-step-number">4</div><div class="chart-step-content"><div class="chart-step-title">步骤四</div><div class="chart-step-desc">步骤说明</div></div></div></div></div>\n</section>' },
-    { id: 'thanks', name: '结尾页', desc: 'Thank You', html: '<section class="slide">\n  <div class="slide-content" style="text-align:center;"><div class="kicker">Thank You</div><h1>谢谢</h1><p class="lead">感谢聆听，欢迎交流探讨。</p></div>\n</section>' }
+    { id: 'cover', name: t('封面页'), desc: t('kicker + 大标题 + 副标题'), html: '<section class="slide">\n  <div class="slide-content" style="text-align:center;"><div class="kicker">Section</div><h1>封面标题</h1><p class="lead">一句话副标题说明</p><div class="divider" style="margin:32px auto;max-width:120px;"></div><p style="font-size:16px;opacity:0.55;">补充说明文字</p></div>\n</section>' },
+    { id: 'hero-stats', name: t('大数字统计'), desc: t('split-visual + 4 个 hero-stat'), html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Data</div><h2>关键数据</h2><div class="split-visual" style="margin-top:32px;"><div class="hero-stat"><div class="big-number">0%</div><div class="big-number-label">指标一</div></div><div class="hero-stat"><div class="big-number">0%</div><div class="big-number-label">指标二</div></div><div class="hero-stat"><div class="big-number">0</div><div class="big-number-label">指标三</div></div><div class="hero-stat"><div class="big-number">0</div><div class="big-number-label">指标四</div></div></div></div>\n</section>' },
+    { id: 'table', name: t('表格页'), desc: t('三列 ppt-table 数据表'), html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Table</div><h2>数据表格</h2><table class="ppt-table small"><thead><tr><th style="width:30%">项目</th><th style="width:40%">说明</th><th style="width:30%">备注</th></tr></thead><tbody><tr><td><strong>项目一</strong></td><td>说明文字</td><td>备注</td></tr><tr><td><strong>项目二</strong></td><td>说明文字</td><td>备注</td></tr><tr><td><strong>项目三</strong></td><td>说明文字</td><td>备注</td></tr></tbody></table></div>\n</section>' },
+    { id: 'progress-ring', name: t('进度环'), desc: t('3 个 progress-ring'), html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Progress</div><h2>完成度概览</h2><div class="progress-ring"><div class="progress-ring-item"><svg class="progress-ring-svg" viewBox="0 0 120 120"><circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle><circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct:75"></circle></svg><div class="progress-ring-value">75%</div><div class="progress-ring-label">维度一</div></div><div class="progress-ring-item"><svg class="progress-ring-svg" viewBox="0 0 120 120"><circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle><circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct:60"></circle></svg><div class="progress-ring-value">60%</div><div class="progress-ring-label">维度二</div></div><div class="progress-ring-item"><svg class="progress-ring-svg" viewBox="0 0 120 120"><circle class="progress-ring-circle-bg" cx="60" cy="60" r="50"></circle><circle class="progress-ring-circle" cx="60" cy="60" r="50" style="--progress-pct:45"></circle></svg><div class="progress-ring-value">45%</div><div class="progress-ring-label">维度三</div></div></div></div>\n</section>' },
+    { id: 'timeline', name: t('时间线'), desc: 'timeline-horizontal', html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Roadmap</div><h2>发展里程碑</h2><div class="timeline-horizontal"><div class="timeline-horizontal-item"><div class="timeline-horizontal-dot"></div><div class="timeline-horizontal-content"><div class="timeline-horizontal-title">阶段一</div><div class="timeline-horizontal-desc">里程碑事件</div></div></div><div class="timeline-horizontal-item"><div class="timeline-horizontal-dot"></div><div class="timeline-horizontal-content"><div class="timeline-horizontal-title">阶段二</div><div class="timeline-horizontal-desc">里程碑事件</div></div></div><div class="timeline-horizontal-item"><div class="timeline-horizontal-dot"></div><div class="timeline-horizontal-content"><div class="timeline-horizontal-title">阶段三</div><div class="timeline-horizontal-desc">里程碑事件</div></div></div><div class="timeline-horizontal-item"><div class="timeline-horizontal-dot"></div><div class="timeline-horizontal-content"><div class="timeline-horizontal-title">阶段四</div><div class="timeline-horizontal-desc">里程碑事件</div></div></div></div></div>\n</section>' },
+    { id: 'waterfall', name: t('瀑布图'), desc: t('waterfall 增减构成'), html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Analysis</div><h2>构成分析</h2><div class="waterfall"><div class="waterfall-item"><div class="waterfall-label">初始值</div><div class="waterfall-bar"><div class="waterfall-fill neutral" style="--width:40%;width:40%"></div></div><div class="waterfall-value">100</div></div><div class="waterfall-item"><div class="waterfall-label">因素一</div><div class="waterfall-bar"><div class="waterfall-fill negative" style="--width:25%;width:25%"></div></div><div class="waterfall-value">-40</div></div><div class="waterfall-item"><div class="waterfall-label">因素二</div><div class="waterfall-bar"><div class="waterfall-fill negative" style="--width:18%;width:18%"></div></div><div class="waterfall-value">-30</div></div><div class="waterfall-item"><div class="waterfall-label">因素三</div><div class="waterfall-bar"><div class="waterfall-fill negative" style="--width:12%;width:12%"></div></div><div class="waterfall-value">-20</div></div><div class="waterfall-item"><div class="waterfall-label">最终值</div><div class="waterfall-bar"><div class="waterfall-fill positive" style="--width:10%;width:10%"></div></div><div class="waterfall-value">10</div></div></div></div>\n</section>' },
+    { id: 'steps', name: t('步骤流程'), desc: t('chart-steps 四步'), html: '<section class="slide">\n  <div class="slide-content"><div class="section-title">Workflow</div><h2>实施流程</h2><div class="chart-steps"><div class="chart-step"><div class="chart-step-number">1</div><div class="chart-step-content"><div class="chart-step-title">步骤一</div><div class="chart-step-desc">步骤说明</div></div></div><div class="chart-step"><div class="chart-step-number">2</div><div class="chart-step-content"><div class="chart-step-title">步骤二</div><div class="chart-step-desc">步骤说明</div></div></div><div class="chart-step"><div class="chart-step-number">3</div><div class="chart-step-content"><div class="chart-step-title">步骤三</div><div class="chart-step-desc">步骤说明</div></div></div><div class="chart-step"><div class="chart-step-number">4</div><div class="chart-step-content"><div class="chart-step-title">步骤四</div><div class="chart-step-desc">步骤说明</div></div></div></div></div>\n</section>' },
+    { id: 'thanks', name: t('结尾页'), desc: 'Thank You', html: '<section class="slide">\n  <div class="slide-content" style="text-align:center;"><div class="kicker">Thank You</div><h1>谢谢</h1><p class="lead">感谢聆听，欢迎交流探讨。</p></div>\n</section>' }
 ];
 
 // === 模型加载 ===
 export async function loadModels() {
     const select = els().inputModelPreset;
     try { S.models = await api('GET', '/api/models'); }
-    catch { S.models = []; select.innerHTML = '<option value="">加载失败，请检查服务</option>'; return; }
+    catch { S.models = []; select.innerHTML = `<option value="">${t('加载失败，请检查服务')}</option>`; return; }
     select.innerHTML = S.models.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join('');
 }
 
 export async function loadGlobalConfig() {
     try { S.globalConfig = await api('GET', '/api/config'); }
-    catch (err) { S.globalConfig = { modelConfig: {} }; showToast('加载模型配置失败：' + err.message, 'error'); }
+    catch (err) { S.globalConfig = { modelConfig: {} }; showToast(t('加载模型配置失败：{msg}', { msg: err.message }), 'error'); }
 }
 
 // === 项目列表 ===
@@ -51,7 +52,7 @@ export async function loadProjects(selectName = null) {
 
 function sourceBadgeLabel(p) {
     const sel = p.sourceSelection;
-    if (sel && typeof sel === 'object' && Object.values(sel).some((arr) => Array.isArray(arr) && arr.length)) return '知识选材';
+    if (sel && typeof sel === 'object' && Object.values(sel).some((arr) => Array.isArray(arr) && arr.length)) return t('知识选材');
     return SOURCE_BADGE_LABELS[p.sourceType] || '';
 }
 
@@ -61,10 +62,11 @@ function renderProjects() {
     projectListEl.innerHTML = '';
     S.projects.forEach((p, idx) => {
         const badge = sourceBadgeLabel(p);
+        const coverUrl = `/projects/${encodeURIComponent(p.name)}/cover.png${p.lastGeneratedAt ? `?t=${encodeURIComponent(p.lastGeneratedAt)}` : ''}`;
         const item = document.createElement('div');
         item.className = 'project-item' + (p.name === S.currentProject ? ' active' : '');
         item.dataset.index = idx;
-        item.innerHTML = `<div style="display:flex;align-items:center;gap:10px;"><div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-mono);background:${idx < 9 ? 'var(--tile)' : 'transparent'};border-radius:4px;color:var(--ink);opacity:0.6;">${idx < 9 ? idx + 1 : ''}</div><div><div class="project-name">${escapeHtml(p.title || p.name)}</div><div class="project-meta">${escapeHtml(p.name)} · ${statusLabel(p.status)}${badge ? `<span class="source-badge">${escapeHtml(badge)}</span>` : ''}</div></div></div><button class="project-delete" title="删除">×</button>`;
+        item.innerHTML = `<div style="display:flex;align-items:center;gap:10px;min-width:0;"><img class="project-cover" src="${coverUrl}" alt="" loading="lazy" onerror="this.remove()"><div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-mono);background:${idx < 9 ? 'var(--tile)' : 'transparent'};border-radius:4px;color:var(--ink);opacity:0.6;flex-shrink:0;">${idx < 9 ? idx + 1 : ''}</div><div style="min-width:0;"><div class="project-name">${escapeHtml(p.title || p.name)}</div><div class="project-meta">${escapeHtml(p.name)} · ${statusLabel(p.status)}${badge ? `<span class="source-badge">${escapeHtml(badge)}</span>` : ''}</div></div></div><button class="project-delete" title="${t('删除')}">×</button>`;
         item.addEventListener('click', (e) => {
             if (e.target.classList.contains('project-delete')) { e.stopPropagation(); deleteProject(p.name); }
             else selectProject(p.name);
@@ -74,6 +76,7 @@ function renderProjects() {
 }
 
 export async function selectProject(name) {
+    if (_cb.closeSidebarDrawer) _cb.closeSidebarDrawer(); // 移动端：选中项目后收起抽屉进入工作区
     S.currentProject = name;
     renderProjects();
     const projectPanelEl = document.getElementById('project-panel');
@@ -120,9 +123,11 @@ function renderConfig(cfg) {
     const canExport = cfg.status === 'ready';
     [e.btnGenerate, e.btnEditMode, e.btnOpenPreview].forEach((btn) => { if (btn) btn.disabled = !S.currentProject; });
     if (e.btnExport) e.btnExport.disabled = !S.currentProject || !canExport;
+    if (e.btnPublishQuick) e.btnPublishQuick.disabled = !S.currentProject || !canExport;
     if (e.btnGenerateContent) e.btnGenerateContent.disabled = false;
     e.btnPreview.disabled = !canExport;
     if (e.btnOpenPreviewHeader) e.btnOpenPreviewHeader.disabled = !canExport;
+    if (e.btnDesignLint) e.btnDesignLint.disabled = !canExport;
     e.progressCard.classList.add('hidden');
     editModeActive = false;
     updateEditModeUI();
@@ -139,7 +144,7 @@ export function renderModelConfigUI() {
     ensureModelOption(mcfg.model);
     e.inputModelBaseUrl.value = mcfg.baseUrl || '';
     e.inputModelApiKey.value = '';
-    e.inputModelApiKey.placeholder = mcfg.apiKeySet ? '已保存，留空保持不变' : 'sk-...';
+    e.inputModelApiKey.placeholder = mcfg.apiKeySet ? t('已保存，留空保持不变') : 'sk-...';
     if (e.inputModelPersistApiKey) e.inputModelPersistApiKey.checked = false;
     updateModelPresetUI(presetId);
     renderMediaModelConfigs();
@@ -153,15 +158,15 @@ async function refreshModelList() {
     const e = els();
     const baseUrl = e.inputModelBaseUrl.value;
     const apiKey = e.inputModelApiKey.value;
-    if (!baseUrl) { showToast('请先填写 Base URL'); return; }
+    if (!baseUrl) { showToast(t('请先填写 Base URL')); return; }
     try {
-        showToast('正在获取模型列表...');
+        showToast(t('正在获取模型列表...'));
         const remoteModels = await api('POST', '/api/models/list-remote', { baseUrl, apiKey });
         const cur = e.inputModelName.value;
-        e.inputModelName.innerHTML = '<option value="">选择或输入模型...</option>' + remoteModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('');
+        e.inputModelName.innerHTML = `<option value="">${t('选择或输入模型...')}</option>` + remoteModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('');
         if (cur) ensureModelOption(cur);
-        showToast(`获取到 ${remoteModels.length} 个模型`);
-    } catch (err) { showToast('获取模型列表失败: ' + err.message); }
+        showToast(t('获取到 {count} 个模型', { count: remoteModels.length }));
+    } catch (err) { showToast(t('获取模型列表失败: {msg}', { msg: err.message })); }
 }
 
 function ensureModelOption(value) {
@@ -200,14 +205,14 @@ function renderMediaModelConfigs() {
     e.inputImageModelName.value = img.model || '';
     e.inputImageModelBaseUrl.value = img.baseUrl || '';
     e.inputImageModelApiKey.value = '';
-    e.inputImageModelApiKey.placeholder = img.apiKeySet ? '已保存，留空保持不变' : 'sk-...';
+    e.inputImageModelApiKey.placeholder = img.apiKeySet ? t('已保存，留空保持不变') : 'sk-...';
     if (e.inputImageModelPersistApiKey) e.inputImageModelPersistApiKey.checked = false;
     const vid = S.globalConfig?.videoModelConfig || {};
     e.inputVideoModelProvider.value = vid.provider || 'arkcli';
     e.inputVideoModelName.value = vid.model || '';
     e.inputVideoModelBaseUrl.value = vid.baseUrl || '';
     e.inputVideoModelApiKey.value = '';
-    e.inputVideoModelApiKey.placeholder = vid.apiKeySet ? '已保存，留空保持不变' : 'sk-...';
+    e.inputVideoModelApiKey.placeholder = vid.apiKeySet ? t('已保存，留空保持不变') : 'sk-...';
     if (e.inputVideoModelPersistApiKey) e.inputVideoModelPersistApiKey.checked = false;
     updateMediaProviderUI('image'); updateMediaProviderUI('video');
 }
@@ -220,12 +225,12 @@ function updateMediaProviderUI(kind) {
 }
 
 async function testMediaModel(kind) {
-    const label = kind === 'image' ? '生图' : '生视频';
+    const label = kind === 'image' ? t('生图') : t('生视频');
     try {
-        showToast(`正在测试${label}模型…`);
+        showToast(t('正在测试{label}模型…', { label }));
         const result = await api('POST', '/api/media/test', { kind });
-        showToast(result?.ok ? (result.message || `${label}模型可用`) : `${label}模型测试失败：` + (result?.message || '未知错误'));
-    } catch (err) { showToast(`${label}模型测试失败：` + err.message, 'error'); }
+        showToast(result?.ok ? (result.message || t('{label}模型可用', { label })) : t('{label}模型测试失败：{msg}', { label, msg: result?.message || t('未知错误') }));
+    } catch (err) { showToast(t('{label}模型测试失败：{msg}', { label, msg: err.message }), 'error'); }
 }
 
 export async function saveGlobalModelConfig() {
@@ -241,13 +246,13 @@ export async function saveGlobalModelConfig() {
         if (e.inputVideoModelPersistApiKey?.checked && e.inputVideoModelApiKey.value.trim()) { videoModelConfig.apiKey = e.inputVideoModelApiKey.value.trim(); keyPersisted = true; }
         S.globalConfig = await api('POST', '/api/config', { modelConfig, imageModelConfig, videoModelConfig, ...(persistApiKey ? { persistApiKey: true } : {}) });
         renderModelConfigUI();
-        showToast(keyPersisted ? '模型配置已保存（含 API Key）' : '模型配置已保存');
-    } catch (err) { showToast('保存模型配置失败：' + err.message, 'error'); }
+        showToast(keyPersisted ? t('模型配置已保存（含 API Key）') : t('模型配置已保存'));
+    } catch (err) { showToast(t('保存模型配置失败：{msg}', { msg: err.message }), 'error'); }
 }
 
 export async function backupNow() {
-    try { showToast('正在备份…'); const data = await api('POST', '/api/backup'); showToast(`已备份到 ${data.dir}`); }
-    catch (err) { showToast('备份失败：' + err.message, 'error'); }
+    try { showToast(t('正在备份…')); const data = await api('POST', '/api/backup'); showToast(t('已备份到 {dir}', { dir: data.dir })); }
+    catch (err) { showToast(t('备份失败：{msg}', { msg: err.message }), 'error'); }
 }
 
 // === Search ===
@@ -260,7 +265,7 @@ async function performSearch(query) {
 
 function renderSearchResults(results) {
     const e = els();
-    if (!results || results.length === 0) { e.searchResults.innerHTML = '<div class="search-result-empty">无匹配结果</div>'; e.searchResults.classList.remove('hidden'); return; }
+    if (!results || results.length === 0) { e.searchResults.innerHTML = `<div class="search-result-empty">${t('无匹配结果')}</div>`; e.searchResults.classList.remove('hidden'); return; }
     e.searchResults.innerHTML = results.map((r) => `<div class="search-result-item" data-name="${escapeHtml(r.name)}"><div class="search-result-title">${escapeHtml(r.title || r.name)}</div><div class="search-result-meta">${escapeHtml(r.name)} · ${statusLabel(r.status)}</div></div>`).join('');
     e.searchResults.classList.remove('hidden');
     e.searchResults.querySelectorAll('.search-result-item').forEach((item) => {
@@ -290,13 +295,15 @@ async function sendChatMessage() {
     e.chatInput.value = '';
     chatBusy = true;
     e.btnChatSend.disabled = true;
-    const progressMsg = appendChatMessage('修改已启动…', 'system');
+    const progressMsg = appendChatMessage(t('修改已启动…'), 'system');
+    const projectName = S.currentProject;
+    const chatStartIso = new Date().toISOString(); // 用于定位本次修改前自动创建的快照
     try {
         const sessionApiKey = e.inputModelApiKey.value.trim();
         await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/chat`, { instruction, ...(sessionApiKey ? { apiKey: sessionApiKey } : {}) });
     } catch (err) {
         progressMsg.remove();
-        appendChatMessage('修改失败：' + withLlmSettingsHint(err.message), 'error');
+        appendChatMessage(t('修改失败：{msg}', { msg: withLlmSettingsHint(err.message) }), 'error');
         chatBusy = false; e.btnChatSend.disabled = false; return;
     }
     const finish = () => { chatBusy = false; e.btnChatSend.disabled = false; };
@@ -304,18 +311,19 @@ async function sendChatMessage() {
     es.onmessage = (ev) => {
         let event;
         try { event = JSON.parse(ev.data); } catch { event = { type: 'progress', message: ev.data }; }
-        if (event.type === 'progress') progressMsg.textContent = event.message || event.step || '修改中…';
+        if (event.type === 'progress') progressMsg.textContent = event.message || event.step || t('修改中…');
         else if (event.type === 'done') {
             progressMsg.remove();
-            appendChatMessage((event.summary || '修改已完成，预览已刷新。') + (event.details ? '\n\n' + event.details : ''), 'assistant');
+            const msgDiv = appendChatMessage((event.summary || t('修改已完成，预览已刷新。')) + (event.details ? '\n\n' + event.details : ''), 'assistant');
+            addChatUndoButton(msgDiv, projectName, chatStartIso);
             es.close(); finish(); updatePreview(); loadSnapshots();
         } else if (event.type === 'error') {
             progressMsg.remove();
-            appendChatMessage('修改失败：' + withLlmSettingsHint(event.message), 'error');
+            appendChatMessage(t('修改失败：{msg}', { msg: withLlmSettingsHint(event.message) }), 'error');
             es.close(); finish();
         }
     };
-    es.onerror = () => { progressMsg.remove(); appendChatMessage('进度连接中断，请稍后手动刷新预览查看结果。', 'error'); es.close(); finish(); };
+    es.onerror = () => { progressMsg.remove(); appendChatMessage(t('进度连接中断，请稍后手动刷新预览查看结果。'), 'error'); es.close(); finish(); };
 }
 
 async function checkProjectFiles() {
@@ -323,7 +331,7 @@ async function checkProjectFiles() {
     const e = els();
     try {
         const res = await fetch(`/projects/${encodeURIComponent(S.currentProject)}/index.html`, { method: 'HEAD' });
-        if (res.ok) { e.btnPreview.disabled = false; if (e.btnExport) e.btnExport.disabled = false; if (e.btnOpenPreview) e.btnOpenPreview.disabled = false; if (e.btnOpenPreviewHeader) e.btnOpenPreviewHeader.disabled = false; }
+        if (res.ok) { e.btnPreview.disabled = false; if (e.btnExport) e.btnExport.disabled = false; if (e.btnPublishQuick) e.btnPublishQuick.disabled = false; if (e.btnOpenPreview) e.btnOpenPreview.disabled = false; if (e.btnOpenPreviewHeader) e.btnOpenPreviewHeader.disabled = false; }
     } catch { }
 }
 
@@ -352,7 +360,7 @@ function activateConfigTab(tabName) { document.querySelector(`.config-tab[data-t
 function handlePipelineStep(stage) {
     if (stage === 'select') activateConfigTab('content');
     else if (stage === 'generate') { activateConfigTab('content'); if (els().btnGenerateContent) { els().btnGenerateContent.scrollIntoView({ behavior: 'smooth', block: 'center' }); els().btnGenerateContent.focus(); } }
-    else if (stage === 'modify') { if (els().previewFrame) els().previewFrame.focus(); showToast('可点击「编辑模式」直接改字，或用「AI 修改」对话调整'); }
+    else if (stage === 'modify') { if (els().previewFrame) els().previewFrame.focus(); showToast(t('可点击「编辑模式」直接改字，或用「AI 修改」对话调整')); }
     else if (stage === 'publish') activateConfigTab('publish');
 }
 
@@ -369,7 +377,7 @@ async function loadVaultSourceData() {
     try {
         const [notesData, cardsData, fragmentsData, mistakesData] = await Promise.all([api('GET', '/api/vault/notes'), api('GET', '/api/vault/cards'), api('GET', '/api/vault/fragments'), api('GET', '/api/mistakes')]);
         S.vaultSourceData = { notes: Array.isArray(notesData) ? notesData : [], cards: Array.isArray(cardsData) ? cardsData : [], fragments: fragmentsData?.fragments || [], mistakes: Array.isArray(mistakesData) ? mistakesData : [] };
-    } catch (err) { showToast('加载知识库素材失败：' + err.message, 'error'); S.vaultSourceData = null; }
+    } catch (err) { showToast(t('加载知识库素材失败：{msg}', { msg: err.message }), 'error'); S.vaultSourceData = null; }
     renderVaultSourceGroups();
 }
 
@@ -385,10 +393,10 @@ function vaultSourceItems(group) {
 function renderVaultSourceGroup(group) {
     const listEl = document.getElementById('vault-source-' + group);
     if (!listEl) return;
-    if (!S.vaultSourceData) { listEl.innerHTML = '<div class="vault-source-empty">加载中…</div>'; return; }
+    if (!S.vaultSourceData) { listEl.innerHTML = `<div class="vault-source-empty">${t('加载中…')}</div>`; return; }
     const filter = (document.querySelector(`.vault-source-filter[data-group="${group}"]`)?.value || '').trim().toLowerCase();
     const items = vaultSourceItems(group).filter((it) => !filter || it.label.toLowerCase().includes(filter));
-    if (!items.length) { listEl.innerHTML = '<div class="vault-source-empty">暂无内容</div>'; return; }
+    if (!items.length) { listEl.innerHTML = `<div class="vault-source-empty">${t('暂无内容')}</div>`; return; }
     const selected = new Set(vaultSourceSelection[group] || []);
     listEl.innerHTML = items.map((it) => `<label class="vault-source-item"><input type="checkbox" data-group="${group}" value="${escapeHtml(it.id)}" ${selected.has(it.id) ? 'checked' : ''}><span>${escapeHtml(it.label)}</span></label>`).join('');
 }
@@ -403,7 +411,7 @@ function updateVaultSourceActions() {
 async function collectVaultSource() {
     const sel = vaultSourceSelection;
     const total = sel.notes.length + sel.cards.length + sel.fragments.length + sel.mistakes.length;
-    if (!total) { showToast('请先勾选素材'); return; }
+    if (!total) { showToast(t('请先勾选素材')); return; }
     if (!S.vaultSourceData) await loadVaultSourceData();
     const parts = [];
     for (const name of sel.notes) {
@@ -415,7 +423,7 @@ async function collectVaultSource() {
     for (const id of sel.mistakes) { const m = S.vaultSourceData?.mistakes.find((x) => x.id === id); if (!m) continue; let t = `## 错题：${(m.question || '').replace(/\s+/g, ' ').slice(0, 30)}\n\n题目：${m.question || ''}\n正确答案：${m.correctAnswer || m.answer || ''}`; if (m.analysis) t += `\n解析：${m.analysis}`; parts.push(t); }
     els().inputArticle.value = parts.join('\n\n');
     setSourceTab('article');
-    showToast(`已汇总 ${total} 项素材`);
+    showToast(t('已汇总 {count} 项素材', { count: total }));
 }
 
 // === Themes ===
@@ -442,7 +450,7 @@ function setFontSelect(select, value) {
     select.querySelectorAll('option[data-custom]').forEach((opt) => opt.remove());
     if (!Array.from(select.options).some((opt) => opt.value === value)) {
         const opt = document.createElement('option');
-        opt.value = value; opt.textContent = '自定义 · ' + value; opt.dataset.custom = 'true';
+        opt.value = value; opt.textContent = t('自定义 · {value}', { value }); opt.dataset.custom = 'true';
         select.appendChild(opt);
     }
     select.value = value;
@@ -463,8 +471,8 @@ async function applyThemeOverrides() {
     const e = els();
     try {
         await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/theme-overrides`, { overrides: { '--teal': e.inputVarTeal.value, '--ink': e.inputVarInk.value, '--cream': e.inputVarCream.value, '--font-heading': e.inputVarFontHeading.value, '--font-body': e.inputVarFontBody.value } });
-        showToast('变量已应用'); updatePreview();
-    } catch (err) { showToast('应用变量失败：' + err.message); }
+        showToast(t('变量已应用')); updatePreview();
+    } catch (err) { showToast(t('应用变量失败：{msg}', { msg: err.message })); }
 }
 
 async function clearThemeOverrides() {
@@ -474,8 +482,8 @@ async function clearThemeOverrides() {
         await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/theme-overrides`, { overrides: {} });
         e.inputVarTeal.value = THEME_VAR_DEFAULTS['--teal']; e.inputVarInk.value = THEME_VAR_DEFAULTS['--ink']; e.inputVarCream.value = THEME_VAR_DEFAULTS['--cream'];
         e.inputVarFontHeading.selectedIndex = 0; e.inputVarFontBody.selectedIndex = 1;
-        showToast('变量已清除'); updatePreview();
-    } catch (err) { showToast('清除变量失败：' + err.message); }
+        showToast(t('变量已清除')); updatePreview();
+    } catch (err) { showToast(t('清除变量失败：{msg}', { msg: err.message })); }
 }
 
 // === Components / Animations ===
@@ -485,7 +493,7 @@ function renderComponents() {
     components.forEach((comp) => {
         const card = document.createElement('div');
         card.className = 'component-card';
-        card.innerHTML = `<div class="component-preview">${escapeHtml(comp.desc)}</div><div class="component-name">${escapeHtml(comp.name)}</div><button class="btn-secondary component-insert">插入</button>`;
+        card.innerHTML = `<div class="component-preview">${escapeHtml(comp.desc)}</div><div class="component-name">${escapeHtml(comp.name)}</div><button class="btn-secondary component-insert">${t('插入')}</button>`;
         card.querySelector('.component-insert').addEventListener('click', () => insertComponent(comp));
         e.componentGrid.appendChild(card);
     });
@@ -493,8 +501,8 @@ function renderComponents() {
 
 async function insertComponent(comp) {
     if (!S.currentProject) return;
-    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/component`, { html: comp.html }); showToast(`已插入「${comp.name}」`); updatePreview(); }
-    catch (err) { showToast('插入组件失败：' + err.message); }
+    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/component`, { html: comp.html }); showToast(t('已插入「{name}」', { name: comp.name })); updatePreview(); }
+    catch (err) { showToast(t('插入组件失败：{msg}', { msg: err.message })); }
 }
 
 function renderAnimationOptions() {
@@ -504,7 +512,7 @@ function renderAnimationOptions() {
     animations.forEach((anim) => {
         const opt = document.createElement('div');
         opt.className = 'animation-option' + (anim.id === cur ? ' active' : '');
-        opt.innerHTML = `<div class="animation-icon">${anim.icon}</div><div class="animation-info"><div class="animation-title">${escapeHtml(anim.name)}</div><div class="animation-desc">${escapeHtml(anim.desc)}</div></div>`;
+        opt.innerHTML = `<div class="animation-icon">${anim.icon}</div><div class="animation-info"><div class="animation-title">${escapeHtml(t(anim.name))}</div><div class="animation-desc">${escapeHtml(t(anim.desc))}</div></div>`;
         opt.addEventListener('click', () => selectAnimation(anim.id));
         e.animationOptions.appendChild(opt);
     });
@@ -535,46 +543,112 @@ async function loadSnapshots() {
 
 function renderSnapshots(snapshots) {
     const e = els();
-    if (!snapshots || !snapshots.length) { e.snapshotList.innerHTML = '<div style="padding:40px 20px;text-align:center;opacity:0.5;font-size:13px;">暂无快照</div>'; return; }
-    e.snapshotList.innerHTML = snapshots.map((s) => `<div class="publish-item"><div class="publish-version">${escapeHtml(new Date(s.createdAt).toLocaleString())}</div><div class="publish-info"><div class="publish-time">${escapeHtml(s.description || '（无说明）')}</div><div class="publish-meta">${escapeHtml(s.title || s.name)} · ${statusLabel(s.status)}</div></div><div style="display:flex;gap:6px;"><button class="btn-secondary snapshot-restore" data-id="${escapeHtml(s.id)}" style="padding:6px 10px;font-size:12px;">恢复</button><button class="btn-secondary snapshot-delete" data-id="${escapeHtml(s.id)}" style="padding:6px 10px;font-size:12px;">删除</button></div></div>`).join('');
+    if (!snapshots || !snapshots.length) { e.snapshotList.innerHTML = `<div style="padding:40px 20px;text-align:center;opacity:0.5;font-size:13px;">${t('暂无快照')}</div>`; return; }
+    e.snapshotList.innerHTML = snapshots.map((s) => `<div class="publish-item"><div class="publish-version">${escapeHtml(new Date(s.createdAt).toLocaleString())}</div><div class="publish-info"><div class="publish-time">${escapeHtml(s.description || t('（无说明）'))}</div><div class="publish-meta">${escapeHtml(s.title || s.name)} · ${statusLabel(s.status)}</div></div><div style="display:flex;gap:6px;"><button class="btn-secondary snapshot-restore" data-id="${escapeHtml(s.id)}" style="padding:6px 10px;font-size:12px;">${t('恢复')}</button><button class="btn-secondary snapshot-delete" data-id="${escapeHtml(s.id)}" style="padding:6px 10px;font-size:12px;">${t('删除')}</button></div></div>`).join('');
     e.snapshotList.querySelectorAll('.snapshot-restore').forEach((btn) => btn.addEventListener('click', () => restoreSnapshotById(btn.dataset.id)));
     e.snapshotList.querySelectorAll('.snapshot-delete').forEach((btn) => btn.addEventListener('click', () => deleteSnapshotById(btn.dataset.id)));
 }
 
 async function createSnapshotNow() {
     if (!S.currentProject) return;
-    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/snapshots`, { description: els().snapshotDescription.value.trim() }); els().snapshotDescription.value = ''; showToast('快照已保存'); loadSnapshots(); }
-    catch (err) { showToast('保存快照失败：' + err.message); }
+    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/snapshots`, { description: els().snapshotDescription.value.trim() }); els().snapshotDescription.value = ''; showToast(t('快照已保存')); loadSnapshots(); }
+    catch (err) { showToast(t('保存快照失败：{msg}', { msg: err.message })); }
 }
 
 async function restoreSnapshotById(id) {
-    if (!(await showConfirmModal({ title: '恢复快照', message: '恢复此快照将覆盖当前项目内容，确定吗？', confirmText: '恢复', danger: true }))) return;
-    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/snapshots/${encodeURIComponent(id)}/restore`); showToast('已恢复快照'); const cfg = await api('GET', `/api/projects/${encodeURIComponent(S.currentProject)}/config`); S.currentConfig = cfg; renderConfig(cfg); updatePreview(); }
-    catch (err) { showToast('恢复失败：' + err.message); }
+    if (!(await showConfirmModal({ title: t('恢复快照'), message: t('恢复此快照将覆盖当前项目内容，确定吗？'), confirmText: t('恢复'), danger: true }))) return;
+    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/snapshots/${encodeURIComponent(id)}/restore`); showToast(t('已恢复快照')); const cfg = await api('GET', `/api/projects/${encodeURIComponent(S.currentProject)}/config`); S.currentConfig = cfg; renderConfig(cfg); updatePreview(); }
+    catch (err) { showToast(t('恢复失败：{msg}', { msg: err.message })); }
+}
+
+// AI 修改完成后在对话消息下附加「撤销本次修改」按钮：
+// 恢复 chat-modify 改前自动创建的快照（restore 本身会再建安全快照，操作可逆）
+function addChatUndoButton(msgDiv, projectName, sinceIso) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-secondary chat-undo-btn';
+    btn.textContent = t('撤销本次修改');
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+            const snapshots = await api('GET', `/api/projects/${encodeURIComponent(projectName)}/snapshots`);
+            // 列表按时间倒序：取本次修改开始后创建的最早一份快照（= 修改前自动快照），找不到则退化为最近一份
+            const pick = [...(snapshots || [])].reverse().find((s) => s.createdAt >= sinceIso) || (snapshots || [])[0];
+            if (!pick) { showToast(t('没有可回滚的快照')); btn.remove(); return; }
+            if (!(await showConfirmModal({ title: t('撤销 AI 修改'), message: t('将回滚到本次 AI 修改前的版本（恢复前会再建安全快照，可再次恢复）。确定吗？'), confirmText: t('撤销修改') }))) { btn.disabled = false; return; }
+            await api('POST', `/api/projects/${encodeURIComponent(projectName)}/snapshots/${encodeURIComponent(pick.id)}/restore`);
+            const cfg = await api('GET', `/api/projects/${encodeURIComponent(projectName)}/config`);
+            S.currentConfig = cfg;
+            renderConfig(cfg);
+            updatePreview();
+            loadSnapshots();
+            showToast(t('已撤销本次 AI 修改'));
+            btn.remove();
+        } catch (err) {
+            btn.disabled = false;
+            showToast(t('撤销失败：{msg}', { msg: err.message }));
+        }
+    });
+    msgDiv.appendChild(btn);
 }
 
 async function deleteSnapshotById(id) {
-    if (!(await showConfirmModal({ title: '删除快照', message: '确定删除此快照吗？此操作不可恢复。', confirmText: '删除', danger: true }))) return;
-    try { await api('DELETE', `/api/projects/${encodeURIComponent(S.currentProject)}/snapshots/${encodeURIComponent(id)}`); showToast('快照已删除'); loadSnapshots(); }
-    catch (err) { showToast('删除失败：' + err.message); }
+    if (!(await showConfirmModal({ title: t('删除快照'), message: t('确定删除此快照吗？此操作不可恢复。'), confirmText: t('删除'), danger: true }))) return;
+    try { await api('DELETE', `/api/projects/${encodeURIComponent(S.currentProject)}/snapshots/${encodeURIComponent(id)}`); showToast(t('快照已删除')); loadSnapshots(); }
+    catch (err) { showToast(t('删除失败：{msg}', { msg: err.message })); }
 }
 
 function renderPublishHistory(history) {
     const e = els();
     if (history?.length) {
-        e.publishStatusTitle.textContent = '已发布';
-        e.publishStatusDesc.textContent = `最新版本: ${history[0].version}`;
+        e.publishStatusTitle.textContent = t('已发布');
+        e.publishStatusDesc.textContent = t('最新版本: {version}', { version: history[0].version });
         e.publishLatest.textContent = `${window.location.origin}/published/${encodeURIComponent(S.currentProject)}/latest/index.html`;
-        e.publishList.innerHTML = history.map((item) => `<div class="publish-item"><div class="publish-version">${escapeHtml(item.version)}</div><div class="publish-info"><div class="publish-time">${new Date(item.publishedAt).toLocaleString()}</div><div class="publish-meta">主题: ${escapeHtml(item.theme || 'web-ui')} · 动画: ${escapeHtml(item.animation || 'slide')}</div></div><a href="/published/${encodeURIComponent(S.currentProject)}/${encodeURIComponent(item.version)}/index.html" target="_blank" class="publish-link">打开</a></div>`).join('');
+        e.publishList.innerHTML = history.map((item) => `<div class="publish-item"><div class="publish-version">${escapeHtml(item.version)}</div><div class="publish-info"><div class="publish-time">${new Date(item.publishedAt).toLocaleString()}</div><div class="publish-meta">${t('主题: {theme} · 动画: {anim}', { theme: escapeHtml(item.theme || 'web-ui'), anim: escapeHtml(item.animation || 'slide') })}</div></div><a href="/published/${encodeURIComponent(S.currentProject)}/${encodeURIComponent(item.version)}/index.html" target="_blank" class="publish-link">${t('打开')}</a></div>`).join('');
     } else {
-        e.publishStatusTitle.textContent = '草稿状态'; e.publishStatusDesc.textContent = '尚未发布过任何版本'; e.publishLatest.textContent = '暂未发布';
-        e.publishList.innerHTML = '<div style="padding:40px 20px;text-align:center;opacity:0.5;font-size:13px;">暂无发布历史</div>';
+        e.publishStatusTitle.textContent = t('草稿状态'); e.publishStatusDesc.textContent = t('尚未发布过任何版本'); e.publishLatest.textContent = t('暂未发布');
+        e.publishList.innerHTML = `<div style="padding:40px 20px;text-align:center;opacity:0.5;font-size:13px;">${t('暂无发布历史')}</div>`;
     }
 }
 
 export function updatePreview() {
     if (!S.currentProject) return;
     els().previewFrame.src = `/projects/${encodeURIComponent(S.currentProject)}/index.html?t=${Date.now()}`;
+}
+
+// === 设计检查 ===
+const LINT_SEVERITY_ICONS = { error: '✗', warning: '⚠', info: 'ℹ' };
+
+function formatLintIssues(issues, max = 15) {
+    const lines = issues.slice(0, max).map((it) => {
+        const page = it.page > 0 ? t('第{page}页', { page: it.page }) : t('全局');
+        return `${LINT_SEVERITY_ICONS[it.severity] || '•'} ${page} ${it.message}${it.autoFixed ? t('（已自动修复）') : ''}`;
+    });
+    if (issues.length > max) lines.push(t('… 其余 {count} 条', { count: issues.length - max }));
+    return lines.join('\n');
+}
+
+async function runDesignLint() {
+    const name = S.currentProject;
+    if (!name) return;
+    let data;
+    try { data = await api('GET', `/api/projects/${encodeURIComponent(name)}/design-lint`); }
+    catch (err) { showToast(t('设计检查失败：{msg}', { msg: err.message })); return; }
+    const issues = data.issues || [];
+    if (!issues.length) { showToast(t('设计检查通过，未发现问题')); return; }
+    const s = data.summary || {};
+    const fixable = issues.filter((it) => it.rule === 'gradient-text' && !it.autoFixed).length;
+    const confirmed = await showConfirmModal({
+        title: t('设计检查：{total} 个问题（error {error} / warning {warning} / info {info}）', { total: s.total ?? issues.length, error: s.error ?? 0, warning: s.warning ?? 0, info: s.info ?? 0 }),
+        message: formatLintIssues(issues),
+        confirmText: fixable > 0 ? t('一键修复（{count} 处）', { count: fixable }) : t('知道了'),
+    });
+    if (!confirmed || fixable === 0) return;
+    try {
+        const res = await api('POST', `/api/projects/${encodeURIComponent(name)}/design-lint/fix`);
+        showToast(t('已自动修复 {count} 处，预览已刷新', { count: res.fixedCount }));
+        updatePreview();
+        loadSnapshots();
+    } catch (err) { showToast(t('自动修复失败：{msg}', { msg: err.message })); }
 }
 
 // === Edit Mode ===
@@ -588,17 +662,17 @@ function updateEditModeUI() {
     const e = els();
     if (!e.btnEditMode) return;
     e.btnEditMode.classList.toggle('active', editModeActive);
-    e.btnEditMode.textContent = editModeActive ? '退出编辑' : '编辑模式';
-    if (e.editStatus) { e.editStatus.textContent = editModeActive ? '可直接点击文字编辑' : ''; e.editStatus.classList.toggle('visible', editModeActive); }
+    e.btnEditMode.textContent = editModeActive ? t('退出编辑') : t('编辑模式');
+    if (e.editStatus) { e.editStatus.textContent = editModeActive ? t('可直接点击文字编辑') : ''; e.editStatus.classList.toggle('visible', editModeActive); }
 }
 
 async function handleEditSaved(html) {
     if (!S.currentProject) return;
-    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/save-edits`, { html }); showToast('编辑已保存'); editModeActive = false; updateEditModeUI(); updatePreview(); loadSnapshots(); }
-    catch (err) { showToast('保存失败：' + err.message); }
+    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/save-edits`, { html }); showToast(t('编辑已保存')); editModeActive = false; updateEditModeUI(); updatePreview(); loadSnapshots(); }
+    catch (err) { showToast(t('保存失败：{msg}', { msg: err.message })); }
 }
 
-function handleEditCancelled() { editModeActive = false; updateEditModeUI(); showToast('已取消编辑'); updatePreview(); }
+function handleEditCancelled() { editModeActive = false; updateEditModeUI(); showToast(t('已取消编辑')); updatePreview(); }
 
 // === Generate / Export / Publish ===
 function getConfigPayload() {
@@ -620,7 +694,7 @@ export async function saveConfig() {
     if (!S.currentProject) return;
     await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/config`, getConfigPayload());
     await saveGlobalModelConfig();
-    showToast('配置已保存');
+    showToast(t('配置已保存'));
     S.currentConfig = await api('GET', `/api/projects/${encodeURIComponent(S.currentProject)}/config`);
     renderConfig(S.currentConfig); updatePreview();
 }
@@ -628,7 +702,7 @@ export async function saveConfig() {
 function initProgress() {
     const e = els();
     e.progressCard.classList.remove('hidden');
-    e.progressSteps.innerHTML = steps.map((s) => `<div class="step pending" data-step="${s.key}"><span>${escapeHtml(s.label)}</span></div>`).join('');
+    e.progressSteps.innerHTML = steps.map((s) => `<div class="step pending" data-step="${s.key}"><span>${escapeHtml(t(s.label))}</span></div>`).join('');
     e.progressLog.textContent = '';
 }
 
@@ -645,7 +719,7 @@ async function generate() {
     const sessionApiKey = e.inputModelApiKey.value.trim();
     await saveConfig(); initProgress();
     e.btnGenerate.disabled = true; if (e.btnGenerateContent) e.btnGenerateContent.disabled = true;
-    updateProgress('start', 'active', '开始生成');
+    updateProgress('start', 'active', t('开始生成'));
     try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/generate`, sessionApiKey ? { apiKey: sessionApiKey } : undefined); }
     catch (err) { updateProgress('start', 'error', withLlmSettingsHint(err.message)); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; return; }
     const es = new EventSource(`/api/projects/${encodeURIComponent(S.currentProject)}/generate/events`);
@@ -653,10 +727,10 @@ async function generate() {
         let event; try { event = JSON.parse(ev.data); } catch { event = { type: 'log', message: ev.data }; }
         if (event.type === 'progress') { updateProgress(event.step, 'done', event.message); const idx = steps.findIndex((s) => s.key === event.step); if (idx >= 0 && idx < steps.length - 1) updateProgress(steps[idx + 1].key, 'active'); }
         else if (event.type === 'log' || event.type === 'stderr') e.progressLog.textContent += event.message + '\n';
-        else if (event.type === 'error') { updateProgress(event.step || 'ready', 'error', withLlmSettingsHint(event.message)); es.close(); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; showToast('生成失败：' + withLlmSettingsHint(event.message)); }
-        else if (event.type === 'done') { updateProgress('ready', 'done', '生成完成'); es.close(); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; loadProjects(S.currentProject).then(() => updatePreview()); }
+        else if (event.type === 'error') { updateProgress(event.step || 'ready', 'error', withLlmSettingsHint(event.message)); es.close(); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; showToast(t('生成失败：{msg}', { msg: withLlmSettingsHint(event.message) })); }
+        else if (event.type === 'done') { updateProgress('ready', 'done', t('生成完成')); es.close(); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; loadProjects(S.currentProject).then(() => updatePreview()); }
     };
-    es.onerror = () => { es.close(); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; updateProgress('ready', 'error', '生成连接中断'); showToast('生成连接中断，请重试'); };
+    es.onerror = () => { es.close(); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; updateProgress('ready', 'error', t('生成连接中断')); showToast(t('生成连接中断，请重试')); };
 }
 
 function openPreview() { window.open(`/projects/${encodeURIComponent(S.currentProject)}/`, '_blank'); }
@@ -665,27 +739,29 @@ function openPreview() { window.open(`/projects/${encodeURIComponent(S.currentPr
 function exportAsync(type, label, downloadName) {
     if (!S.currentProject) return;
     const name = S.currentProject;
-    showToast(`${label}导出已启动...`);
+    showToast(t('{label}导出已启动...', { label }));
     api('POST', `/api/projects/${encodeURIComponent(name)}/export/${type}`)
         .then(() => {
             const es = new EventSource(`/api/projects/${encodeURIComponent(name)}/export/${type}/events`);
             es.onmessage = (ev) => {
                 let event; try { event = JSON.parse(ev.data); } catch { event = { type: 'log', message: ev.data }; }
                 if (event.type === 'progress') { if (event.message) showToast(event.message); }
-                else if (event.type === 'error') { es.close(); showToast(`${label}导出失败：` + event.message, 'error'); }
+                else if (event.type === 'error') { es.close(); showToast(t('{label}导出失败：{msg}', { label, msg: event.message }), 'error'); }
                 else if (event.type === 'done') {
                     es.close();
                     if (event.downloadUrl) {
                         const a = document.createElement('a'); a.href = event.downloadUrl; a.download = downloadName; document.body.appendChild(a); a.click(); a.remove();
-                        showToast(`${label}已下载`);
+                        showToast(t('{label}已下载', { label }));
+                    } else if (event.note) {
+                        showToast(event.note);
                     } else {
-                        showToast(`${label}导出完成但未返回下载地址`, 'error');
+                        showToast(t('{label}导出完成但未返回下载地址', { label }), 'error');
                     }
                 }
             };
-            es.onerror = () => { es.close(); showToast(`${label}导出连接中断，请重试`, 'error'); };
+            es.onerror = () => { es.close(); showToast(t('{label}导出连接中断，请重试', { label }), 'error'); };
         })
-        .catch((err) => { showToast(`${label}导出失败：` + err.message, 'error'); });
+        .catch((err) => { showToast(t('{label}导出失败：{msg}', { label, msg: err.message }), 'error'); });
 }
 
 async function exportPptx() {
@@ -693,21 +769,70 @@ async function exportPptx() {
 }
 
 async function exportPptxImage() {
-    exportAsync('pptx-image', '高清图片 PPTX', `${S.currentProject}-image.pptx`);
+    exportAsync('pptx-image', t('高清图片 PPTX'), `${S.currentProject}-image.pptx`);
 }
 
 async function exportHtml() {
     if (!S.currentProject) return;
-    showToast('正在生成单文件 HTML...');
-    try { const res = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/export/html`); if (res.downloadUrl) { const a = document.createElement('a'); a.href = res.downloadUrl; a.download = `${S.currentProject}.html`; document.body.appendChild(a); a.click(); a.remove(); showToast('单文件 HTML 已下载'); } }
-    catch (err) { showToast('单文件 HTML 导出失败：' + err.message); }
+    showToast(t('正在生成单文件 HTML...'));
+    try { const res = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/export/html`); if (res.downloadUrl) { const a = document.createElement('a'); a.href = res.downloadUrl; a.download = `${S.currentProject}.html`; document.body.appendChild(a); a.click(); a.remove(); showToast(t('单文件 HTML 已下载')); } }
+    catch (err) { showToast(t('单文件 HTML 导出失败：{msg}', { msg: err.message })); }
+}
+
+async function exportVideo() {
+    exportAsync('video', t('视频 MP4'), `${S.currentProject}.mp4`);
+}
+
+async function exportSite() {
+    if (!S.currentProject) return;
+    showToast(t('正在打包静态站点...'));
+    try { const res = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/export/site`); if (res.downloadUrl) { const a = document.createElement('a'); a.href = res.downloadUrl; a.download = `${S.currentProject}-site.zip`; document.body.appendChild(a); a.click(); a.remove(); showToast(t('静态站点包已下载')); } }
+    catch (err) { showToast(t('静态站点包导出失败：{msg}', { msg: err.message })); }
 }
 
 async function doPublish() {
     if (!S.currentProject) return;
-    showToast('正在发布...');
-    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/publish`); showToast('发布成功！'); loadPublishHistory(); }
-    catch (err) { showToast('发布失败：' + err.message); }
+    showToast(t('正在发布...'));
+    try {
+        const res = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/publish`);
+        showToast(t('发布成功！'));
+        loadPublishHistory();
+        showPublishModal(res);
+    }
+    catch (err) { showToast(t('发布失败：{msg}', { msg: err.message })); }
+}
+
+// 发布结果弹窗：完整链接（优先局域网 IP 形态）+ 复制 + 二维码
+function showPublishModal(res) {
+    const name = S.currentProject;
+    const modal = document.getElementById('publish-modal');
+    if (!modal || !name) return;
+    const localUrl = `${window.location.origin}/published/${encodeURIComponent(name)}/latest/index.html`;
+    const url = res?.lanUrl || localUrl;
+    document.getElementById('publish-modal-url').value = url;
+    document.getElementById('publish-modal-hint').textContent = res?.lanUrl
+        ? t('手机扫码访问：需与本机同一局域网，且服务以 AI_PPT_HOST=0.0.0.0 启动')
+        : t('未检测到局域网地址，二维码使用当前访问地址');
+    document.getElementById('publish-modal-qr-img').src =
+        `/api/projects/${encodeURIComponent(name)}/publish/qr?url=${encodeURIComponent(url)}`;
+    modal.classList.remove('hidden');
+}
+
+function closePublishModal() {
+    document.getElementById('publish-modal')?.classList.add('hidden');
+}
+
+async function copyPublishUrl() {
+    const input = document.getElementById('publish-modal-url');
+    if (!input?.value) return;
+    try {
+        await navigator.clipboard.writeText(input.value);
+        showToast(t('链接已复制'));
+    } catch {
+        input.select();
+        document.execCommand('copy');
+        showToast(t('链接已复制'));
+    }
 }
 
 // === CRUD helpers ===
@@ -715,7 +840,7 @@ function toggleSidebarCollapse() { els().projectSidebar.classList.toggle('collap
 function toggleExportDropdown() { els().exportDropdown.querySelector('.dropdown-menu').classList.toggle('hidden'); }
 function closeExportDropdown() { els().exportDropdown.querySelector('.dropdown-menu').classList.add('hidden'); }
 function openExportDropdown() {
-    if (!S.currentProject) { showToast('请先选择项目'); return; }
+    if (!S.currentProject) { showToast(t('请先选择项目')); return; }
     if (S.currentSidebarTab !== 'projects' && _cb.switchSidebarTab) _cb.switchSidebarTab('projects');
     els().exportDropdown.querySelector('.dropdown-menu').classList.remove('hidden');
 }
@@ -731,18 +856,38 @@ function handleEscapeKey() {
 async function createProject() {
     const e = els();
     const name = e.newProjectName.value.trim();
-    if (!name) { showToast('请输入项目标识'); return; }
-    try { await api('POST', '/api/projects', { name, title: e.newProjectTitle.value.trim() }); e.createModal.classList.add('hidden'); e.newProjectName.value = ''; e.newProjectTitle.value = ''; await loadProjects(name); showToast('项目已创建'); }
+    if (!name) { showToast(t('请输入项目标识')); return; }
+    const template = e.newProjectTemplate ? e.newProjectTemplate.value : '';
+    try { await api('POST', '/api/projects', { name, title: e.newProjectTitle.value.trim(), ...(template ? { template } : {}) }); e.createModal.classList.add('hidden'); e.newProjectName.value = ''; e.newProjectTitle.value = ''; if (e.newProjectTemplate) e.newProjectTemplate.value = ''; await loadProjects(name); showToast(t('项目已创建')); }
     catch (err) { showToast(err.message); }
 }
 
+// === 主题画廊（iframe 加载基座 theme-showcase，点选主题经 postMessage 回传） ===
+function openThemeGallery() {
+    const e = els();
+    const cur = S.currentConfig?.theme || 'web-ui';
+    e.themeGalleryFrame.src = `/base/theme-showcase.html?current=${encodeURIComponent(cur)}`;
+    e.themeGalleryModal.classList.remove('hidden');
+}
+
+function closeThemeGallery() {
+    els().themeGalleryModal.classList.add('hidden');
+}
+
+function handleGalleryThemeSelected(themeId) {
+    if (!S.currentProject) { showToast(t('请先选择项目')); return; }
+    if (!S.themes.some((t) => t.id === themeId)) return;
+    selectTheme(themeId); // 标记主题卡 active 并经配置 API 保存 + 刷新预览
+    showToast(t('主题已切换为「{name}」', { name: S.themes.find((t) => t.id === themeId).name }));
+}
+
 async function deleteProject(name) {
-    if (!(await showConfirmModal({ title: '删除项目', message: `确定删除项目 ${name} 吗？项目文件将被移除，此操作不可恢复。`, confirmText: '删除', danger: true }))) return;
+    if (!(await showConfirmModal({ title: t('删除项目'), message: t('确定删除项目 {name} 吗？项目文件将被移除，此操作不可恢复。', { name }), confirmText: t('删除'), danger: true }))) return;
     try {
         await api('DELETE', `/api/projects/${encodeURIComponent(name)}`);
         if (S.currentProject === name) { S.currentProject = null; els().projectPanel.classList.add('hidden'); els().emptyState.classList.remove('hidden'); }
-        await loadProjects(); showToast('项目已删除');
-    } catch (err) { showToast('删除项目失败：' + err.message); }
+        await loadProjects(); showToast(t('项目已删除'));
+    } catch (err) { showToast(t('删除项目失败：{msg}', { msg: err.message })); }
 }
 
 // === Tags ===
@@ -750,13 +895,13 @@ export function showTagsPanel() { _cb.hideAllMainPanels(); document.getElementBy
 
 async function loadTags() {
     try { const data = await api('GET', '/api/vault/tags'); S.vaultTags = data.tags || {}; renderTagCloud(); renderTagDetail(); }
-    catch (e) { console.error('Failed to load tags:', e); showToast('加载标签失败'); }
+    catch (e) { console.error('Failed to load tags:', e); showToast(t('加载标签失败')); }
 }
 
 function renderTagCloud() {
     const el = document.getElementById('tags-cloud');
     const entries = Object.entries(S.vaultTags || {}).map(([tag, info]) => ({ tag, count: (info.notes?.length || 0) + (info.cards?.length || 0) + (info.fragments?.length || 0) })).filter((e) => e.count > 0).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
-    if (!entries.length) { el.innerHTML = '<div style="opacity:0.5;font-size:13px;">暂无标签</div>'; return; }
+    if (!entries.length) { el.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('暂无标签')}</div>`; return; }
     const max = entries[0].count;
     el.innerHTML = entries.map((e) => { const r = e.count / max; const t = r > 0.66 ? 'tags-chip-lg' : r > 0.33 ? 'tags-chip-md' : ''; const a = e.tag === S.currentTag ? ' active' : ''; return `<button class="tags-chip ${t}${a}" data-tag="${escapeHtmlAttr(e.tag)}" style="opacity:${(0.55 + r * 0.45).toFixed(2)};">#${escapeHtml(e.tag)}<span class="tags-chip-count">${e.count}</span></button>`; }).join('');
 }
@@ -780,8 +925,8 @@ function tagItemInfo(item) {
 function renderTagColumn(elId, items, type) {
     const el = document.getElementById(elId);
     const list = Array.isArray(items) ? items : [];
-    if (!list.length) { el.innerHTML = '<div style="opacity:0.5;font-size:12px;">暂无</div>'; return; }
-    const badge = { note: '笔记', card: '卡片', fragment: '碎片' }[type];
+    if (!list.length) { el.innerHTML = `<div style="opacity:0.5;font-size:12px;">${t('暂无')}</div>`; return; }
+    const badge = { note: t('笔记'), card: t('卡片'), fragment: t('碎片') }[type];
     el.innerHTML = list.map((item) => { const { id, label } = tagItemInfo(item); return `<div class="tags-item" data-type="${type}" data-id="${escapeHtmlAttr(id)}"><span class="tags-item-name">${escapeHtml(label)}</span><span class="tags-item-badge">${badge}</span></div>`; }).join('');
 }
 
@@ -789,21 +934,21 @@ function openTagItem(type, id) {
     if (!id) return;
     if (type === 'note') { _cb.switchSidebarTab('vault'); _cb.selectNote(id); }
     else if (type === 'card') { _cb.switchSidebarTab('cards'); _cb.loadCards().then(() => _cb.selectCard(id)); }
-    else if (type === 'fragment') { _cb.switchSidebarTab('fragments'); showToast('已切换到速记'); }
+    else if (type === 'fragment') { _cb.switchSidebarTab('fragments'); showToast(t('已切换到速记')); }
 }
 
 // === Dashboard ===
 export async function loadDashboard() {
     try { renderDashboard(await api('GET', '/api/dashboard')); }
-    catch (e) { console.error('Failed to load dashboard:', e); showToast('加载工作台数据失败'); }
+    catch (e) { console.error('Failed to load dashboard:', e); showToast(t('加载工作台数据失败')); }
 }
 
 function relativeTime(iso) {
-    const t = new Date(iso).getTime(); if (!t) return '';
-    const m = Math.floor((Date.now() - t) / 60000);
-    if (m < 1) return '刚刚'; if (m < 60) return `${m} 分钟前`;
-    const h = Math.floor(m / 60); if (h < 24) return `${h} 小时前`;
-    const d = Math.floor(h / 24); if (d < 7) return `${d} 天前`;
+    const ts = new Date(iso).getTime(); if (!ts) return '';
+    const m = Math.floor((Date.now() - ts) / 60000);
+    if (m < 1) return t('刚刚'); if (m < 60) return t('{n} 分钟前', { n: m });
+    const h = Math.floor(m / 60); if (h < 24) return t('{n} 小时前', { n: h });
+    const d = Math.floor(h / 24); if (d < 7) return t('{n} 天前', { n: d });
     return new Date(iso).toLocaleDateString();
 }
 
@@ -814,10 +959,10 @@ function renderDashboard(data) {
     document.getElementById('dash-stat-mistakes').textContent = data.lowMasteryMistakes ?? 0;
     const listEl = document.getElementById('dashboard-recent-list');
     const recent = (data.recentFragments || []).slice(0, 10);
-    if (!recent.length) listEl.innerHTML = '<div class="dashboard-recent-empty">暂无碎片，点击「写速记」记录第一条吧</div>';
-    else listEl.innerHTML = recent.map((f) => `<div class="dashboard-recent-item"><div class="dashboard-recent-content">${escapeHtml(f.content)}</div><div class="dashboard-recent-meta">${escapeHtml(relativeTime(f.created))}${f.status === 'inbox' ? ' · 待整理' : ''}</div></div>`).join('');
+    if (!recent.length) listEl.innerHTML = `<div class="dashboard-recent-empty">${t('暂无碎片，点击「写速记」记录第一条吧')}</div>`;
+    else listEl.innerHTML = recent.map((f) => `<div class="dashboard-recent-item"><div class="dashboard-recent-content">${escapeHtml(f.content)}</div><div class="dashboard-recent-meta">${escapeHtml(relativeTime(f.created))}${f.status === 'inbox' ? ` · ${t('待整理')}` : ''}</div></div>`).join('');
     const counts = data.counts || {};
-    document.getElementById('dashboard-counts').innerHTML = [['笔记', counts.notes], ['知识卡片', counts.cards], ['测验', counts.exams], ['错题', counts.mistakes], ['项目', counts.projects]].map(([l, n]) => `<div class="dashboard-count-row"><span>${l}</span><strong>${Number(n) || 0}</strong></div>`).join('');
+    document.getElementById('dashboard-counts').innerHTML = [[t('笔记'), counts.notes], [t('知识卡片'), counts.cards], [t('测验'), counts.exams], [t('错题'), counts.mistakes], [t('项目'), counts.projects]].map(([l, n]) => `<div class="dashboard-count-row"><span>${l}</span><strong>${Number(n) || 0}</strong></div>`).join('');
 }
 
 export function bindDashboardEvents() {
@@ -835,7 +980,11 @@ export function bindEvents() {
         const data = ev.data || {};
         if (data.type === 'ai-ppt:edit-saved') handleEditSaved(data.html);
         else if (data.type === 'ai-ppt:edit-cancelled') handleEditCancelled();
+        else if (data.type === 'ai-ppt:select-theme') handleGalleryThemeSelected(data.theme);
     });
+    if (e.btnThemeGallery) e.btnThemeGallery.addEventListener('click', openThemeGallery);
+    if (e.btnCloseThemeGallery) e.btnCloseThemeGallery.addEventListener('click', closeThemeGallery);
+    document.querySelector('#theme-gallery-modal .modal-backdrop')?.addEventListener('click', closeThemeGallery);
     if (e.btnEditMode) e.btnEditMode.addEventListener('click', toggleEditMode);
     if (e.btnCollapseSidebar) e.btnCollapseSidebar.addEventListener('click', toggleSidebarCollapse);
     if (e.btnCreateProject) e.btnCreateProject.addEventListener('click', openCreateModal);
@@ -869,14 +1018,15 @@ export function bindEvents() {
     document.getElementById('btn-backup-now')?.addEventListener('click', backupNow);
     e.btnCreateSnapshot.addEventListener('click', createSnapshotNow);
     e.btnToggleChat.addEventListener('click', toggleChatDock);
+    e.btnDesignLint?.addEventListener('click', runDesignLint);
     e.btnChatSend.addEventListener('click', sendChatMessage);
     e.chatInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.isComposing) sendChatMessage(); });
     e.btnImportMd.addEventListener('click', () => e.inputMdFile.click());
     e.inputMdFile.addEventListener('change', () => {
         const file = e.inputMdFile.files?.[0]; if (!file) return;
         const reader = new FileReader();
-        reader.onload = () => { e.inputArticle.value = reader.result || ''; showToast(`已导入 ${file.name}`); e.inputMdFile.value = ''; };
-        reader.onerror = () => showToast('文件读取失败');
+        reader.onload = () => { e.inputArticle.value = reader.result || ''; showToast(t('已导入 {name}', { name: file.name })); e.inputMdFile.value = ''; };
+        reader.onerror = () => showToast(t('文件读取失败'));
         reader.readAsText(file);
     });
     e.inputGlobalSearch.addEventListener('input', (ev) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => performSearch(ev.target.value), 300); });
@@ -906,6 +1056,12 @@ export function bindEvents() {
     dd?.querySelector('#dropdown-export-pptx-image')?.addEventListener('click', exportPptxImage);
     dd?.querySelector('#dropdown-export-pdf')?.addEventListener('click', () => { if (S.currentProject) window.open(`/projects/${encodeURIComponent(S.currentProject)}/`, '_blank'); });
     dd?.querySelector('#dropdown-export-html')?.addEventListener('click', exportHtml);
+    dd?.querySelector('#dropdown-export-video')?.addEventListener('click', exportVideo);
+    dd?.querySelector('#dropdown-export-site')?.addEventListener('click', exportSite);
+    e.btnPublishQuick?.addEventListener('click', doPublish);
+    document.getElementById('btn-close-publish-modal')?.addEventListener('click', closePublishModal);
+    document.getElementById('btn-copy-publish-url')?.addEventListener('click', copyPublishUrl);
+    document.querySelector('#publish-modal .modal-backdrop')?.addEventListener('click', closePublishModal);
     e.btnHelp.addEventListener('click', openHelpPanel);
     e.btnCloseHelp.addEventListener('click', closeHelpPanel);
     e.helpOverlay.addEventListener('click', closeHelpPanel);

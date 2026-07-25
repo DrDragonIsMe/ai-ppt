@@ -44,14 +44,18 @@
     } catch { /* keep fallback */ }
   }
 
-  const stage = document.getElementById('stage');
-  const overviewEl = document.getElementById('overview');
-  const overviewGrid = overviewEl.querySelector('.overview-grid');
-  const progressEl = document.getElementById('progress');
-  const hudEl = document.getElementById('hud');
-  const toastEl = document.getElementById('toast');
-  const helpEl = document.getElementById('help');
-  const originalTitle = document.title || 'ai-ppt';
+  // hasDOM：浏览器运行时为 true。Node（单测 import 本文件取纯函数）下为 false，
+  // 顶层 DOM 查询与启动逻辑全部跳过，只做函数定义。
+  const hasDOM = typeof document !== 'undefined' && typeof window !== 'undefined';
+
+  const stage = hasDOM ? document.getElementById('stage') : null;
+  const overviewEl = hasDOM ? document.getElementById('overview') : null;
+  const overviewGrid = hasDOM ? overviewEl.querySelector('.overview-grid') : null;
+  const progressEl = hasDOM ? document.getElementById('progress') : null;
+  const hudEl = hasDOM ? document.getElementById('hud') : null;
+  const toastEl = hasDOM ? document.getElementById('toast') : null;
+  const helpEl = hasDOM ? document.getElementById('help') : null;
+  const originalTitle = hasDOM ? (document.title || 'ai-ppt') : 'ai-ppt';
 
   let sidebarEl = null;
   let sidebarContentEl = null;
@@ -71,12 +75,329 @@
   let markerToolbarEl = null;
   let markerCurrentPath = null;
 
+  // ===== SVG 数据图表渲染器（.chart-line / .chart-pie / .chart-bars）=====
+  // 以下为纯函数（不触碰 DOM）：输入 data-chart 配置对象，输出内联 SVG 字符串。
+  // 序列色用 CSS 变量 var(--chart-1..6)（ppt.css :root 定义，主题 css 可覆盖），
+  // 文字/网格/轴线用 var(--chart-text*) / var(--chart-grid) / var(--chart-axis)。
+  // 渲染结果是静态 SVG：打印、导出截图、overview/sidebar/presenter 缩略图
+  // （都是 DOM 克隆）天然正确，无需终态补偿。
+  // Node 单测经文件尾部 module.exports 引用这些函数（浏览器下 module 未定义，自动跳过）。
+
+  const CHART_W = 640;
+  const CHART_H = 360;
+
+  function chartNum(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function chartEsc(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function chartFmt(v) {
+    const n = chartNum(v);
+    if (Math.abs(n) >= 10000) {
+      const k = n / 1000;
+      return `${Math.round(k * 10) / 10}k`;
+    }
+    return String(Math.round(n * 100) / 100);
+  }
+
+  function chartColor(i) {
+    return `var(--chart-${(i % 6) + 1})`;
+  }
+
+  // 顶部居中水平图例（宽度按字符数估算，CJK 约 13px/字）
+  function chartLegend(names) {
+    const items = names.map((n, i) => {
+      const name = String(n ?? `系列${i + 1}`);
+      return { name, color: chartColor(i), w: name.length * 13 + 26 };
+    });
+    const total = items.reduce((s, it) => s + it.w, 0);
+    let x = Math.max(8, (CHART_W - total) / 2);
+    return items.map((it) => {
+      const out = `<rect x="${x}" y="8" width="12" height="12" rx="3" style="fill:${it.color}"/>`
+        + `<text x="${x + 18}" y="19" class="chart-legend-text">${chartEsc(it.name)}</text>`;
+      x += it.w;
+      return out;
+    }).join('');
+  }
+
+  // 归一化 labels / series；series 元素为 { name, data[] }
+  function chartSeries(cfg) {
+    const labels = Array.isArray(cfg && cfg.labels) ? cfg.labels.map(String) : [];
+    const series = (Array.isArray(cfg && cfg.series) ? cfg.series : [])
+      .filter((s) => s && Array.isArray(s.data) && s.data.length > 0)
+      .map((s) => ({ name: String(s.name ?? ''), data: s.data.map(chartNum) }));
+    return { labels, series };
+  }
+
+  // y 轴刻度：把 min..max 外扩到「好看」边界（1/2/2.5/5×10^n 步进），返回刻度数组
+  function chartTicks(min, max) {
+    const span = max - min || 1;
+    const rawStep = span / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    let step = mag * 10;
+    for (const m of [1, 2, 2.5, 5, 10]) {
+      if (rawStep <= m * mag) { step = m * mag; break; }
+    }
+    const niceMin = Math.floor(min / step) * step;
+    const niceMax = Math.ceil(max / step) * step;
+    const ticks = [];
+    for (let t = niceMin; t <= niceMax + step * 1e-6; t += step) {
+      ticks.push(Math.round(t * 1e6) / 1e6);
+    }
+    return ticks;
+  }
+
+  function chartSvgOpen(cls) {
+    return `<svg class="chart-svg ${cls}" viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="xMidYMid meet" role="img" xmlns="http://www.w3.org/2000/svg">`;
+  }
+
+  // 折线/面积图：cfg = { labels, series:[{name,data}], area?, points?, valueLabels? }
+  function renderLineChart(cfg) {
+    const { labels, series } = chartSeries(cfg);
+    if (!labels.length || !series.length) return '';
+    const area = !!cfg.area;
+    const showPoints = cfg.points !== false;
+    const showValues = !!cfg.valueLabels;
+    const withLegend = series.length > 1;
+
+    const pad = { l: 52, r: 20, t: withLegend ? 34 : 20, b: 34 };
+    const iw = CHART_W - pad.l - pad.r;
+    const ih = CHART_H - pad.t - pad.b;
+
+    const all = series.flatMap((s) => s.data);
+    let min = Math.min(0, ...all);
+    let max = Math.max(...all);
+    if (max <= min) max = min + 1;
+    const ticks = chartTicks(min, max);
+    min = ticks[0];
+    max = ticks[ticks.length - 1];
+
+    const x = (i) => pad.l + (labels.length === 1 ? iw / 2 : (i / (labels.length - 1)) * iw);
+    const y = (v) => pad.t + ih - ((v - min) / (max - min)) * ih;
+    const y0 = y(Math.max(0, min));
+
+    const parts = [];
+    for (const t of ticks) {
+      const ty = y(t);
+      parts.push(`<line x1="${pad.l}" y1="${ty.toFixed(1)}" x2="${CHART_W - pad.r}" y2="${ty.toFixed(1)}" class="chart-grid"/>`);
+      parts.push(`<text x="${pad.l - 8}" y="${ty.toFixed(1)}" dy="0.35em" text-anchor="end" class="chart-tick">${chartFmt(t)}</text>`);
+    }
+    parts.push(`<line x1="${pad.l}" y1="${y0.toFixed(1)}" x2="${CHART_W - pad.r}" y2="${y0.toFixed(1)}" class="chart-axis"/>`);
+    labels.forEach((label, i) => {
+      parts.push(`<text x="${x(i).toFixed(1)}" y="${CHART_H - 10}" text-anchor="middle" class="chart-tick">${chartEsc(label)}</text>`);
+    });
+
+    series.forEach((s, si) => {
+      const color = chartColor(si);
+      const pts = labels.map((_, i) => [x(i), y(s.data[i] ?? 0)]);
+      const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+      if (area) {
+        parts.push(`<path d="${line} L ${pts[pts.length - 1][0].toFixed(1)} ${y0.toFixed(1)} L ${pts[0][0].toFixed(1)} ${y0.toFixed(1)} Z" style="fill:${color};fill-opacity:0.12;stroke:none"/>`);
+      }
+      parts.push(`<path d="${line}" style="fill:none;stroke:${color};stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round"/>`);
+      if (showPoints) {
+        pts.forEach((p) => {
+          parts.push(`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" style="fill:${color};stroke:var(--surface);stroke-width:1.5"/>`);
+        });
+      }
+      if (showValues) {
+        pts.forEach((p, i) => {
+          parts.push(`<text x="${p[0].toFixed(1)}" y="${(p[1] - 10).toFixed(1)}" text-anchor="middle" class="chart-value">${chartFmt(s.data[i] ?? 0)}</text>`);
+        });
+      }
+    });
+
+    if (withLegend) parts.push(chartLegend(series.map((s) => s.name)));
+    return chartSvgOpen('chart-svg-line') + parts.join('') + '</svg>';
+  }
+
+  // 饼/环图：cfg = { labels, data }（或 series[0].data）；donut?、centerLabel?
+  function renderPieChart(cfg) {
+    const labels = Array.isArray(cfg && cfg.labels) ? cfg.labels.map(String) : [];
+    const raw = Array.isArray(cfg && cfg.data)
+      ? cfg.data
+      : (cfg && Array.isArray(cfg.series) && cfg.series[0] && Array.isArray(cfg.series[0].data) ? cfg.series[0].data : []);
+    const items = labels
+      .map((label, i) => ({ label, value: chartNum(raw[i]) }))
+      .filter((it) => it.value > 0);
+    if (!items.length) return '';
+    const total = items.reduce((s, it) => s + it.value, 0);
+    if (total <= 0) return '';
+
+    const donut = !!cfg.donut;
+    const cx = 175;
+    const cy = CHART_H / 2;
+    const r = 128;
+    const innerR = donut ? 66 : 0;
+
+    const pt = (radius, a) => `${(cx + radius * Math.cos(a)).toFixed(1)} ${(cy + radius * Math.sin(a)).toFixed(1)}`;
+    const parts = [];
+    let angle = -Math.PI / 2;
+    items.forEach((it, i) => {
+      const pct = it.value / total;
+      const a1 = angle + pct * Math.PI * 2;
+      const large = pct > 0.5 ? 1 : 0;
+      let d;
+      if (innerR) {
+        d = `M ${pt(r, angle)} A ${r} ${r} 0 ${large} 1 ${pt(r, a1)} L ${pt(innerR, a1)} A ${innerR} ${innerR} 0 ${large} 0 ${pt(innerR, angle)} Z`;
+      } else {
+        d = `M ${cx} ${cy} L ${pt(r, angle)} A ${r} ${r} 0 ${large} 1 ${pt(r, a1)} Z`;
+      }
+      parts.push(`<path d="${d}" style="fill:${chartColor(i)};stroke:var(--surface);stroke-width:2"/>`);
+      if (pct >= 0.06) {
+        const mid = (angle + a1) / 2;
+        const lr = innerR ? (r + innerR) / 2 : r * 0.62;
+        parts.push(`<text x="${(cx + lr * Math.cos(mid)).toFixed(1)}" y="${(cy + lr * Math.sin(mid)).toFixed(1)}" dy="0.35em" text-anchor="middle" class="chart-pct">${Math.round(pct * 100)}%</text>`);
+      }
+      angle = a1;
+    });
+
+    if (donut && cfg.centerLabel) {
+      parts.push(`<text x="${cx}" y="${cy}" dy="0.35em" text-anchor="middle" class="chart-center">${chartEsc(cfg.centerLabel)}</text>`);
+    }
+
+    // 右侧纵向图例：色块 + 名称 + 占比
+    const lx = 370;
+    const rowH = 26;
+    const ly0 = cy - ((items.length - 1) * rowH) / 2;
+    items.forEach((it, i) => {
+      const yRow = ly0 + i * rowH;
+      const pctText = `${Math.round((it.value / total) * 100)}%`;
+      parts.push(`<rect x="${lx}" y="${(yRow - 6).toFixed(1)}" width="12" height="12" rx="3" style="fill:${chartColor(i)}"/>`);
+      parts.push(`<text x="${lx + 18}" y="${yRow.toFixed(1)}" dy="0.35em" class="chart-legend-text">${chartEsc(it.label)}</text>`);
+      parts.push(`<text x="${CHART_W - 16}" y="${yRow.toFixed(1)}" dy="0.35em" text-anchor="end" class="chart-value">${pctText}</text>`);
+    });
+
+    return chartSvgOpen('chart-svg-pie') + parts.join('') + '</svg>';
+  }
+
+  // 柱状图（分组/堆叠）：cfg = { labels, series:[{name,data}], stacked?, valueLabels? }
+  function renderBarsChart(cfg) {
+    const { labels, series } = chartSeries(cfg);
+    if (!labels.length || !series.length) return '';
+    const stacked = !!cfg.stacked;
+    const showValues = cfg.valueLabels !== false;
+    const withLegend = series.length > 1;
+
+    const pad = { l: 52, r: 20, t: withLegend ? 34 : 20, b: 34 };
+    const iw = CHART_W - pad.l - pad.r;
+    const ih = CHART_H - pad.t - pad.b;
+
+    let min = 0;
+    let max = 0;
+    if (stacked) {
+      labels.forEach((_, i) => {
+        max = Math.max(max, series.reduce((s, sr) => s + Math.max(0, sr.data[i] ?? 0), 0));
+      });
+    } else {
+      const all = series.flatMap((s) => s.data);
+      min = Math.min(0, ...all);
+      max = Math.max(0, ...all);
+    }
+    if (max <= min) max = min + 1;
+    const ticks = chartTicks(min, max);
+    min = ticks[0];
+    max = ticks[ticks.length - 1];
+
+    const y = (v) => pad.t + ih - ((v - min) / (max - min)) * ih;
+    const y0 = y(Math.max(0, min));
+    const slot = iw / labels.length;
+
+    const parts = [];
+    for (const t of ticks) {
+      const ty = y(t);
+      parts.push(`<line x1="${pad.l}" y1="${ty.toFixed(1)}" x2="${CHART_W - pad.r}" y2="${ty.toFixed(1)}" class="chart-grid"/>`);
+      parts.push(`<text x="${pad.l - 8}" y="${ty.toFixed(1)}" dy="0.35em" text-anchor="end" class="chart-tick">${chartFmt(t)}</text>`);
+    }
+    parts.push(`<line x1="${pad.l}" y1="${y0.toFixed(1)}" x2="${CHART_W - pad.r}" y2="${y0.toFixed(1)}" class="chart-axis"/>`);
+
+    labels.forEach((label, i) => {
+      const cx = pad.l + slot * (i + 0.5);
+      parts.push(`<text x="${cx.toFixed(1)}" y="${CHART_H - 10}" text-anchor="middle" class="chart-tick">${chartEsc(label)}</text>`);
+
+      if (stacked) {
+        const bw = Math.min(56, slot * 0.5);
+        let acc = 0;
+        series.forEach((s, si) => {
+          const v = Math.max(0, s.data[i] ?? 0);
+          if (v <= 0) return;
+          const top = y(acc + v);
+          const bottom = y(acc);
+          parts.push(`<rect x="${(cx - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${(bottom - top).toFixed(1)}" style="fill:${chartColor(si)}"/>`);
+          if (cfg.segmentLabels && bottom - top >= 16) {
+            parts.push(`<text x="${cx.toFixed(1)}" y="${((top + bottom) / 2).toFixed(1)}" dy="0.35em" text-anchor="middle" class="chart-pct">${chartFmt(v)}</text>`);
+          }
+          acc += v;
+        });
+        if (showValues && acc > 0) {
+          parts.push(`<text x="${cx.toFixed(1)}" y="${(y(acc) - 8).toFixed(1)}" text-anchor="middle" class="chart-value">${chartFmt(acc)}</text>`);
+        }
+      } else {
+        const bw = Math.min(48, (slot * 0.62) / series.length);
+        const gx = cx - (bw * series.length) / 2;
+        series.forEach((s, si) => {
+          const v = s.data[i] ?? 0;
+          const vy = y(v);
+          const top = Math.min(vy, y0);
+          const h = Math.abs(y0 - vy);
+          const bx = gx + si * bw;
+          parts.push(`<rect x="${bx.toFixed(1)}" y="${top.toFixed(1)}" width="${Math.max(1, bw - 3).toFixed(1)}" height="${h.toFixed(1)}" rx="2" style="fill:${chartColor(si)}"/>`);
+          if (showValues) {
+            const ly = v >= 0 ? top - 6 : top + h + 12;
+            parts.push(`<text x="${(bx + bw / 2).toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" class="chart-value">${chartFmt(v)}</text>`);
+          }
+        });
+      }
+    });
+
+    if (withLegend) parts.push(chartLegend(series.map((s) => s.name)));
+    return chartSvgOpen('chart-svg-bars') + parts.join('') + '</svg>';
+  }
+
+  function renderChart(type, cfg) {
+    if (type === 'line') return renderLineChart(cfg);
+    if (type === 'pie') return renderPieChart(cfg);
+    if (type === 'bars') return renderBarsChart(cfg);
+    return '';
+  }
+
+  // DOM 包装：扫描声明式 data-chart 容器并注入 SVG（init 时调用一次，
+  // 必须在 buildSidebar/buildOverview 之前，保证缩略图克隆到已渲染的 SVG）。
+  function initCharts() {
+    if (!hasDOM) return;
+    document.querySelectorAll('.chart-line[data-chart], .chart-pie[data-chart], .chart-bars[data-chart]').forEach((el) => {
+      const type = el.classList.contains('chart-line') ? 'line' : el.classList.contains('chart-pie') ? 'pie' : 'bars';
+      let cfg = null;
+      try {
+        cfg = JSON.parse(el.getAttribute('data-chart'));
+      } catch {
+        cfg = null;
+      }
+      const svg = cfg && renderChart(type, cfg);
+      if (svg) {
+        el.innerHTML = svg;
+      } else {
+        el.classList.add('chart-error');
+        if (!el.textContent.trim()) el.textContent = '图表数据无效';
+      }
+    });
+  }
+
   async function init() {
     await loadThemes();
     state.slides = Array.from(document.querySelectorAll('.slide'));
     if (state.slides.length === 0) return;
 
     initThemes();
+    initCharts();
     buildSidebar();
     buildOverview();
     buildFullscreenBtn();
@@ -867,7 +1188,7 @@
     updateSlide();
   }
 
-  window.goTo = goTo;
+  if (hasDOM) window.goTo = goTo;
 
   function updateSlide() {
     state.slides.forEach((slide, i) => {
@@ -1348,9 +1669,21 @@ ${links}
     document.documentElement.style.fontSize = `${16 * Math.max(base, 0.5)}px`;
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+  if (hasDOM) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  }
+
+  // Node 单测入口：仅导出图表渲染纯函数（浏览器下 module 未定义，跳过）。
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      renderChart,
+      renderLineChart,
+      renderPieChart,
+      renderBarsChart,
+    };
   }
 })();

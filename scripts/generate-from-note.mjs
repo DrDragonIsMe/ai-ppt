@@ -26,6 +26,8 @@ import {
   buildFallbackSlides,
   generateSlidesHtml,
 } from './generation-common.mjs';
+import { lintAfterGenerate } from './design-lint.mjs';
+import { captureCover } from './deck-capture.mjs';
 
 // 从笔记提取内容，包括关联笔记（可选）
 function extractContentFromNote(noteName, includeLinked = false, depth = 1) {
@@ -165,6 +167,8 @@ async function generateFromNote(noteName, projectName, options = {}) {
   };
   writeConfig(projectName, cfg);
 
+  lintAfterGenerate(projectName, emit);
+  await captureCover(projectName); // 顺手更新封面（静默失败，不阻断生成）
   emit('done', `生成完成！项目：${projectName}`);
   emitDone();
 

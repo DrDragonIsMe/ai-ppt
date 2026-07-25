@@ -76,7 +76,8 @@
 - `.timeline` / `.timeline-item` — 纵向时间轴
 - `.timeline-horizontal` — 横向时间轴（里程碑）
 - `.chart-steps` / `.chart-step` — 步骤条（流程、路径、框架）
-- `.chart-bar` — 柱状图
+- `.chart-bar` — 柱状图（纯 CSS 静件，手写高度）
+- `.chart-line` / `.chart-pie` / `.chart-bars` — SVG 数据图表（折线/面积、饼/环、分组/堆叠柱），用 `data-chart` JSON 声明数据，ppt.js 初始化时渲染为内联静态 SVG，见下文「数据图表组件」
 - `.progress-ring` — 进度环（数值用 `--progress-pct: 84`，旧 `--progress` dashoffset 写法兼容）
 - `.waterfall` — 瀑布图
 - `.data-matrix` — 2×2 数据象限
@@ -88,6 +89,42 @@
 - `.code-block` — 代码块
 - `.btn-primary` / `.btn-secondary` — 按钮
 - ~~`.gradient-text`~~ — **已弃用**（仅保留兼容，新内容禁用，见 `/ppt-design` 规则）
+
+## 数据图表组件（SVG）
+
+三类图表在 slide HTML 里用 `data-chart` JSON 声明数据，ppt.js 初始化时渲染为内联静态 SVG——零依赖、打印/导出截图/缩略图天然正确。序列色取 `var(--chart-1..6)`（`ppt.css` `:root` 定义，`--chart-1` 跟随主题品牌色，主题 css 可覆盖整个调色板）；文字/网格/轴线取 `var(--chart-text*)` / `var(--chart-grid)` / `var(--chart-axis)`。
+
+注意：`data-chart` 属性用单引号包外层、JSON 内部用双引号。
+
+### 折线/面积图 `.chart-line`
+
+```html
+<div class="chart-line" data-chart='{"labels":["Q1","Q2","Q3","Q4"],"series":[{"name":"客户数","data":[120,180,260,320]},{"name":"活跃数","data":[80,110,150,200]}],"area":true}'></div>
+```
+
+- `labels`：x 轴刻度；`series`：多序列 `{name, data}`。
+- `area: true` 填充面积；`points: false` 隐藏数据点；`valueLabels: true` 显示每点数值。
+- 多序列自动出图例。
+
+### 饼图/环图 `.chart-pie`
+
+```html
+<div class="chart-pie" data-chart='{"labels":["薪酬","考勤","招聘","其他"],"data":[45,25,20,10],"donut":true,"centerLabel":"构成"}'></div>
+```
+
+- `data` 与 `labels` 一一对应（也接受 `series[0].data`）。
+- `donut: true` 渲染为环图，`centerLabel` 为环心文字；占比标签与右侧图例自动生成。
+
+### 柱状图 `.chart-bars`（分组/堆叠）
+
+```html
+<div class="chart-bars" data-chart='{"labels":["Q1","Q2","Q3","Q4"],"series":[{"name":"2024","data":[45,58,72,85]},{"name":"2025","data":[52,66,81,97]}]}'></div>
+```
+
+- 默认分组柱；`stacked: true` 切换为堆叠柱（显示合计值，`segmentLabels: true` 额外显示分段值）。
+- `valueLabels: false` 关闭柱顶数值。
+
+与既有 `.chart-bar`（纯 CSS 静件）共存不冲突；数据无效时容器显示 `.chart-error` 占位提示。
 
 ## 导出 PDF / PPTX
 
