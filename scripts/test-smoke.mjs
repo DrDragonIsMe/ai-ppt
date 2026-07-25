@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(__filename), '..');
-const BASE = 'http://localhost:3456';
+const BASE = process.env.AI_PPT_SMOKE_BASE || 'http://localhost:3456';
 
 function request(method, path, body) {
   return new Promise((resolve, reject) => {
@@ -31,12 +31,15 @@ function request(method, path, body) {
   });
 }
 
+let failed = 0;
+
 async function run(name, fn) {
   try {
     await fn();
     console.log(`✅ ${name}`);
   } catch (err) {
     console.error(`❌ ${name}: ${err.message}`);
+    failed++;
   }
 }
 
@@ -431,4 +434,6 @@ async function run(name, fn) {
     await request('DELETE', `/api/projects/${testProject}`);
     console.log('🧹 cleaned up');
   } catch {}
+
+  process.exit(failed);
 })();

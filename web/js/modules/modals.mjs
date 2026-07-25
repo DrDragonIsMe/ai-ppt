@@ -68,7 +68,7 @@ export function showConfirmModal(opts = {}) {
     return new Promise((resolve) => {
         confirmModalResolve = resolve;
         e.modal.classList.remove('hidden');
-        e.btnConfirm.focus();
+        (opts.danger ? e.btnCancel : e.btnConfirm).focus();
     });
 }
 

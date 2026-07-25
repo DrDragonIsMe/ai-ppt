@@ -669,7 +669,7 @@ export async function exportPptx(name, onProgress) {
 }
 
 export async function findChrome() {
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) return process.env.PUPPETEER_EXECUTABLE_PATH;
   const candidates = [
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
@@ -685,6 +685,11 @@ export async function findChrome() {
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
+  try {
+    const { spawnSync } = await import('node:child_process');
+    const r = spawnSync('which', ['google-chrome'], { encoding: 'utf8' });
+    if (r.status === 0 && r.stdout.trim()) return r.stdout.trim();
+  } catch { /* PATH 查找失败 */ }
   throw new Error('未找到 Chrome，请安装 Google Chrome 或设置 PUPPETEER_EXECUTABLE_PATH');
 }
 

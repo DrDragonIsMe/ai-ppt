@@ -11,9 +11,9 @@ export const PAGE_HEIGHT = 800;
 export const COVER_WIDTH = 480;
 export const COVER_HEIGHT = 300;
 
-// 逐页截取 index.html 的幻灯片，返回 PNG Buffer 数组（每页一张 1280×800）。
-// indexHtml 为绝对路径；onProgress(step, message) 与各导出脚本一致。
-export async function captureSlideFrames(indexHtml, onProgress) {
+// 逐页截取 index.html 的幻灯片，返回 PNG Buffer 数组（每页一张 1280×800 × scale）。
+// indexHtml 为绝对路径；onProgress(step, message) 与各导出脚本一致；scale 默认为 1。
+export async function captureSlideFrames(indexHtml, onProgress, scale = 1) {
   let puppeteer;
   try {
     puppeteer = await import('puppeteer-core');
@@ -30,7 +30,7 @@ export async function captureSlideFrames(indexHtml, onProgress) {
   });
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: PAGE_WIDTH, height: PAGE_HEIGHT });
+    await page.setViewport({ width: PAGE_WIDTH, height: PAGE_HEIGHT, deviceScaleFactor: scale });
     await page.goto('file://' + indexHtml, { waitUntil: 'networkidle0' });
     await page.evaluate(() => document.fonts.ready);
 

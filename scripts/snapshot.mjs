@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// scripts/snapshot.mjs — 项目快照管理（创建/列表/恢复/删除/清理）
+// 每个项目快照保存在 .snapshots/<项目名>/<快照ID>/，快照 ID 为时间戳格式
+// 默认保留策略：每个项目最近 20 个快照；快照时默认排除 export/ 目录以节省空间
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +20,8 @@ function ensureDir(dir) {
 function copyDirSync(src, dst) {
   ensureDir(dst);
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    // 快照时默认排除 export/ 目录（导出产物可重新生成，节省快照空间）
+    if (entry.isDirectory() && entry.name === 'export') continue;
     const srcPath = path.join(src, entry.name);
     const dstPath = path.join(dst, entry.name);
     if (entry.isDirectory()) {

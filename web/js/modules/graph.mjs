@@ -182,8 +182,12 @@ function renderGraph() {
     const container = document.getElementById('graph-container');
     const rect = container.getBoundingClientRect();
 
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+    ctx.scale(dpr, dpr);
 
     ctx.fillStyle = GRAPH_CREAM;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -466,11 +470,16 @@ export function bindGraphEvents() {
     const canvas = document.getElementById('graph-canvas');
     const btnGraphRefresh = document.getElementById('btn-graph-refresh');
     const btnGraphFit = document.getElementById('btn-graph-fit');
+    const btnGraphClose = document.getElementById('btn-graph-close');
     const btnOpenNote = document.getElementById('btn-open-note');
     const btnGeneratePpt = document.getElementById('btn-generate-ppt');
 
     btnGraphRefresh.addEventListener('click', refreshGraph);
     btnGraphFit.addEventListener('click', fitGraph);
+    btnGraphClose?.addEventListener('click', () => {
+        document.getElementById('graph-panel').classList.add('hidden');
+        if (_switchSidebarTab) _switchSidebarTab('vault');
+    });
 
     document.getElementById('graph-highfreq-toggle')?.addEventListener('change', (e) => {
         S.graphHighFreqOnly = e.target.checked;

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { copyBaseEngine, getThemeFiles } from './config.mjs';
 import { syncThemeLinksBlock } from './generation-common.mjs';
 import { writeFileAtomic } from './fs-utils.mjs';
+import { createSnapshot, pruneSnapshots } from './snapshot.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,16 +22,19 @@ function usage() {
 Options:
   --dry-run          Print what would be copied, but do not copy.
   --project <name>   Upgrade only the specified project.
+  --no-snapshot      Do not create snapshot before upgrading.
   --help             Show this help.
 `);
 }
 
 function parseArgs(argv) {
-  const options = { dryRun: false, project: null, help: false };
+  const options = { dryRun: false, project: null, help: false, noSnapshot: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--dry-run') {
       options.dryRun = true;
+    } else if (arg === '--no-snapshot') {
+      options.noSnapshot = true;
     } else if (arg === '--project') {
       const next = argv[++i];
       if (!next) {
@@ -79,8 +83,13 @@ function listProjects(filterName = null) {
   return projects;
 }
 
-function upgradeProject(name, dryRun) {
+function upgradeProject(name, dryRun, noSnapshot) {
   const projectDir = path.join(PROJECTS_DIR, name);
+  if (!dryRun && !noSnapshot) {
+    createSnapshot(name, 'auto before engine upgrade');
+    pruneSnapshots(name);
+  }
+
   const cssDir = path.join(projectDir, 'css');
   const jsDir = path.join(projectDir, 'js');
   const themesDir = path.join(cssDir, 'themes');
@@ -147,7 +156,7 @@ function main() {
 
   console.log(`${options.dryRun ? '[DRY RUN] ' : ''}Upgrading ${projects.length} project(s) from ai-ppt-base...\n`);
   for (const name of projects) {
-    upgradeProject(name, options.dryRun);
+    upgradeProject(name, options.dryRun, options.noSnapshot);
   }
   syncBaseIndexThemeLinks(options.dryRun);
   console.log('\nDone.');

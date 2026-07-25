@@ -31,7 +31,7 @@ export async function exportPdf(name, onProgress) {
     return { fallback: true, message: '未安装 puppeteer-core，请在浏览器预览页使用 Ctrl+P 导出 PDF。' };
   }
 
-  const images = await captureSlideFrames(indexHtml, onProgress);
+  const images = await captureSlideFrames(indexHtml, onProgress, 2);
 
   onProgress?.('build', '正在合并 PDF');
   const exportDir = path.join(projectDir, 'export');

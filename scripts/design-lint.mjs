@@ -276,12 +276,13 @@ export function summarizeIssues(issues) {
 export function lintAfterGenerate(name, emitFn) {
   try {
     const { issues, fixedCount } = lintProject(name, { fix: true, snapshot: false });
-    if (issues.length && typeof emitFn === 'function') {
+    if (typeof emitFn === 'function') {
       const s = summarizeIssues(issues);
-      emitFn('lint',
-        `设计检查：${s.total} 个问题（error ${s.error} / warning ${s.warning} / info ${s.info}）`
-        + (s.autoFixed ? `，已自动修复 ${s.autoFixed} 处` : ''),
-        { issues, fixedCount });
+      const msg = s.total > 0
+        ? `设计检查：${s.total} 个问题（error ${s.error} / warning ${s.warning} / info ${s.info}）`
+          + (s.autoFixed ? `，已自动修复 ${s.autoFixed} 处` : '')
+        : `设计检查：未发现问题`;
+      emitFn('lint', msg, { issues, fixedCount });
     }
     return issues;
   } catch (err) {

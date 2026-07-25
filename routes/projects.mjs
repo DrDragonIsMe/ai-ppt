@@ -214,7 +214,8 @@ export default function projectRoutes(ctx) {
                 const name = matches[1];
                 if (!validName(name, res, '非法项目名称')) return;
                 if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
-                const result = { config: readConfig(name) };
+                const result = {};
+                try { result.config = readConfig(name); } catch { result.config = {}; }
                 try { result.snapshots = listSnapshots(name); } catch { result.snapshots = []; }
                 try { result.publishHistory = getPublishHistory(name); } catch { result.publishHistory = []; }
                 try { result.chatHistory = readChatHistory(name); } catch { result.chatHistory = []; }

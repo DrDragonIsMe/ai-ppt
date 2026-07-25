@@ -45,9 +45,13 @@ export async function loadGlobalConfig() {
 
 // === 项目列表 ===
 export async function loadProjects(selectName = null) {
-    S.projects = await api('GET', '/api/projects');
-    renderProjects();
-    if (selectName) selectProject(selectName);
+    try {
+        S.projects = await api('GET', '/api/projects');
+        renderProjects();
+        if (selectName) selectProject(selectName);
+    } catch (e) {
+        showToast('加载项目列表失败', 'error');
+    }
 }
 
 function sourceBadgeLabel(p) {
@@ -1020,7 +1024,7 @@ export function bindEvents() {
     e.btnToggleChat.addEventListener('click', toggleChatDock);
     e.btnDesignLint?.addEventListener('click', runDesignLint);
     e.btnChatSend.addEventListener('click', sendChatMessage);
-    e.chatInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.isComposing) sendChatMessage(); });
+    e.chatInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); sendChatMessage(); } });
     e.btnImportMd.addEventListener('click', () => e.inputMdFile.click());
     e.inputMdFile.addEventListener('change', () => {
         const file = e.inputMdFile.files?.[0]; if (!file) return;
@@ -1047,6 +1051,12 @@ export function bindEvents() {
     e.btnOpenPreview.addEventListener('click', openPreview);
     e.btnPublish.addEventListener('click', doPublish);
     if (e.btnCreate) e.btnCreate.addEventListener('click', openCreateModal);
+    e.newProjectName?.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); createProject(); }
+    });
+    e.newProjectTitle?.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); createProject(); }
+    });
     e.btnCancelCreate.addEventListener('click', () => e.createModal.classList.add('hidden'));
     e.btnConfirmCreate.addEventListener('click', createProject);
     if (e.btnGenerateContent) e.btnGenerateContent.addEventListener('click', generate);

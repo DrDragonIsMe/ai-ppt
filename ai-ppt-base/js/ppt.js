@@ -983,17 +983,52 @@
   }
 
   function onKeyDown(e) {
-    if (state.overview || state.transitioning) return;
+    if (state.transitioning) return;
     if (state.editMode) return;
     if (e.target && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName))) return;
 
-    // Marker mode shortcuts take priority over navigation.
-    if (state.markerMode) {
-      if (e.key === 'Escape') {
-        e.preventDefault();
+    // Escape: overview first, then fullscreen, then theme panel
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (state.overview) {
+        toggleOverview(false);
+      } else if (document.fullscreenElement) {
+        exitFullscreen();
+      } else if (themePanelEl && themePanelEl.classList.contains('open')) {
+        closeThemePanel();
+      } else if (state.markerMode) {
         toggleMarkerMode();
+      }
+      return;
+    }
+
+    if (state.overview) {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const idx = state.currentIndex + 1;
+        if (idx < state.slides.length) {
+          selectOverviewItem(idx);
+        }
         return;
       }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const idx = state.currentIndex - 1;
+        if (idx >= 0) {
+          selectOverviewItem(idx);
+        }
+        return;
+      }
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleOverview(false);
+        return;
+      }
+      return;
+    }
+
+    // Marker mode shortcuts take priority over navigation (except Escape above).
+    if (state.markerMode) {
       if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         toggleMarkerMode();
@@ -1029,10 +1064,10 @@
         clearCurrentSlideMarkers();
         return;
       }
-      // In marker mode, still allow slide navigation with arrows.
     }
 
-    if (e.key === 'ArrowRight') {
+    // Navigation keys
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
       e.preventDefault();
       if (e.metaKey || e.ctrlKey) {
         goTo(state.slides.length - 1);
@@ -1042,7 +1077,7 @@
       return;
     }
 
-    if (e.key === 'ArrowLeft') {
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
       e.preventDefault();
       if (e.metaKey || e.ctrlKey) {
         goTo(0);
@@ -1064,15 +1099,15 @@
       return;
     }
 
-    if (e.key === 'Escape') {
+    if (e.key === 'Home') {
       e.preventDefault();
-      if (state.overview) {
-        toggleOverview(false);
-      } else if (document.fullscreenElement) {
-        exitFullscreen();
-      } else if (themePanelEl && themePanelEl.classList.contains('open')) {
-        closeThemePanel();
-      }
+      goTo(0);
+      return;
+    }
+
+    if (e.key === 'End') {
+      e.preventDefault();
+      goTo(state.slides.length - 1);
       return;
     }
 

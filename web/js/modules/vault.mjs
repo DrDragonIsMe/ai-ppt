@@ -266,6 +266,8 @@ export async function selectNote(name) {
     if (S.currentNote !== name) {
         const noteChatMessages = document.getElementById('note-chat-messages');
         if (noteChatMessages) noteChatMessages.innerHTML = '';
+        // 切换笔记前自动保存当前笔记
+        await saveNote({ auto: true });
     }
     S.currentNote = name;
     const els = getVaultEls();
@@ -1879,6 +1881,30 @@ export function bindVaultEvents() {
     els.vaultNoteContent.addEventListener('keydown', (e) => {
         // 自定义撤销/重做（阻止浏览器原生 undo，避免与自定义栈双重生效）
         const key = e.key.toLowerCase();
+        if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            const el = e.target;
+            const start = el.selectionStart;
+            const end = el.selectionEnd;
+            if (e.shiftKey) {
+                // Shift+Tab 去缩进：移除开头的空格/制表符
+                const before = el.value.slice(0, start);
+                const lineStart = before.lastIndexOf('\n') + 1;
+                const line = el.value.slice(lineStart, start);
+                const leadingSpaces = line.match(/^[ \t]+/);
+                if (leadingSpaces) {
+                    el.value = el.value.slice(0, lineStart) + line.slice(leadingSpaces[0].length) + el.value.slice(start);
+                    el.selectionStart = el.selectionEnd = start - leadingSpaces[0].length;
+                }
+            } else {
+                // Tab 插入缩进（2空格）
+                el.value = el.value.slice(0, start) + '  ' + el.value.slice(end);
+                el.selectionStart = el.selectionEnd = start + 2;
+            }
+            markNoteDirty();
+            scheduleTypingUndo();
+            return;
+        }
         if ((e.ctrlKey || e.metaKey) && !e.altKey && key === 'z') {
             e.preventDefault();
             if (e.shiftKey) noteRedo(); else noteUndo();

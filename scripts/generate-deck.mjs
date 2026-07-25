@@ -30,7 +30,7 @@ function parseSections(content) {
   const sections = [];
   let current = null;
   for (const line of lines) {
-    const headerMatch = line.match(/^(?:#{1,6}\s*)?(?:第[一二三四五六七八九十\\d]+点[：:]?|开场[：:]?|收尾[：:]?)(.+)/);
+    const headerMatch = line.match(/^(?:第[一二三四五六七八九十\d]+点[：:]?|开场[：:]?|收尾[：:]?)(.+)/);
     if (headerMatch) {
       if (current) sections.push(current);
       current = { title: headerMatch[1].replace(/[：:]$/, '').trim(), points: [] };

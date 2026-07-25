@@ -255,6 +255,7 @@
               </label>
               <button id="btn-graph-refresh" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="刷新">刷新</button>
               <button id="btn-graph-fit" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="适应">适应</button>
+              <button id="btn-graph-close" class="btn-secondary" style="padding:6px 12px;font-size:12px;">✕ 关闭</button>
             </div>
           </div>
           <div class="graph-body">
@@ -758,7 +759,7 @@
             <div id="chat-dock" class="chat-dock hidden">
               <div id="chat-messages" class="chat-messages"></div>
               <div class="chat-input-row">
-                <input type="text" id="chat-input" placeholder="例如：把第二页标题改为… / 给第三页加一条要点…" data-i18n-placeholder="例如：把第二页标题改为… / 给第三页加一条要点…">
+                <textarea id="chat-input" placeholder="例如：把第二页标题改为… / 给第三页加一条要点…" data-i18n-placeholder="例如：把第二页标题改为… / 给第三页加一条要点…" style="resize:none;flex:1;height:38px;min-height:38px;max-height:120px;"></textarea>
                 <button id="btn-chat-send" class="btn-primary" style="white-space:nowrap;" data-i18n="发送">发送</button>
               </div>
             </div>
@@ -1269,7 +1270,7 @@
     </div>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <!-- 笔记历史版本弹窗 -->
   <div id="note-history-modal" class="modal hidden">

@@ -33,7 +33,7 @@ function renderCardsList() {
         document.getElementById('btn-first-card')?.addEventListener('click', createNewCard);
         return;
     }
-    const masteryColors = ['#e5e7eb', '#fef3c7', '#fde68a', '#d9f99d', '#86efac'];
+    const masteryColors = ['#fee2e2', '#fef3c7', '#fde68a', '#d9f99d', '#86efac', '#22c55e'];
     let html = '';
     for (const card of S.cards) {
         const level = (card.mastery && card.mastery.level) || 0;

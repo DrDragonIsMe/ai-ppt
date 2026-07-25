@@ -167,6 +167,8 @@ async function readBody(req, maxBytes = MAX_BODY_BYTES) {
       try {
         resolve(body ? JSON.parse(body) : {});
       } catch (e) {
+        e.statusCode = 400;
+        e.message = '请求体不是合法 JSON';
         reject(e);
       }
     });

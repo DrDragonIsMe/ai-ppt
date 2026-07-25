@@ -37,10 +37,12 @@ export default function mediaRoutes({ send, readBody, validName, readGlobalConfi
                         apiKey: body.apiKey, // 临时透传，不落盘
                         outPath,
                     });
-                } catch {
+                } catch (e) {
+                    console.error('生图失败:', e.message);
                     result = null;
                 }
-                if (!result) return send(res, 502, { error: '生图失败或后端不可用' });
+                const errMsg = result ? null : '生图失败或后端不可用';
+                if (errMsg) return send(res, 502, { error: errMsg });
                 send(res, 200, {
                     filePath: result.filePath,
                     webPath: `${target.webBase}/${encodeURIComponent(path.basename(result.filePath))}`,

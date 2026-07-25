@@ -172,6 +172,8 @@ export async function exportVideo(name, opts = {}, onProgress) {
     };
   }
 
+  // 导出成功后清理 frames 目录
+  try { fs.rmSync(framesDir, { recursive: true, force: true }); } catch { /* ignore cleanup errors */ }
   return { fallback: false, file: outFile, width: PAGE_WIDTH, height: PAGE_HEIGHT, seconds: totalSeconds };
 }
 

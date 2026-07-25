@@ -27,6 +27,7 @@ export async function exportSiteZip(name) {
     archive.directory(dir, false, (entry) => {
       const rel = entry.name;
       if (rel === 'export' || rel.startsWith('export/')) return false;
+      if (rel === 'chat-history.json' || rel === 'ai-ppt.json') return false;
       if (rel.split('/').some((seg) => seg.startsWith('.'))) return false;
       return entry;
     });

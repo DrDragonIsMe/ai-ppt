@@ -172,7 +172,8 @@ export function showToast(message, type) {
     toast.classList.toggle('error', type === 'error');
     toast.classList.add('show');
     clearTimeout(showToast._timer);
-    showToast._timer = setTimeout(() => toast.classList.remove('show'), 2600);
+    const duration = type === 'error' ? 6000 : 2600;
+    showToast._timer = setTimeout(() => toast.classList.remove('show'), duration);
 }
 
 export function escapeHtml(text) {

@@ -136,6 +136,7 @@ source .env.kimi && npm run web
 projects/q3-report/
 ├── README.md
 ├── index.html
+├── ai-ppt.json
 ├── css/ppt.css
 └── js/ppt.js
 ```

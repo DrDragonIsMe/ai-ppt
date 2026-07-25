@@ -430,7 +430,14 @@ loadModels().then(loadGlobalConfig).then(() => {
     // 首次使用：数据加载完成后弹出 3 步向导
     let onboarded = null;
     try { onboarded = localStorage.getItem(ONBOARDING_KEY); } catch { /* 隐私模式下忽略 */ }
-    if (!onboarded) openOnboarding();
+    if (!onboarded && S.notes.length === 0 && S.projects.length === 0) openOnboarding();
+}).catch((e) => {
+    console.error('启动失败:', e);
+    showToast('加载失败，点击重试', 'error');
+    // 简单持久化重试按钮：刷新重试
+    const toastEl = document.getElementById('toast');
+    toastEl.style.cursor = 'pointer';
+    toastEl.onclick = () => location.reload();
 });
 bindProjectEvents();
 

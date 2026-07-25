@@ -2009,3 +2009,18 @@ describe('createProject(template)', () => {
         }
     });
 });
+
+// ---- SW version sync ----
+describe('sw.js CACHE_VERSION sync', () => {
+    it('should match package.json version', async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const packageJsonPath = path.join(new URL('..', import.meta.url).pathname, 'package.json');
+        const swPath = path.join(new URL('..', import.meta.url).pathname, 'web', 'sw.js');
+        const packageJson = JSON.parse(await fs.promises.readFile(packageJsonPath, 'utf8'));
+        const swContent = await fs.promises.readFile(swPath, 'utf8');
+        const match = swContent.match(/const CACHE_VERSION = '([^']+)'/);
+        assert.ok(match, 'sw.js should define CACHE_VERSION');
+        assert.equal(match[1], packageJson.version, `sw.js CACHE_VERSION (${match[1]}) should match package.json version (${packageJson.version})`);
+    });
+});

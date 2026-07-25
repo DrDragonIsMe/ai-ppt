@@ -551,12 +551,31 @@ async function submitVoiceFragment(file, name, seconds) {
 // 事件绑定
 // ============================================================
 export function bindFragmentEvents() {
-    document.getElementById('fragment-input')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submitFragment(); }
+    const input = document.getElementById('fragment-input');
+    // 恢复草稿
+    if (input) {
+        const draft = localStorage.getItem('ai-ppt-fragment-draft');
+        if (draft) input.value = draft;
+    }
+    // 保存草稿（防抖）
+    let draftTimer = null;
+    input?.addEventListener('input', () => {
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(() => {
+            localStorage.setItem('ai-ppt-fragment-draft', input.value || '');
+        }, 300);
     });
-    document.getElementById('btn-fragment-submit')?.addEventListener('click', submitFragment);
+    // 提交时清除草稿
+    const submitWithClear = async () => {
+        localStorage.removeItem('ai-ppt-fragment-draft');
+        await submitFragment();
+    };
+    input?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submitWithClear(); }
+    });
+    document.getElementById('btn-fragment-submit')?.addEventListener('click', submitWithClear);
     // 粘贴附件（截图粘贴是核心场景）
-    document.getElementById('fragment-input')?.addEventListener('paste', (e) => {
+    input?.addEventListener('paste', (e) => {
         const items = e.clipboardData?.items || [];
         const files = [];
         for (const item of items) {
