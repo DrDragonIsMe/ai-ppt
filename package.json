@@ -22,7 +22,14 @@
     "snapshot": "node scripts/snapshot.mjs",
     "chat-modify": "node scripts/chat-modify.mjs",
     "test": "node --test tests/core.test.mjs",
-    "test:smoke": "node scripts/test-smoke.mjs"
+    "test:smoke": "node scripts/test-smoke.mjs",
+    "wuying": "bash scripts/wuying.sh",
+    "wuying:start": "bash scripts/wuying.sh start",
+    "wuying:stop": "bash scripts/wuying.sh stop",
+    "wuying:status": "bash scripts/wuying.sh status",
+    "wuying:reboot": "bash scripts/wuying.sh reboot",
+    "wuying:list": "bash scripts/wuying.sh list",
+    "wuying:configure": "bash scripts/wuying.sh configure"
   },
   "dependencies": {
     "archiver": "^8.0.0",
