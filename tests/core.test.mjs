@@ -1446,10 +1446,9 @@ describe('design-lint: ruleHeadingIssues', () => {
 });
 
 describe('design-lint: ruleGradientText', () => {
-    it('gradient-text 类命中', () => {
+    it('少量 gradient-text 不命中（节制使用是允许的）', () => {
         const issues = lintRule(ruleGradientText, slide('<h1 class="gradient-text">标题</h1>'));
-        assert.equal(issues.length, 1);
-        assert.equal(issues[0].rule, 'gradient-text');
+        assert.equal(issues.length, 0);
     });
 
     it('无 gradient-text 不命中', () => {
@@ -1457,13 +1456,25 @@ describe('design-lint: ruleGradientText', () => {
         assert.equal(issues.length, 0);
     });
 
-    it('lintHtml fix=true 自动移除该类并标记 autoFixed', () => {
+    it('每页超过 3 处 gradient-text 命中过度使用警告', () => {
+        const html = slide(`
+            <h1 class="gradient-text">标题</h1>
+            <div class="big-number gradient-text">100</div>
+            <div class="big-number gradient-text">200</div>
+            <div class="big-number gradient-text">300</div>
+            <div class="big-number gradient-text">400</div>
+        `);
+        const issues = lintRule(ruleGradientText, html);
+        assert.equal(issues.length, 1);
+        assert.equal(issues[0].rule, 'gradient-text');
+        assert.ok(issues[0].message.includes('过多'));
+    });
+
+    it('lintHtml fix=true 不移除 gradient-text（已为正式设计元素）', () => {
         const html = `<main class="stage">${slide('<h1 class="gradient-text">标题</h1>')}</main>`;
-        const { issues, html: fixed, fixedCount } = lintHtml(html, { fix: true });
-        assert.equal(fixedCount, 1);
-        assert.equal(issues.find((i) => i.rule === 'gradient-text').autoFixed, true);
-        assert.ok(!fixed.includes('gradient-text'));
-        assert.ok(fixed.includes('<h1>标题</h1>'));
+        const { fixedCount, html: fixed } = lintHtml(html, { fix: true });
+        assert.equal(fixedCount, 0);
+        assert.ok(fixed.includes('gradient-text'));
     });
 
     it('lintHtml fix=false 时不修改 html', () => {

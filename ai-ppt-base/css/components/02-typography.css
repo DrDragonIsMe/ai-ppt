@@ -1,0 +1,99 @@
+
+.kicker {
+  display: inline-block;
+  position: relative;
+  color: var(--accent);
+  font-family: var(--font-heading);
+  font-size: clamp(10px, 0.95vw, 12px);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0 0 0 14px;
+  margin-bottom: clamp(12px, 1.8vh, 18px);
+  line-height: 1.4;
+}
+
+.kicker::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--gradient-primary);
+}
+
+.eyebrow {
+  display: inline-block;
+  font-family: var(--font-heading);
+  font-size: clamp(9px, 0.8vw, 11px);
+  font-weight: var(--font-medium);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: clamp(6px, 1vh, 10px);
+}
+
+.slide h1 {
+  font-family: var(--font-heading);
+  font-size: clamp(40px, 5.6vw, 76px);
+  font-weight: var(--font-extrabold);
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  margin: 0 0 clamp(14px, 2vh, 22px) 0;
+  color: var(--ink);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.slide h1.gradient-text {
+  background: var(--text-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.slide h2 {
+  font-family: var(--font-heading);
+  font-size: clamp(32px, 4.2vw, 56px);
+  font-weight: var(--font-bold);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin: 0 0 clamp(12px, 1.8vh, 20px) 0;
+  color: var(--ink);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.slide h3 {
+  font-family: var(--font-heading);
+  font-size: clamp(20px, 2.3vw, 30px);
+  font-weight: var(--font-semibold);
+  margin: 0 0 clamp(8px, 1vh, 12px) 0;
+  color: var(--ink);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+  letter-spacing: -0.01em;
+}
+
+.slide p {
+  font-size: clamp(16px, 1.5vw, 21px);
+  color: var(--slate);
+  max-width: 680px;
+  margin: 0 0 clamp(10px, 1vh, 16px) 0;
+  line-height: 1.75;
+  font-weight: var(--font-regular);
+}
+
+.slide p.lead {
+  font-size: clamp(18px, 1.9vw, 26px);
+  color: var(--slate);
+  margin-bottom: clamp(20px, 3vh, 32px);
+  line-height: 1.65;
+  max-width: 720px;
+  font-weight: var(--font-regular);
+}
+
+/* ===== Components ===== */

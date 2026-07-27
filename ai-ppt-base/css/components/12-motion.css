@@ -1,0 +1,317 @@
+
+/* Reveal Up (already exists, keeping for reference) */
+@keyframes revealUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Reveal Left */
+@keyframes revealLeft {
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Reveal Right */
+@keyframes revealRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Fade In */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Scale In */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Zoom In */
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Blur In */
+@keyframes blurIn {
+  from { opacity: 0; filter: blur(8px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+/* Flip In */
+@keyframes flipIn {
+  from { opacity: 0; transform: perspective(800px) rotateY(-45deg); }
+  to { opacity: 1; transform: perspective(800px) rotateY(0); }
+}
+
+/* Staggered Reveal Items */
+.reveal-item {
+  opacity: 0;
+  animation: revealUp 0.5s ease forwards;
+}
+
+.reveal-item:nth-child(1) { animation-delay: 0.1s; }
+.reveal-item:nth-child(2) { animation-delay: 0.2s; }
+.reveal-item:nth-child(3) { animation-delay: 0.3s; }
+.reveal-item:nth-child(4) { animation-delay: 0.4s; }
+.reveal-item:nth-child(5) { animation-delay: 0.5s; }
+.reveal-item:nth-child(6) { animation-delay: 0.6s; }
+
+/* ===== Animation Presets ===== */
+
+/* No animation */
+.anim-none * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Fade in */
+.anim-fade .slide.active .kicker,
+.anim-fade .slide.active h1,
+.anim-fade .slide.active h2,
+.anim-fade .slide.active .lead,
+.anim-fade .slide.active .tile,
+.anim-fade .slide.active .visual-card,
+.anim-fade .slide.active .data-metric,
+.anim-fade .slide.active .chart-bar-item,
+.anim-fade .slide.active .progress-ring-item,
+.anim-fade .slide.active .chart-step,
+.anim-fade .slide.active [data-chart] {
+  opacity: 0;
+  animation: fadeIn 0.5s ease forwards;
+}
+
+.anim-fade .slide.active .kicker { animation-delay: 0.1s; }
+.anim-fade .slide.active h1,
+.anim-fade .slide.active h2 { animation-delay: 0.15s; }
+.anim-fade .slide.active .lead { animation-delay: 0.22s; }
+
+/* Slide in (default behavior - already uses revealUp) */
+.anim-slide .slide.active .kicker,
+.anim-slide .slide.active h1,
+.anim-slide .slide.active h2,
+.anim-slide .slide.active .lead,
+.anim-slide .slide.active .tile,
+.anim-slide .slide.active .visual-card,
+.anim-slide .slide.active .data-metric,
+.anim-slide .slide.active .chart-bar-item,
+.anim-slide .slide.active .progress-ring-item,
+.anim-slide .slide.active .chart-step,
+.anim-slide .slide.active [data-chart] {
+  opacity: 0;
+  animation: revealUp 0.6s ease forwards;
+}
+
+.anim-slide .slide.active .kicker { animation-delay: 0.1s; }
+.anim-slide .slide.active h1,
+.anim-slide .slide.active h2 { animation-delay: 0.15s; }
+.anim-slide .slide.active .lead { animation-delay: 0.22s; }
+
+/* Bounce / Spring */
+.anim-bounce .slide.active .kicker,
+.anim-bounce .slide.active h1,
+.anim-bounce .slide.active h2,
+.anim-bounce .slide.active .lead,
+.anim-bounce .slide.active .tile,
+.anim-bounce .slide.active .visual-card,
+.anim-bounce .slide.active .data-metric,
+.anim-bounce .slide.active .chart-bar-item,
+.anim-bounce .slide.active .progress-ring-item,
+.anim-bounce .slide.active .chart-step,
+.anim-bounce .slide.active [data-chart] {
+  opacity: 0;
+  animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.anim-bounce .slide.active .kicker { animation-delay: 0.1s; }
+.anim-bounce .slide.active h1,
+.anim-bounce .slide.active h2 { animation-delay: 0.15s; }
+.anim-bounce .slide.active .lead { animation-delay: 0.22s; }
+
+/* Zoom */
+.anim-zoom .slide.active .kicker,
+.anim-zoom .slide.active h1,
+.anim-zoom .slide.active h2,
+.anim-zoom .slide.active .lead,
+.anim-zoom .slide.active .tile,
+.anim-zoom .slide.active .visual-card,
+.anim-zoom .slide.active .data-metric,
+.anim-zoom .slide.active .chart-bar-item,
+.anim-zoom .slide.active .progress-ring-item,
+.anim-zoom .slide.active .chart-step,
+.anim-zoom .slide.active [data-chart] {
+  opacity: 0;
+  animation: zoomIn 0.5s ease forwards;
+}
+
+.anim-zoom .slide.active .kicker { animation-delay: 0.1s; }
+.anim-zoom .slide.active h1,
+.anim-zoom .slide.active h2 { animation-delay: 0.15s; }
+.anim-zoom .slide.active .lead { animation-delay: 0.22s; }
+
+/* Blur */
+.anim-blur .slide.active .kicker,
+.anim-blur .slide.active h1,
+.anim-blur .slide.active h2,
+.anim-blur .slide.active .lead,
+.anim-blur .slide.active .tile,
+.anim-blur .slide.active .visual-card,
+.anim-blur .slide.active .data-metric,
+.anim-blur .slide.active .chart-bar-item,
+.anim-blur .slide.active .progress-ring-item,
+.anim-blur .slide.active .chart-step,
+.anim-blur .slide.active [data-chart] {
+  opacity: 0;
+  animation: blurIn 0.6s ease forwards;
+}
+
+.anim-blur .slide.active .kicker { animation-delay: 0.1s; }
+.anim-blur .slide.active h1,
+.anim-blur .slide.active h2 { animation-delay: 0.15s; }
+.anim-blur .slide.active .lead { animation-delay: 0.22s; }
+
+/* Flip */
+.anim-flip .slide.active .kicker,
+.anim-flip .slide.active h1,
+.anim-flip .slide.active h2,
+.anim-flip .slide.active .lead,
+.anim-flip .slide.active .tile,
+.anim-flip .slide.active .visual-card,
+.anim-flip .slide.active .data-metric,
+.anim-flip .slide.active .chart-bar-item,
+.anim-flip .slide.active .progress-ring-item,
+.anim-flip .slide.active .chart-step,
+.anim-flip .slide.active [data-chart] {
+  opacity: 0;
+  animation: flipIn 0.6s ease forwards;
+}
+
+.anim-flip .slide.active .kicker { animation-delay: 0.1s; }
+.anim-flip .slide.active h1,
+.anim-flip .slide.active h2 { animation-delay: 0.15s; }
+.anim-flip .slide.active .lead { animation-delay: 0.22s; }
+
+/* ===== Speaker Notes ===== */
+/* Authored inside a slide as <div class="speaker-note">; never rendered in
+   normal view — ppt.js extracts it for the presenter window (S key). */
+.speaker-note {
+  display: none;
+}
+
+/* Progress Ring Animation on Slide Active.
+   --progress = final stroke-dashoffset (legacy, 0..314);
+   --progress-pct = fill percentage 0..100 (preferred, intuitive). */
+.slide.active .progress-ring-circle {
+  stroke-dashoffset: 314;
+  animation: fillProgress 1s ease-out forwards;
+}
+
+@keyframes fillProgress {
+  to { stroke-dashoffset: var(--progress, calc(314 - (314 * var(--progress-pct, 0) / 100))); }
+}
+
+/* Waterfall Bar Animation */
+.slide.active .waterfall-fill {
+  width: 0;
+  animation: fillWidth 1s ease-out forwards;
+}
+
+@keyframes fillWidth {
+  to { width: var(--width, 0%); }
+}
+
+
+
+/* ===== Reduced Motion ===== */
+/* Required by ppt-design rules (impeccable "motion"): every animation needs a
+   reduced-motion alternative. Slide transitions collapse to an instant
+   crossfade; per-element reveal / fill animations render the final state. */
+@media (prefers-reduced-motion: reduce) {
+  .slide,
+  .slide.exit-forward,
+  .slide.exit-backward,
+  .slide.active {
+    transition: opacity 0.01s linear;
+    transform: none;
+  }
+
+  .anim-fade .slide.active .kicker,
+  .anim-fade .slide.active h1,
+  .anim-fade .slide.active h2,
+  .anim-fade .slide.active .lead,
+  .anim-fade .slide.active .tile,
+  .anim-fade .slide.active .visual-card,
+  .anim-fade .slide.active .data-metric,
+  .anim-fade .slide.active .chart-bar-item,
+  .anim-fade .slide.active .progress-ring-item,
+  .anim-fade .slide.active .chart-step,
+  .anim-slide .slide.active .kicker,
+  .anim-slide .slide.active h1,
+  .anim-slide .slide.active h2,
+  .anim-slide .slide.active .lead,
+  .anim-slide .slide.active .tile,
+  .anim-slide .slide.active .visual-card,
+  .anim-slide .slide.active .data-metric,
+  .anim-slide .slide.active .chart-bar-item,
+  .anim-slide .slide.active .progress-ring-item,
+  .anim-slide .slide.active .chart-step,
+  .anim-bounce .slide.active .kicker,
+  .anim-bounce .slide.active h1,
+  .anim-bounce .slide.active h2,
+  .anim-bounce .slide.active .lead,
+  .anim-bounce .slide.active .tile,
+  .anim-bounce .slide.active .visual-card,
+  .anim-bounce .slide.active .data-metric,
+  .anim-bounce .slide.active .chart-bar-item,
+  .anim-bounce .slide.active .progress-ring-item,
+  .anim-bounce .slide.active .chart-step,
+  .anim-zoom .slide.active .kicker,
+  .anim-zoom .slide.active h1,
+  .anim-zoom .slide.active h2,
+  .anim-zoom .slide.active .lead,
+  .anim-zoom .slide.active .tile,
+  .anim-zoom .slide.active .visual-card,
+  .anim-zoom .slide.active .data-metric,
+  .anim-zoom .slide.active .chart-bar-item,
+  .anim-zoom .slide.active .progress-ring-item,
+  .anim-zoom .slide.active .chart-step,
+  .anim-blur .slide.active .kicker,
+  .anim-blur .slide.active h1,
+  .anim-blur .slide.active h2,
+  .anim-blur .slide.active .lead,
+  .anim-blur .slide.active .tile,
+  .anim-blur .slide.active .visual-card,
+  .anim-blur .slide.active .data-metric,
+  .anim-blur .slide.active .chart-bar-item,
+  .anim-blur .slide.active .progress-ring-item,
+  .anim-blur .slide.active .chart-step,
+  .anim-flip .slide.active .kicker,
+  .anim-flip .slide.active h1,
+  .anim-flip .slide.active h2,
+  .anim-flip .slide.active .lead,
+  .anim-flip .slide.active .tile,
+  .anim-flip .slide.active .visual-card,
+  .anim-flip .slide.active .data-metric,
+  .anim-flip .slide.active .chart-bar-item,
+  .anim-flip .slide.active .progress-ring-item,
+  .anim-flip .slide.active .chart-step {
+    opacity: 1;
+    animation: none;
+  }
+
+  .slide.active .progress-ring-circle,
+  .slide.active .waterfall-fill {
+    animation-duration: 0.01s;
+  }
+
+  /* SVG 图表入场动画直接落到终态（SVG 本身是静态的） */
+  .slide.active [data-chart] {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+/* ===== Visual edit mode toolbar ===== */

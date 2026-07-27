@@ -1,0 +1,200 @@
+:root {
+  /* Deck design language = teal-editorial（原始默认主题）。
+     Brand is --teal #439288；--accent aliases to --teal。
+     配色见 MEMORY.md 设计系统表与 theme-ref/teal-editorial-preview.html。 */
+
+  /* Brand */
+  --teal: #439288;
+  --teal-light: #7DD3C0;
+  --accent: #439288;          /* deck accent = brand teal */
+  --accent-light: #EAF3F1;    /* teal tint for soft fills */
+  --accent-dark: #35766A;     /* darker teal for hover/press */
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, var(--accent) 0%, var(--teal-light) 100%);
+  --gradient-accent-soft: linear-gradient(135deg, color-mix(in srgb, var(--accent) 85%, white) 0%, var(--accent-light) 100%);
+  --text-gradient: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  --gradient-hero: radial-gradient(ellipse at top left, color-mix(in srgb, var(--accent) 8%, transparent), transparent 50%),
+                   radial-gradient(ellipse at bottom right, color-mix(in srgb, var(--accent) 5%, transparent), transparent 50%);
+
+  /* Ink + neutrals (teal-editorial values) */
+  --ink: #151A19;
+  --navy: #0B1413;
+  --slate: #6B8A83;
+  --muted: #6B8A83;
+  --cream: #FAFAF7;
+  --surface: #FFFFFF;
+  --surface-subtle: #EDF1F0;
+  --tile: #EDF1F0;
+  --tile-strong: #E3E9E7;
+  --border: #E3E9E7;          /* alias of --tile-strong for compat */
+  --border-strong: #CBD5D1;
+
+  /* Status colors */
+  --danger: #EF4444;
+  --success: #10B981;
+  --info: #3B82F6;
+  --warning: #F59E0B;
+
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.8);
+  --glass-blur: 12px;
+
+  /* Shadows (4-tier system) */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.03);
+  --shadow-md: 0 4px 8px -2px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 24px -8px rgba(15, 23, 42, 0.08), 0 6px 12px -6px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 24px 48px -12px rgba(15, 23, 42, 0.12), 0 12px 24px -12px rgba(15, 23, 42, 0.08);
+  --shadow-glow: 0 8px 32px -4px color-mix(in srgb, var(--accent) 35%, transparent);
+  --shadow-glow-sm: 0 4px 16px -2px color-mix(in srgb, var(--accent) 30%, transparent);
+
+  /* Radius system */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-heading: "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-body: "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Menlo", monospace;
+
+  /* Font weights */
+  --font-light: 300;
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* Slide layout */
+  --slide-padding-x: clamp(5vw, 7vw, 9vw);
+  --slide-padding-y: clamp(2rem, 5vh, 4rem);
+
+  /* 数据图表固定色（--chart-1 等品牌/中性色别名在 body 上声明，见下） */
+  --chart-2: #E8A33D;
+  --chart-3: #5B8DEF;
+  --chart-4: #D96C62;
+  --chart-5: #8B7BD8;
+  --chart-6: #53A06E;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--cream);
+  color: var(--ink);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* 数据图表调色板（.chart-line / .chart-pie / .chart-bars）。
+     必须声明在 body 而非 :root：var(--teal)/var(--muted) 等别名在声明处按
+     本元素的自定义属性求值，:root 上会被冻结成默认值；body 上才能跟随
+     body.theme-* 的主题变量。主题 css 可在 body.theme-<id> 覆盖任意一项。 */
+  --chart-1: var(--teal);
+  --chart-text: var(--muted);
+  --chart-text-strong: var(--ink);
+  --chart-axis: var(--border-strong);
+  --chart-grid: var(--tile-strong);
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.stage {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--slide-padding-y) var(--slide-padding-x);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 20px, 0) scale(0.99);
+  transition: opacity 0.5s var(--ease-out-expo),
+              transform 0.5s var(--ease-out-expo);
+  z-index: 1;
+  background-color: var(--cream);
+  background-image: var(--gradient-hero);
+  background-size: cover;
+  background-position: center;
+}
+
+.slide.active {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 2;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.slide.exit-forward {
+  opacity: 0;
+  transform: translate3d(30px, -16px, 0) scale(0.98);
+}
+
+.slide.exit-backward {
+  opacity: 0;
+  transform: translate3d(-30px, -16px, 0) scale(0.98);
+}
+
+.slide-content {
+  width: 100%;
+  max-width: clamp(960px, 90vw, 1200px);
+  min-height: 72vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.slide-content > .section-title,
+.slide-content > h1,
+.slide-content > h2 {
+  align-self: flex-start;
+  margin-bottom: 0;
+}
+
+.slide-content > *:not(.section-title):not(h1):not(h2):not(.hero-headline):not(.kicker):not(.lead):not(.badge-row):not(.hero-meta):not(.divider):not(.btn-primary):not(.btn-secondary) {
+  align-self: center;
+  justify-content: center;
+  margin: auto 0;
+  width: 100%;
+}
+
+.slide-content > .kicker,
+.slide-content > .lead,
+.slide-content > .badge-row,
+.slide-content > .hero-meta,
+.slide-content > .divider,
+.slide-content > .btn-primary,
+.slide-content > .btn-secondary {
+  align-self: flex-start;
+}
+
+/* ===== Typography ===== */

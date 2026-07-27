@@ -89,9 +89,28 @@ export function projectExists(name) {
   return fs.existsSync(getProjectDir(name));
 }
 
-// 把基座引擎（ppt.css / ppt.js / css/themes/*）复制到目标目录。
+// 递归复制目录（cp -r 风格），用于复制 css/components/ 等子目录。
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) return 0;
+  fs.mkdirSync(dest, { recursive: true });
+  let count = 0;
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      count += copyDirRecursive(srcPath, destPath);
+    } else if (entry.isFile()) {
+      fs.copyFileSync(srcPath, destPath);
+      count++;
+    }
+  }
+  return count;
+}
+
+// 把基座引擎（ppt.css + css/components/* + css/themes/* + ppt.js）复制到目标目录。
 // 唯一实现：config.mjs 的 ensureBaseEngine 与 upgrade-decks.mjs 都走这里。
-// 返回 { themeCount } 供调用方打印日志。
+// 返回 { themeCount, componentCount } 供调用方打印日志。
 export function copyBaseEngine(dir) {
   const themeFiles = getThemeFiles();
 
@@ -100,6 +119,16 @@ export function copyBaseEngine(dir) {
   fs.copyFileSync(BASE_CSS, path.join(dir, 'css', 'ppt.css'));
   fs.copyFileSync(BASE_JS, path.join(dir, 'js', 'ppt.js'));
 
+  // 复制 components/ 目录（模块化 CSS 组件）
+  const baseComponentsDir = path.join(BASE_DIR, 'css', 'components');
+  let componentCount = 0;
+  if (fs.existsSync(baseComponentsDir)) {
+    componentCount = copyDirRecursive(
+      baseComponentsDir,
+      path.join(dir, 'css', 'components'),
+    );
+  }
+
   if (themeFiles.length > 0) {
     const themesDest = path.join(dir, 'css', 'themes');
     fs.mkdirSync(themesDest, { recursive: true });
@@ -107,7 +136,7 @@ export function copyBaseEngine(dir) {
       fs.copyFileSync(themeFile, path.join(themesDest, path.basename(themeFile)));
     }
   }
-  return { themeCount: themeFiles.length };
+  return { themeCount: themeFiles.length, componentCount };
 }
 
 export function ensureBaseEngine(name) {

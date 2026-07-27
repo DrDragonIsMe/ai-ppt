@@ -30,4 +30,14 @@ body.theme-minimal-gray {
   --danger: #DC2626;
   --success: #16A34A;
   --info: #2563EB;
+
+  /* Gradients & Effects */
+  --gradient-primary: linear-gradient(135deg, #171717 0%, #404040 50%, #737373 100%);
+  --text-gradient: linear-gradient(135deg, #0A0A0A 0%, #262626 100%);
+  --gradient-hero: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(0, 0, 0, 0.05), transparent 60%),
+                   radial-gradient(ellipse 50% 40% at 50% 100%, rgba(0, 0, 0, 0.03), transparent 60%);
+  --shadow-glow: 0 8px 32px -4px rgba(0, 0, 0, 0.25);
+  --shadow-glow-sm: 0 4px 16px -2px rgba(0, 0, 0, 0.2);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(229, 229, 229, 0.9);
 }

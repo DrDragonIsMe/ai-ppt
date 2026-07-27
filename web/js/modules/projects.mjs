@@ -70,7 +70,8 @@ function renderProjects() {
         const item = document.createElement('div');
         item.className = 'project-item' + (p.name === S.currentProject ? ' active' : '');
         item.dataset.index = idx;
-        item.innerHTML = `<div style="display:flex;align-items:center;gap:10px;min-width:0;"><img class="project-cover" src="${coverUrl}" alt="" loading="lazy" onerror="this.remove()"><div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-mono);background:${idx < 9 ? 'var(--tile)' : 'transparent'};border-radius:4px;color:var(--ink);opacity:0.6;flex-shrink:0;">${idx < 9 ? idx + 1 : ''}</div><div style="min-width:0;"><div class="project-name">${escapeHtml(p.title || p.name)}</div><div class="project-meta">${escapeHtml(p.name)} · ${statusLabel(p.status)}${badge ? `<span class="source-badge">${escapeHtml(badge)}</span>` : ''}</div></div></div><button class="project-delete" title="${t('删除')}">×</button>`;
+        const statusBadgeClass = p.status === 'error' ? 'error' : (p.status === 'ready' || p.status === 'published') ? 'ready' : (p.status === 'generating' ? 'generating' : 'draft');
+        item.innerHTML = `<div style="display:flex;align-items:center;gap:10px;min-width:0;"><img class="project-cover" src="${coverUrl}" alt="" loading="lazy" onerror="this.remove()"><div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-mono);background:${idx < 9 ? 'var(--tile)' : 'transparent'};border-radius:4px;color:var(--ink);opacity:0.6;flex-shrink:0;">${idx < 9 ? idx + 1 : ''}</div><div style="min-width:0;"><div class="project-name">${escapeHtml(p.title || p.name)}</div><div class="project-meta">${escapeHtml(p.name)}<span class="status-badge ${statusBadgeClass}">${statusLabel(p.status)}</span>${badge ? `<span class="source-badge">${escapeHtml(badge)}</span>` : ''}</div></div></div><button class="project-delete" title="${t('删除')}">×</button>`;
         item.addEventListener('click', (e) => {
             if (e.target.classList.contains('project-delete')) { e.stopPropagation(); deleteProject(p.name); }
             else selectProject(p.name);
@@ -152,6 +153,7 @@ export function renderModelConfigUI() {
     if (e.inputModelPersistApiKey) e.inputModelPersistApiKey.checked = false;
     updateModelPresetUI(presetId);
     renderMediaModelConfigs();
+    renderPdfConfigUI();
 }
 
 function updateModelPresetUI(presetId) {
@@ -221,6 +223,13 @@ function renderMediaModelConfigs() {
     updateMediaProviderUI('image'); updateMediaProviderUI('video');
 }
 
+function renderPdfConfigUI() {
+    const sel = document.getElementById('input-pdf-engine');
+    if (!sel) return;
+    const engine = S.globalConfig?.pdfConfig?.defaultEngine || 'puppeteer';
+    sel.value = engine;
+}
+
 function updateMediaProviderUI(kind) {
     const e = els();
     const provider = kind === 'image' ? e.inputImageModelProvider.value : e.inputVideoModelProvider.value;
@@ -243,15 +252,19 @@ export async function saveGlobalModelConfig() {
         const modelConfig = getModelConfigFromUI();
         const imageModelConfig = getMediaModelConfigFromUI('image');
         const videoModelConfig = getMediaModelConfigFromUI('video');
+        const pdfEngineSel = document.getElementById('input-pdf-engine');
+        const pdfConfig = pdfEngineSel ? { defaultEngine: pdfEngineSel.value || 'puppeteer' } : undefined;
         const persistApiKey = !!(e.inputModelPersistApiKey?.checked || e.inputImageModelPersistApiKey?.checked || e.inputVideoModelPersistApiKey?.checked);
         let keyPersisted = false;
         if (e.inputModelPersistApiKey?.checked && e.inputModelApiKey.value.trim()) { modelConfig.apiKey = e.inputModelApiKey.value.trim(); keyPersisted = true; }
         if (e.inputImageModelPersistApiKey?.checked && e.inputImageModelApiKey.value.trim()) { imageModelConfig.apiKey = e.inputImageModelApiKey.value.trim(); keyPersisted = true; }
         if (e.inputVideoModelPersistApiKey?.checked && e.inputVideoModelApiKey.value.trim()) { videoModelConfig.apiKey = e.inputVideoModelApiKey.value.trim(); keyPersisted = true; }
-        S.globalConfig = await api('POST', '/api/config', { modelConfig, imageModelConfig, videoModelConfig, ...(persistApiKey ? { persistApiKey: true } : {}) });
+        const body = { modelConfig, imageModelConfig, videoModelConfig, ...(persistApiKey ? { persistApiKey: true } : {}) };
+        if (pdfConfig) body.pdfConfig = pdfConfig;
+        S.globalConfig = await api('POST', '/api/config', body);
         renderModelConfigUI();
-        showToast(keyPersisted ? t('模型配置已保存（含 API Key）') : t('模型配置已保存'));
-    } catch (err) { showToast(t('保存模型配置失败：{msg}', { msg: err.message }), 'error'); }
+        showToast(keyPersisted ? t('模型配置已保存（含 API Key）') : t('配置已保存'));
+    } catch (err) { showToast(t('保存配置失败：{msg}', { msg: err.message }), 'error'); }
 }
 
 export async function backupNow() {
@@ -787,6 +800,10 @@ async function exportVideo() {
     exportAsync('video', t('视频 MP4'), `${S.currentProject}.mp4`);
 }
 
+async function exportPdfVector() {
+    exportAsync('pdf-vector', t('矢量 PDF'), `${S.currentProject}-vector.pdf`);
+}
+
 async function exportSite() {
     if (!S.currentProject) return;
     showToast(t('正在打包静态站点...'));
@@ -848,7 +865,35 @@ function openExportDropdown() {
     if (S.currentSidebarTab !== 'projects' && _cb.switchSidebarTab) _cb.switchSidebarTab('projects');
     els().exportDropdown.querySelector('.dropdown-menu').classList.remove('hidden');
 }
-function openCreateModal() { els().createModal.classList.remove('hidden'); }
+function openCreateModal() {
+    const e = els();
+    e.newProjectName.value = '';
+    e.newProjectTitle.value = '';
+    if (e.newProjectTemplate) e.newProjectTemplate.value = '';
+    clearNameValidity();
+    e.createModal.classList.remove('hidden');
+}
+
+function validateProjectName(name) {
+    return /^[a-z0-9][a-z0-9\-]*$/.test(name);
+}
+
+function updateNameValidity(name) {
+    const hintEl = document.getElementById('name-validity');
+    if (!hintEl || !name.trim()) { clearNameValidity(); return; }
+    if (validateProjectName(name)) {
+        hintEl.textContent = '✓ 名称有效';
+        hintEl.className = 'field-hint success';
+    } else {
+        hintEl.textContent = '✕ 仅支持小写字母、数字和中划线（不能以中划线开头）';
+        hintEl.className = 'field-hint error';
+    }
+}
+
+function clearNameValidity() {
+    const hintEl = document.getElementById('name-validity');
+    if (hintEl) { hintEl.textContent = ''; hintEl.className = 'field-hint hidden'; }
+}
 function openHelpPanel() { els().helpPanel.classList.remove('hidden'); }
 function closeHelpPanel() { els().helpPanel.classList.add('hidden'); }
 function isInputActive() { const a = document.activeElement; return a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName); }
@@ -859,10 +904,11 @@ function handleEscapeKey() {
 
 async function createProject() {
     const e = els();
-    const name = e.newProjectName.value.trim();
+    const name = e.newProjectName.value.trim().toLowerCase();
     if (!name) { showToast(t('请输入项目标识')); return; }
+    if (!validateProjectName(name)) { showToast(t('名称仅支持小写字母、数字和中划线（不能以中划线开头）')); return; }
     const template = e.newProjectTemplate ? e.newProjectTemplate.value : '';
-    try { await api('POST', '/api/projects', { name, title: e.newProjectTitle.value.trim(), ...(template ? { template } : {}) }); e.createModal.classList.add('hidden'); e.newProjectName.value = ''; e.newProjectTitle.value = ''; if (e.newProjectTemplate) e.newProjectTemplate.value = ''; await loadProjects(name); showToast(t('项目已创建')); }
+    try { await api('POST', '/api/projects', { name, title: e.newProjectTitle.value.trim(), ...(template ? { template } : {}) }); e.createModal.classList.add('hidden'); clearNameValidity(); await loadProjects(name); showToast(t('项目已创建')); const toastEl = document.getElementById('toast'); if (toastEl) toastEl.className = 'toast show success'; setTimeout(() => { if (toastEl) toastEl.className = 'toast'; }, 2500); }
     catch (err) { showToast(err.message); }
 }
 
@@ -943,7 +989,13 @@ function openTagItem(type, id) {
 
 // === Dashboard ===
 export async function loadDashboard() {
-    try { renderDashboard(await api('GET', '/api/dashboard')); }
+    try {
+        const data = await api('GET', '/api/dashboard');
+        S.inboxFragments = data.inboxFragments ?? 0;
+        S.dueCards = data.dueCards ?? 0;
+        renderDashboard(data);
+        updateTabBadges();
+    }
     catch (e) { console.error('Failed to load dashboard:', e); showToast(t('加载工作台数据失败')); }
 }
 
@@ -961,15 +1013,72 @@ function renderDashboard(data) {
     document.getElementById('dash-stat-inbox').textContent = data.inboxFragments ?? 0;
     document.getElementById('dash-stat-due').textContent = data.dueCards ?? 0;
     document.getElementById('dash-stat-mistakes').textContent = data.lowMasteryMistakes ?? 0;
+
+    // Recent projects (top 5 by lastGeneratedAt, fallback to name)
     const listEl = document.getElementById('dashboard-recent-list');
-    const recent = (data.recentFragments || []).slice(0, 10);
-    if (!recent.length) listEl.innerHTML = `<div class="dashboard-recent-empty">${t('暂无碎片，点击「写速记」记录第一条吧')}</div>`;
-    else listEl.innerHTML = recent.map((f) => `<div class="dashboard-recent-item"><div class="dashboard-recent-content">${escapeHtml(f.content)}</div><div class="dashboard-recent-meta">${escapeHtml(relativeTime(f.created))}${f.status === 'inbox' ? ` · ${t('待整理')}` : ''}</div></div>`).join('');
+    if (!listEl) return;
+    const recentProjects = [...(S.projects || [])]
+        .sort((a, b) => {
+            if (a.lastGeneratedAt && b.lastGeneratedAt) return new Date(b.lastGeneratedAt) - new Date(a.lastGeneratedAt);
+            if (a.lastGeneratedAt) return -1;
+            if (b.lastGeneratedAt) return 1;
+            return a.name.localeCompare(b.name);
+        })
+        .slice(0, 5);
+
+    if (!recentProjects.length) {
+        listEl.innerHTML = `<div style="grid-column:1/-1;padding:24px;text-align:center;font-size:13px;color:var(--ink);opacity:0.5;">${t('暂无项目，点击上方「+ 新建 PPT」开始')}</div>`;
+    } else {
+        listEl.innerHTML = recentProjects.map((p) => {
+            const coverUrl = `/projects/${encodeURIComponent(p.name)}/cover.png?t=${encodeURIComponent(p.lastGeneratedAt || '')}`;
+            return `<div class="recent-project-card" data-name="${escapeHtmlAttr(p.name)}">
+                <img class="recent-project-cover" src="${coverUrl}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling?.classList.remove('hidden');">
+                <div class="recent-project-placeholder hidden">📊</div>
+                <div class="recent-project-info">
+                    <div class="recent-project-name">${escapeHtml(p.title || p.name)}</div>
+                    <div class="recent-project-meta">${statusLabel(p.status)}${p.lastGeneratedAt ? ' · ' + relativeTime(p.lastGeneratedAt) : ''}</div>
+                </div>
+            </div>`;
+        }).join('');
+
+        listEl.querySelectorAll('.recent-project-card').forEach((card) => {
+            card.addEventListener('click', () => _cb.selectProject(card.dataset.name));
+        });
+    }
+
     const counts = data.counts || {};
     document.getElementById('dashboard-counts').innerHTML = [[t('笔记'), counts.notes], [t('知识卡片'), counts.cards], [t('测验'), counts.exams], [t('错题'), counts.mistakes], [t('项目'), counts.projects]].map(([l, n]) => `<div class="dashboard-count-row"><span>${l}</span><strong>${Number(n) || 0}</strong></div>`).join('');
 }
 
+export function updateTabBadges() {
+    // Update sidebar tab badges with pending counts
+    const inboxCount = S.inboxFragments ?? 0;
+    const dueCards = S.dueCards ?? 0;
+    if (inboxCount > 0) setBadge('badge-fragments', inboxCount);
+    else hideBadge('badge-fragments');
+    if (dueCards > 0) {
+        setBadge('badge-cards', dueCards);
+        setBadge('badge-study', dueCards);
+    } else {
+        hideBadge('badge-cards');
+        hideBadge('badge-study');
+    }
+}
+
+function setBadge(id, count) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = count > 99 ? '99+' : count;
+    el.classList.remove('hidden');
+}
+
+function hideBadge(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+}
+
 export function bindDashboardEvents() {
+    document.getElementById('btn-dash-new-ppt')?.addEventListener('click', openCreateModal);
     document.getElementById('btn-dash-journal')?.addEventListener('click', () => _cb.openTodayNote());
     document.getElementById('btn-dash-write')?.addEventListener('click', () => _cb.focusFragmentInput());
     document.getElementById('btn-dash-organize')?.addEventListener('click', () => _cb.openOrganizeModal());
@@ -991,6 +1100,10 @@ export function bindEvents() {
     document.querySelector('#theme-gallery-modal .modal-backdrop')?.addEventListener('click', closeThemeGallery);
     if (e.btnEditMode) e.btnEditMode.addEventListener('click', toggleEditMode);
     if (e.btnCollapseSidebar) e.btnCollapseSidebar.addEventListener('click', toggleSidebarCollapse);
+    // Create modal name validation live feedback
+    document.getElementById('new-project-name')?.addEventListener('input', (ev) => {
+        updateNameValidity(ev.target.value.trim());
+    });
     if (e.btnCreateProject) e.btnCreateProject.addEventListener('click', openCreateModal);
     if (e.exportDropdown) {
         const btn = e.exportDropdown.querySelector('#btn-export');
@@ -1022,6 +1135,23 @@ export function bindEvents() {
     document.getElementById('btn-backup-now')?.addEventListener('click', backupNow);
     e.btnCreateSnapshot.addEventListener('click', createSnapshotNow);
     e.btnToggleChat.addEventListener('click', toggleChatDock);
+    // Fullscreen preview toggle (button + F key when in project panel)
+    document.getElementById('btn-fullscreen-preview')?.addEventListener('click', () => {
+        const canvas = document.querySelector('.workspace-canvas');
+        const isFs = !!canvas?.classList.contains('fullscreen');
+        if (!isFs && canvas) { canvas.classList.add('fullscreen'); }
+        else if (canvas) { canvas.classList.remove('fullscreen'); }
+    });
+
+    // Esc exits fullscreen preview (check no modal is open first)
+    document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') {
+            const anyModalOpen = document.querySelector('.modal:not(.hidden), .help-panel:not(.hidden)');
+            if (!anyModalOpen && document.querySelector('.workspace-canvas.fullscreen')) {
+                document.querySelector('.workspace-canvas.fullscreen').classList.remove('fullscreen');
+            }
+        }
+    });
     e.btnDesignLint?.addEventListener('click', runDesignLint);
     e.btnChatSend.addEventListener('click', sendChatMessage);
     e.chatInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); sendChatMessage(); } });
@@ -1065,6 +1195,7 @@ export function bindEvents() {
     dd?.querySelector('#dropdown-export-pptx')?.addEventListener('click', exportPptx);
     dd?.querySelector('#dropdown-export-pptx-image')?.addEventListener('click', exportPptxImage);
     dd?.querySelector('#dropdown-export-pdf')?.addEventListener('click', () => { if (S.currentProject) window.open(`/projects/${encodeURIComponent(S.currentProject)}/`, '_blank'); });
+    dd?.querySelector('#dropdown-export-pdf-vector')?.addEventListener('click', exportPdfVector);
     dd?.querySelector('#dropdown-export-html')?.addEventListener('click', exportHtml);
     dd?.querySelector('#dropdown-export-video')?.addEventListener('click', exportVideo);
     dd?.querySelector('#dropdown-export-site')?.addEventListener('click', exportSite);

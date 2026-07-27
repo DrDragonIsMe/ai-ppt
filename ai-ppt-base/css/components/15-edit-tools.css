@@ -1,0 +1,193 @@
+#ai-ppt-edit-toolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--navy, #0F172A);
+  color: var(--cream, #FAFAF7);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-family: var(--font-body);
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 4px;
+  opacity: 0.9;
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-save {
+  background: var(--teal, #439288);
+  color: white;
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-cancel {
+  background: var(--tile-strong, #E0E4EA);
+  color: var(--ink, #1A2332);
+}
+
+#ai-ppt-edit-toolbar .edit-toolbar-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.slide [contenteditable="true"] {
+  outline: 2px dashed var(--teal, #439288);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.slide [contenteditable="true"]:focus,
+.slide [contenteditable="true"]:hover {
+  outline-style: solid;
+  background: rgba(13, 148, 136, 0.06);
+}
+
+/* ===== Marker pen ===== */
+/* The toolbar is hidden by default; in marker mode it appears on pointer
+   activity (.visible) and auto-hides after ~2s. */
+.marker-toolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.92);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.marker-toolbar.active {
+  display: flex;
+}
+
+.marker-toolbar.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.marker-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.marker-tool-btn,
+.marker-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: rgba(250, 250, 247, 0.85);
+  background: transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.marker-tool-btn:hover,
+.marker-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.marker-tool-btn.active {
+  background: var(--teal, #439288);
+  color: white;
+}
+
+.marker-tool-btn svg,
+.marker-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.marker-colors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.marker-color-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.marker-color-btn.active {
+  border-color: white;
+  transform: scale(1.15);
+}
+
+.marker-hint {
+  font-size: 11px;
+  color: rgba(250, 250, 247, 0.55);
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  white-space: nowrap;
+}
+
+.marker-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 60;
+}
+
+html.marker-mode .marker-overlay {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+/* Fullscreen: hide help panel, slide sidebar, and prevent them from appearing */
+html:fullscreen .help,
+html:fullscreen .sidebar {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .marker-toolbar {
+    bottom: 16px;
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  .marker-hint {
+    display: none;
+  }
+}
+

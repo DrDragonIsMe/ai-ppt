@@ -108,6 +108,7 @@ function upgradeProject(name, dryRun, noSnapshot) {
   if (dryRun) {
     console.log(`  ${name}:`);
     console.log(`    would copy -> ${path.relative(ROOT, cssDest)}`);
+    console.log(`    would copy components -> ${path.relative(ROOT, path.join(cssDir, 'components'))}/`);
     console.log(`    would copy -> ${path.relative(ROOT, jsDest)}`);
     if (themeFiles.length > 0) {
       console.log(`    would copy ${themeFiles.length} theme(s) -> ${path.relative(ROOT, themesDir)}/`);
@@ -115,9 +116,12 @@ function upgradeProject(name, dryRun, noSnapshot) {
     return;
   }
 
-  const { themeCount } = copyBaseEngine(projectDir);
+  const { themeCount, componentCount } = copyBaseEngine(projectDir);
   console.log(`  ${name}:`);
   console.log(`    copied -> ${path.relative(ROOT, cssDest)}`);
+  if (componentCount > 0) {
+    console.log(`    copied ${componentCount} component file(s) -> ${path.relative(ROOT, path.join(cssDir, 'components'))}/`);
+  }
   console.log(`    copied -> ${path.relative(ROOT, jsDest)}`);
   if (themeCount > 0) {
     console.log(`    copied ${themeCount} theme(s) -> ${path.relative(ROOT, themesDir)}/`);

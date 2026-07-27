@@ -22,6 +22,10 @@ export default function configRoutes({ send, readBody, presentGlobalConfig, read
                         }
                     }
                 }
+                // pdfConfig 是纯配置（无密钥），直接透传
+                if (body.pdfConfig && typeof body.pdfConfig === 'object') {
+                    safe.pdfConfig = body.pdfConfig;
+                }
                 if (persistApiKey) safe.persistApiKey = true;
                 try {
                     writeGlobalConfig(safe);

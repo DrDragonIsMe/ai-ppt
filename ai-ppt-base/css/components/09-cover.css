@@ -1,0 +1,603 @@
+/* ==========================================================================
+   Cover Slide System
+   5 variants:
+   1. .cover-hero        — 居中大字陈述（bold typography-led）
+   2. .cover-split       — 左文右图（分割布局）
+   3. .cover-left-aligned — 左对齐大标题 + 右侧视觉元素
+   4. .cover-minimal     — 极简陈述（一句话价值主张）
+   5. .cover-magazine    — 杂志风（非对称 + 大号字）
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Shared cover layout helpers
+   -------------------------------------------------------------------------- */
+
+.slide-content[style*="text-align: center"],
+.slide-content.centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* Cover slides get more breathing room */
+.slide-content.cover {
+  min-height: auto;
+  height: 100%;
+  justify-content: center;
+}
+
+/* --------------------------------------------------------------------------
+   1. Cover Hero (centered, big-statement)
+   -------------------------------------------------------------------------- */
+
+.cover-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0;
+}
+
+.cover-hero .kicker {
+  text-align: center;
+  padding: 0 14px;
+  margin-bottom: clamp(16px, 2.5vh, 28px);
+}
+
+.cover-hero .kicker::before {
+  display: none;
+}
+
+.cover-hero h1 {
+  font-size: clamp(48px, 7vw, 96px);
+  font-weight: var(--font-extrabold);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  margin-bottom: clamp(14px, 2vh, 22px);
+  background: var(--text-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  max-width: 16ch;
+}
+
+.cover-hero .lead {
+  font-size: clamp(17px, 1.8vw, 24px);
+  color: var(--muted);
+  max-width: 560px;
+  margin: 0 auto clamp(24px, 4vh, 44px);
+  line-height: 1.65;
+  font-weight: var(--font-regular);
+}
+
+.cover-hero .divider {
+  margin: 0 auto clamp(24px, 4vh, 40px);
+  width: 56px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.cover-hero .metric-row {
+  display: flex;
+  justify-content: center;
+  gap: clamp(20px, 3vw, 48px);
+  margin-top: clamp(28px, 4.5vh, 52px);
+  flex-wrap: wrap;
+}
+
+.cover-hero .hero-stat {
+  min-width: 120px;
+}
+
+.cover-hero .hero-stat .big-number {
+  font-size: clamp(40px, 4.8vw, 68px);
+}
+
+.cover-hero .cover-footer {
+  margin-top: auto;
+  padding-top: clamp(32px, 5vh, 60px);
+  font-size: clamp(11px, 0.95vw, 13px);
+  color: var(--muted);
+  opacity: 0.6;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   2. Cover Split (left text / right visual)
+   -------------------------------------------------------------------------- */
+
+.cover-split {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: clamp(36px, 5vw, 72px);
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+}
+
+.cover-split .cover-text {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cover-split .cover-text .kicker {
+  align-self: flex-start;
+}
+
+.cover-split .cover-text h1 {
+  font-size: clamp(42px, 5.6vw, 76px);
+  font-weight: var(--font-extrabold);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  margin-bottom: clamp(16px, 2.5vh, 28px);
+  color: var(--ink);
+}
+
+.cover-split .cover-text h1 .accent {
+  background: var(--text-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.cover-split .cover-text .lead {
+  font-size: clamp(16px, 1.7vw, 22px);
+  color: var(--muted);
+  max-width: 480px;
+  margin-bottom: clamp(24px, 3.5vh, 36px);
+  line-height: 1.65;
+}
+
+.cover-split .cover-text .divider {
+  margin-left: 0;
+}
+
+.cover-split .cover-text .cover-footer {
+  margin-top: clamp(28px, 4.5vh, 48px);
+  font-size: clamp(11px, 0.95vw, 13px);
+  color: var(--muted);
+  opacity: 0.6;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.cover-split .cover-visual {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--gradient-primary);
+  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-split .cover-visual::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 80%;
+  height: 80%;
+  background: radial-gradient(circle, rgba(255,255,255,0.35), transparent 60%);
+}
+
+.cover-split .cover-visual::after {
+  content: '';
+  position: absolute;
+  bottom: -30%;
+  right: -20%;
+  width: 90%;
+  height: 90%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent-dark) 40%, transparent), transparent 60%);
+}
+
+.cover-split .cover-visual-content {
+  position: relative;
+  z-index: 2;
+  color: #fff;
+  text-align: center;
+  padding: clamp(20px, 3vh, 40px);
+}
+
+.cover-split .cover-visual-content .big-number {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  font-size: clamp(60px, 8vw, 120px);
+  text-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+
+.cover-split .cover-visual-content .big-number-label {
+  color: rgba(255,255,255,0.9);
+  font-size: clamp(14px, 1.3vw, 18px);
+}
+
+/* Floating badges (decorative stats around the visual) */
+.cover-split .cover-visual .floating-badge {
+  position: absolute;
+  z-index: 3;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: var(--radius-lg);
+  padding: clamp(10px, 1.2vh, 14px) clamp(14px, 1.5vw, 20px);
+  box-shadow: var(--shadow-lg);
+  font-size: clamp(12px, 1vw, 14px);
+  font-weight: var(--font-semibold);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cover-split .cover-visual .floating-badge.top-left {
+  top: 12%;
+  left: -8%;
+}
+
+.cover-split .cover-visual .floating-badge.bottom-right {
+  bottom: 12%;
+  right: -8%;
+}
+
+.cover-split .cover-visual .floating-badge .badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   3. Cover Left-Aligned (bold title + side visual elements)
+   -------------------------------------------------------------------------- */
+
+.cover-left-aligned {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: clamp(32px, 4vw, 56px);
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+}
+
+.cover-left-aligned .cover-text {
+  text-align: left;
+}
+
+.cover-left-aligned .cover-text .kicker {
+  align-self: flex-start;
+}
+
+.cover-left-aligned .cover-text h1 {
+  font-size: clamp(48px, 6.2vw, 84px);
+  font-weight: var(--font-extrabold);
+  line-height: 1.03;
+  letter-spacing: -0.04em;
+  margin-bottom: clamp(16px, 2.5vh, 24px);
+  background: var(--text-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.cover-left-aligned .cover-text .lead {
+  font-size: clamp(17px, 1.7vw, 22px);
+  color: var(--muted);
+  max-width: 520px;
+  margin-bottom: clamp(24px, 3.5vh, 40px);
+  line-height: 1.65;
+}
+
+.cover-left-aligned .cover-text .cover-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(16px, 2vw, 28px);
+  margin-top: clamp(28px, 4vh, 44px);
+}
+
+.cover-left-aligned .cover-text .cover-meta .meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cover-left-aligned .cover-text .cover-meta .meta-item .meta-value {
+  font-family: var(--font-heading);
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: var(--font-bold);
+  color: var(--ink);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.cover-left-aligned .cover-text .cover-meta .meta-item .meta-label {
+  font-size: clamp(11px, 0.95vw, 13px);
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.cover-left-aligned .cover-visual {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.5vh, 20px);
+}
+
+.cover-left-aligned .cover-visual .visual-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: clamp(16px, 2vh, 24px);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 1.2vw, 18px);
+  transition: all 0.35s var(--ease-out-expo);
+}
+
+.cover-left-aligned .cover-visual .visual-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent);
+}
+
+.cover-left-aligned .cover-visual .visual-tile .tile-icon {
+  width: clamp(40px, 4.5vw, 56px);
+  height: clamp(40px, 4.5vw, 56px);
+  border-radius: var(--radius-md);
+  background: var(--accent-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(20px, 2.2vw, 28px);
+  flex-shrink: 0;
+}
+
+.cover-left-aligned .cover-visual .visual-tile .tile-content h4 {
+  font-family: var(--font-heading);
+  font-size: clamp(13px, 1.1vw, 16px);
+  font-weight: var(--font-semibold);
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+
+.cover-left-aligned .cover-visual .visual-tile .tile-content p {
+  font-size: clamp(11px, 0.9vw, 13px);
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.4;
+  max-width: none;
+}
+
+/* --------------------------------------------------------------------------
+   4. Cover Minimal (statement-only)
+   -------------------------------------------------------------------------- */
+
+.cover-minimal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  max-width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.cover-minimal .kicker {
+  margin-bottom: clamp(20px, 3vh, 32px);
+}
+
+.cover-minimal h1 {
+  font-size: clamp(56px, 8vw, 112px);
+  font-weight: var(--font-extrabold);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+  color: var(--ink);
+  margin-bottom: clamp(24px, 4vh, 48px);
+  max-width: 18ch;
+}
+
+.cover-minimal h1 .accent {
+  background: var(--text-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.cover-minimal .lead {
+  font-size: clamp(18px, 1.9vw, 26px);
+  color: var(--muted);
+  max-width: 560px;
+  margin-bottom: clamp(32px, 5vh, 64px);
+  line-height: 1.65;
+}
+
+.cover-minimal .cover-footer {
+  display: flex;
+  align-items: center;
+  gap: clamp(16px, 2vw, 32px);
+  margin-top: auto;
+  padding-top: clamp(32px, 5vh, 56px);
+}
+
+.cover-minimal .cover-footer .brand {
+  font-family: var(--font-heading);
+  font-weight: var(--font-bold);
+  font-size: clamp(14px, 1.2vw, 18px);
+  color: var(--ink);
+}
+
+.cover-minimal .cover-footer .tag {
+  font-size: clamp(11px, 0.95vw, 13px);
+  color: var(--muted);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   5. Cover Magazine (asymmetric editorial)
+   -------------------------------------------------------------------------- */
+
+.cover-magazine {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: auto 1fr auto;
+  gap: clamp(20px, 3vh, 40px);
+  height: 100%;
+  min-height: 72vh;
+  width: 100%;
+  max-width: 100%;
+  align-items: start;
+}
+
+.cover-magazine .cover-top {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.cover-magazine .cover-top .kicker {
+  margin-bottom: 0;
+}
+
+.cover-magazine .cover-top .cover-date {
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 0.95vw, 13px);
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+
+.cover-magazine .cover-main {
+  grid-column: 1 / 2;
+  align-self: center;
+}
+
+.cover-magazine .cover-main h1 {
+  font-size: clamp(64px, 9vw, 128px);
+  font-weight: var(--font-extrabold);
+  line-height: 0.96;
+  letter-spacing: -0.055em;
+  color: var(--ink);
+  margin-bottom: clamp(16px, 2.5vh, 28px);
+}
+
+.cover-magazine .cover-main h1 .outline {
+  -webkit-text-stroke: 2px var(--accent);
+  color: transparent;
+}
+
+.cover-magazine .cover-main .lead {
+  font-size: clamp(17px, 1.7vw, 22px);
+  color: var(--muted);
+  max-width: 520px;
+  margin-bottom: 0;
+  line-height: 1.65;
+}
+
+.cover-magazine .cover-side {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2.5vh, 28px);
+}
+
+.cover-magazine .cover-side .side-stat {
+  border-left: 3px solid var(--accent);
+  padding-left: clamp(12px, 1.5vw, 20px);
+}
+
+.cover-magazine .cover-side .side-stat .stat-number {
+  font-family: var(--font-heading);
+  font-size: clamp(28px, 3.5vw, 44px);
+  font-weight: var(--font-extrabold);
+  color: var(--ink);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  margin-bottom: 4px;
+}
+
+.cover-magazine .cover-side .side-stat .stat-label {
+  font-size: clamp(11px, 0.95vw, 13px);
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.cover-magazine .cover-bottom {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-top: clamp(24px, 3.5vh, 40px);
+  border-top: 1px solid var(--border);
+}
+
+.cover-magazine .cover-bottom .cover-brand {
+  font-family: var(--font-heading);
+  font-weight: var(--font-bold);
+  font-size: clamp(14px, 1.2vw, 17px);
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+.cover-magazine .cover-bottom .cover-pagination {
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 0.95vw, 13px);
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+
+/* --------------------------------------------------------------------------
+   Cover Metric Row (shared)
+   -------------------------------------------------------------------------- */
+
+.metric-row {
+  display: flex;
+  justify-content: center;
+  gap: clamp(16px, 2.5vw, 40px);
+  flex-wrap: wrap;
+  margin-top: clamp(20px, 3vh, 36px);
+}
+
+.metric-row .hero-stat {
+  flex: 1;
+  min-width: 120px;
+  max-width: 200px;
+  text-align: center;
+}
+
+.metric-row .hero-stat .big-number {
+  font-size: clamp(40px, 5vw, 64px);
+}
+
+.metric-row .hero-stat .big-number-label {
+  font-size: clamp(12px, 1.1vw, 15px);
+  margin-top: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Backwards compatibility: old cover class names
+   -------------------------------------------------------------------------- */
+
+.cover-centered-gradient {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-centered-gradient h1 {
+  background: var(--text-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: clamp(44px, 6vw, 80px);
+}

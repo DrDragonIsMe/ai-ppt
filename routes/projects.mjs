@@ -31,6 +31,7 @@ export default function projectRoutes(ctx) {
         pptx: { script: 'export-pptx.mjs', args: [] },
         'pptx-image': { script: 'export-pptx.mjs', args: ['--image'] },
         pdf: { script: 'export-pdf.mjs', args: [] },
+        'pdf-vector': { script: 'export-pdf-weasy.mjs', args: [] },
         video: { script: 'export-video.mjs', args: [] },
     };
     const PUPPETEER_EXPORT_TYPES = new Set(['pptx-image', 'pdf', 'video']);
@@ -385,7 +386,7 @@ export default function projectRoutes(ctx) {
         },
         // Export（异步任务：POST 202 → GET .../events SSE → done 事件带 downloadUrl）
         {
-            method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/(pptx|pptx-image|pdf|video)$/, handler: async (req, res, matches) => {
+            method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/export\/(pptx|pptx-image|pdf|pdf-vector|video)$/, handler: async (req, res, matches) => {
                 const name = matches[1];
                 const type = matches[2];
                 if (!validName(name, res, '非法项目名称')) return;
@@ -399,7 +400,7 @@ export default function projectRoutes(ctx) {
                 const state = spawnNdjsonTask(exportTasks, key, def.script, [...def.args, name]);
                 state.exportType = type;
                 // PDF 导出完成后顺手更新项目封面（静默失败，不影响导出结果）
-                if (type === 'pdf') {
+                if (type === 'pdf' || type === 'pdf-vector') {
                     state.listeners.add((event) => {
                         if (event.type === 'done') captureCover(name);
                     });
@@ -408,7 +409,7 @@ export default function projectRoutes(ctx) {
             }
         },
         {
-            method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/export\/(pptx|pptx-image|pdf|video)\/events$/, handler: async (req, res, matches) => {
+            method: 'GET', pattern: /^\/api\/projects\/([^/]+)\/export\/(pptx|pptx-image|pdf|pdf-vector|video)\/events$/, handler: async (req, res, matches) => {
                 const name = matches[1];
                 const type = matches[2];
                 if (!validName(name, res, '非法项目名称')) return;

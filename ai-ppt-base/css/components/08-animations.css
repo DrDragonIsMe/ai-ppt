@@ -1,0 +1,183 @@
+
+.slide.active .kicker {
+  animation: revealUp 0.55s var(--ease-out-expo) 0.1s both;
+}
+
+.slide.active h1,
+.slide.active h2 {
+  animation: revealUp 0.6s var(--ease-out-expo) 0.15s both;
+}
+
+.slide.active .lead {
+  animation: revealUp 0.6s var(--ease-out-expo) 0.22s both;
+}
+
+.slide.active .section-title {
+  animation: revealUp 0.5s var(--ease-out-expo) 0.08s both;
+}
+
+.slide.active .tile,
+.slide.active .two-col > * {
+  animation: revealUp 0.55s var(--ease-out-expo) both;
+}
+
+.slide.active .tile:nth-child(1),
+.slide.active .two-col > *:nth-child(1) { animation-delay: 0.22s; }
+.slide.active .tile:nth-child(2),
+.slide.active .two-col > *:nth-child(2) { animation-delay: 0.32s; }
+.slide.active .tile:nth-child(3),
+.slide.active .two-col > *:nth-child(3) { animation-delay: 0.42s; }
+.slide.active .tile:nth-child(4),
+.slide.active .two-col > *:nth-child(4) { animation-delay: 0.52s; }
+
+.slide.active table.ppt-table {
+  animation: revealUp 0.55s var(--ease-out-expo) 0.2s both;
+}
+
+/* Bento grid stagger */
+.slide.active .bento-item {
+  opacity: 0;
+  animation: revealUp 0.6s var(--ease-out-expo) forwards;
+}
+
+.slide.active .bento-item:nth-child(1) { animation-delay: 0.15s; }
+.slide.active .bento-item:nth-child(2) { animation-delay: 0.25s; }
+.slide.active .bento-item:nth-child(3) { animation-delay: 0.35s; }
+.slide.active .bento-item:nth-child(4) { animation-delay: 0.45s; }
+.slide.active .bento-item:nth-child(5) { animation-delay: 0.55s; }
+.slide.active .bento-item:nth-child(6) { animation-delay: 0.65s; }
+
+/* Data components stagger reveal */
+.slide.active .chart-bar-item {
+  opacity: 0;
+  animation: growUp 0.7s var(--ease-out-expo) forwards;
+}
+
+.slide.active .chart-bar-item:nth-child(1) { animation-delay: 0.2s; }
+.slide.active .chart-bar-item:nth-child(2) { animation-delay: 0.3s; }
+.slide.active .chart-bar-item:nth-child(3) { animation-delay: 0.4s; }
+.slide.active .chart-bar-item:nth-child(4) { animation-delay: 0.5s; }
+.slide.active .chart-bar-item:nth-child(5) { animation-delay: 0.6s; }
+
+.slide.active .progress-ring-item {
+  opacity: 0;
+  animation: scaleIn 0.6s var(--ease-out-expo) forwards;
+}
+
+.slide.active .progress-ring-item:nth-child(1) { animation-delay: 0.2s; }
+.slide.active .progress-ring-item:nth-child(2) { animation-delay: 0.3s; }
+.slide.active .progress-ring-item:nth-child(3) { animation-delay: 0.4s; }
+.slide.active .progress-ring-item:nth-child(4) { animation-delay: 0.5s; }
+
+.slide.active .chart-step {
+  opacity: 0;
+  animation: revealLeft 0.55s var(--ease-out-expo) forwards;
+}
+
+.slide.active .chart-step:nth-child(1) { animation-delay: 0.15s; }
+.slide.active .chart-step:nth-child(2) { animation-delay: 0.25s; }
+.slide.active .chart-step:nth-child(3) { animation-delay: 0.35s; }
+.slide.active .chart-step:nth-child(4) { animation-delay: 0.45s; }
+
+.slide.active .data-compare-item,
+.slide.active .data-matrix-cell,
+.slide.active .metric-card {
+  opacity: 0;
+  animation: revealUp 0.55s var(--ease-out-expo) forwards;
+}
+
+.slide.active .data-compare-item:nth-child(1),
+.slide.active .data-matrix-cell:nth-child(1),
+.slide.active .metric-card:nth-child(1) { animation-delay: 0.15s; }
+.slide.active .data-compare-item:nth-child(2),
+.slide.active .data-matrix-cell:nth-child(2),
+.slide.active .metric-card:nth-child(2) { animation-delay: 0.25s; }
+.slide.active .data-compare-item:nth-child(3),
+.slide.active .data-matrix-cell:nth-child(3),
+.slide.active .metric-card:nth-child(3) { animation-delay: 0.35s; }
+.slide.active .data-compare-item:nth-child(4),
+.slide.active .data-matrix-cell:nth-child(4),
+.slide.active .metric-card:nth-child(4) { animation-delay: 0.45s; }
+
+.slide.active .waterfall-item {
+  opacity: 0;
+  animation: revealRight 0.55s var(--ease-out-expo) forwards;
+}
+
+.slide.active .waterfall-item:nth-child(1) { animation-delay: 0.15s; }
+.slide.active .waterfall-item:nth-child(2) { animation-delay: 0.25s; }
+.slide.active .waterfall-item:nth-child(3) { animation-delay: 0.35s; }
+.slide.active .waterfall-item:nth-child(4) { animation-delay: 0.45s; }
+.slide.active .waterfall-item:nth-child(5) { animation-delay: 0.55s; }
+
+.slide.active .timeline-horizontal-item {
+  opacity: 0;
+  animation: scaleIn 0.5s var(--ease-out-expo) forwards;
+}
+
+.slide.active .timeline-horizontal-item:nth-child(1) { animation-delay: 0.2s; }
+.slide.active .timeline-horizontal-item:nth-child(2) { animation-delay: 0.35s; }
+.slide.active .timeline-horizontal-item:nth-child(3) { animation-delay: 0.5s; }
+.slide.active .timeline-horizontal-item:nth-child(4) { animation-delay: 0.65s; }
+
+@keyframes revealUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes growUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scaleY(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes revealLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes revealRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ===== Cover Slide Special Styling ===== */

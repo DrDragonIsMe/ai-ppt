@@ -6,5 +6,6 @@
   { "id": "sunset-red", "name": "日落红", "desc": "热情、有冲击力，适合营销活动与动员宣讲", "color": "#E11D48", "mode": "light" },
   { "id": "tech-green", "name": "科技绿", "desc": "环保、可持续的科技感，适合新能源与农业主题", "color": "#65A30D", "mode": "light" },
   { "id": "minimal-gray", "name": "极简灰", "desc": "克制、高级的无印风，适合设计工作室与作品集", "color": "#171717", "mode": "light" },
-  { "id": "dark-mode", "name": "暗黑模式", "desc": "沉浸、护眼的未来感，适合科技产品发布与暗场放映", "color": "#22D3EE", "mode": "dark" }
+  { "id": "dark-mode", "name": "暗黑模式", "desc": "沉浸、护眼的未来感，适合科技产品发布与暗场放映", "color": "#22D3EE", "mode": "dark" },
+  { "id": "ai-glow", "name": "AI 辉光", "desc": "深邃梦幻的霓虹玻璃态，适合 AI 产品发布与未来主题演示", "color": "#A78BFA", "mode": "dark" }
 ]

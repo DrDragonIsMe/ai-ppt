@@ -461,6 +461,7 @@ function presentGlobalConfigFn(cfg) {
     modelConfig: strip(cfg.modelConfig, {}),
     imageModelConfig: strip(cfg.imageModelConfig, DEFAULT_MEDIA_MODEL_CONFIG),
     videoModelConfig: strip(cfg.videoModelConfig, DEFAULT_MEDIA_MODEL_CONFIG),
+    pdfConfig: cfg.pdfConfig || { defaultEngine: 'puppeteer' },
   };
 }
 

@@ -33,7 +33,7 @@
           <input type="search" id="input-global-search" placeholder="搜索项目或内容… (Ctrl+K)" data-i18n-placeholder="搜索项目或内容… (Ctrl+K)">
           <div id="search-results" class="search-results hidden"></div>
         </div>
-        <button id="btn-settings" class="btn-secondary btn-icon" title="系统设置" data-i18n-title="系统设置">
+        <button id="btn-settings-topbar" class="btn-secondary btn-icon" title="系统设置（侧边栏也有）" data-i18n-title="系统设置（侧边栏也有）">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -57,11 +57,22 @@
       <div id="sidebar-scrim" class="sidebar-scrim hidden"></div>
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-tabs">
-          <button class="sidebar-tab active" data-tab="fragments" data-i18n="速记">速记</button>
-          <button class="sidebar-tab" data-tab="vault" data-i18n="知识库">知识库</button>
-          <button class="sidebar-tab" data-tab="cards" data-i18n="知识卡片">知识卡片</button>
-          <button class="sidebar-tab" data-tab="study" data-i18n="学习">学习</button>
-          <button class="sidebar-tab" data-tab="projects" data-i18n="PPT 作品">PPT 作品</button>
+          <button class="sidebar-tab active" data-tab="fragments"><span data-i18n="速记">速记</span><span class="tab-badge hidden" id="badge-fragments"></span></button>
+          <button class="sidebar-tab" data-tab="vault"><span data-i18n="知识库">知识库</span><span class="tab-badge hidden" id="badge-vault"></span></button>
+          <button class="sidebar-tab" data-tab="cards"><span data-i18n="知识卡片">知识卡片</span><span class="tab-badge hidden" id="badge-cards"></span></button>
+          <button class="sidebar-tab" data-tab="study"><span data-i18n="学习">学习</span><span class="tab-badge hidden" id="badge-study"></span></button>
+          <button class="sidebar-tab" data-tab="projects"><span data-i18n="PPT 作品">PPT 作品</span></button>
+        </div>
+
+        <div class="sidebar-tabs-spacer"></div>
+        <div class="sidebar-tabs-bottom">
+          <button id="btn-settings-tab" class="sidebar-tab btn-icon" data-tab="settings" title="系统设置" data-i18n-title="系统设置">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82v-.01a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
         </div>
 
         <div id="fragments-sidebar-content" class="sidebar-content">
@@ -193,9 +204,9 @@
         <div id="empty-state" class="empty-state hidden">
           <h2 data-i18n="从速记开始，或打开一篇笔记">从速记开始，或打开一篇笔记</h2>
           <p data-i18n="这里是你的知识中枢：随手记录速记，沉淀为笔记后可一键生成 PPT、视频或报告">这里是你的知识中枢：随手记录速记，沉淀为笔记后可一键生成 PPT、视频或报告</p>
-          <div style="display:flex;gap:10px;justify-content:center;">
-            <button id="btn-empty-new-note" class="btn-primary" data-i18n="+ 新建笔记">+ 新建笔记</button>
-            <button id="btn-empty-fragment" class="btn-secondary" data-i18n="写速记">写速记</button>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+            <button id="btn-empty-new-note" class="btn-primary" data-i18n="+ 新建笔记">📝 + 新建笔记</button>
+            <button id="btn-empty-fragment" class="btn-secondary" data-i18n="写速记">✏️ 写速记</button>
           </div>
         </div>
 
@@ -224,18 +235,21 @@
             </div>
           </div>
           <div class="dashboard-body">
-            <section class="card dashboard-recent">
-              <div class="card-title" data-i18n="最近碎片">最近碎片</div>
-              <div id="dashboard-recent-list" class="dashboard-recent-list"></div>
+            <!-- 最近项目卡片 -->
+            <section class="card dashboard-recent-projects" id="dashboard-recent-projects-card">
+              <div class="card-title" data-i18n="最近项目">最近项目</div>
+              <div id="dashboard-recent-list" class="dashboard-recent-grid"></div>
             </section>
+
             <section class="card dashboard-side">
               <div class="card-title" data-i18n="快捷操作">快捷操作</div>
               <div class="dashboard-actions">
-                <button id="btn-dash-journal" class="btn-secondary" data-i18n="今日笔记">今日笔记</button>
-                <button id="btn-dash-write" class="btn-secondary" data-i18n="写速记">写速记</button>
-                <button id="btn-dash-organize" class="btn-secondary" data-i18n="AI 整理">AI 整理</button>
-                <button id="btn-dash-smart-exam" class="btn-secondary" data-i18n="智能组卷">智能组卷</button>
-                <button id="btn-dash-graph" class="btn-secondary" data-i18n="知识星图">知识星图</button>
+                <button id="btn-dash-new-ppt" class="btn-primary" style="flex:1;">🚀 + 新建 PPT</button>
+                <button id="btn-dash-journal" class="btn-secondary" data-i18n="今日笔记">📅 今日笔记</button>
+                <button id="btn-dash-write" class="btn-secondary" data-i18n="写速记">✏️ 写速记</button>
+                <button id="btn-dash-organize" class="btn-secondary" data-i18n="AI 整理">🧹 AI 整理</button>
+                <button id="btn-dash-smart-exam" class="btn-secondary" data-i18n="智能组卷">📝 智能组卷</button>
+                <button id="btn-dash-graph" class="btn-secondary" data-i18n="知识星图">🌐 知识星图</button>
               </div>
               <div class="card-title" style="margin-top:20px;" data-i18n="内容概览">内容概览</div>
               <div id="dashboard-counts" class="dashboard-counts"></div>
@@ -710,12 +724,18 @@
               <div class="dropdown" id="export-dropdown">
                 <button id="btn-export" class="btn-secondary" disabled data-i18n="导出 ▾">导出 ▾</button>
                 <div class="dropdown-menu hidden">
-                  <button id="dropdown-export-pptx" data-i18n="PPTX（可编辑文字）">PPTX（可编辑文字）</button>
-                  <button id="dropdown-export-pptx-image" data-i18n="高清图片 PPTX">高清图片 PPTX</button>
-                  <button id="dropdown-export-pdf" data-i18n="浏览器打印 / PDF">浏览器打印 / PDF</button>
-                  <button id="dropdown-export-html" data-i18n="单文件 HTML">单文件 HTML</button>
-                  <button id="dropdown-export-video" data-i18n="视频 MP4">视频 MP4</button>
-                  <button id="dropdown-export-site" data-i18n="静态站点包 ZIP">静态站点包 ZIP</button>
+                  <div style="padding:4px 12px;font-size:10px;opacity:0.5;text-transform:uppercase;letter-spacing:0.08em;" data-i18n="发送给他人">发送给他人</div>
+                  <button id="dropdown-export-pdf" title="适合打印或发给他人查看"><span class="export-icon">📄</span><span class="export-label">PDF</span></button>
+                  <button id="dropdown-export-pdf-vector" title="矢量文字，可选中复制，文件更小" data-i18n-title="矢量文字，可选中复制，文件更小"><span class="export-icon">📝</span><span class="export-label" data-i18n="矢量 PDF（文字可选中）">矢量 PDF（文字可选中）</span></button>
+                  <button id="dropdown-export-pptx" title="可在 PowerPoint 中继续编辑"><span class="export-icon">📊</span><span class="export-label">PPTX（可编辑）</span></button>
+                  <div class="dropdown-divider"></div>
+                  <div style="padding:4px 12px;font-size:10px;opacity:0.5;text-transform:uppercase;letter-spacing:0.08em;" data-i18n="嵌入与分享">嵌入与分享</div>
+                  <button id="dropdown-export-html" title="适合嵌入网页或离线分享"><span class="export-icon">🌐</span><span class="export-label">单文件 HTML</span></button>
+                  <button id="dropdown-export-site" title="完整打包，拖入任何静态托管即可放映"><span class="export-icon">📦</span><span class="export-label">静态站点 ZIP</span></button>
+                  <div class="dropdown-divider"></div>
+                  <div style="padding:4px 12px;font-size:10px;opacity:0.5;text-transform:uppercase;letter-spacing:0.08em;" data-i18n="视频与图片">视频与图片</div>
+                  <button id="dropdown-export-video" title="逐页合成静帧视频，每页 4 秒"><span class="export-icon">🎬</span><span class="export-label">视频 MP4</span></button>
+                  <button id="dropdown-export-pptx-image" title="每页高清截图放入 PPTX"><span class="export-icon">🖼️</span><span class="export-label">高清图片 PPTX</span></button>
                 </div>
               </div>
               <button id="btn-publish-quick" class="btn-secondary" disabled data-i18n="发布">发布</button>
@@ -745,12 +765,13 @@
               <div class="workspace-preview-status" id="edit-status"></div>
               <div class="workspace-preview-actions">
                 <button id="btn-design-lint" class="btn-secondary" data-i18n="设计检查"
-                  style="padding: 6px 12px; font-size: 12px;">设计检查</button>
+                  style="padding: 6px 12px; font-size: 12px;">🔍 设计检查</button>
                 <button id="btn-ai-image" class="btn-secondary" data-i18n="生成配图"
-                  style="padding: 6px 12px; font-size: 12px;">生成配图</button>
-                <button id="btn-toggle-chat" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" data-i18n="AI 修改">AI 修改</button>
+                  style="padding: 6px 12px; font-size: 12px;">🖼️ 生成配图</button>
+                <button id="btn-toggle-chat" class="btn-secondary btn-chat" style="padding: 6px 12px; font-size: 12px;" data-i18n="AI 修改">✨ AI 修改</button>
+                <button id="btn-fullscreen-preview" class="btn-secondary" title="全屏预览 (F)" data-i18n-title="全屏预览 (F)" style="padding: 6px 12px; font-size: 12px;" data-i18n="⛶ 全屏">⛶ 全屏</button>
                 <button id="btn-open-preview-header" class="btn-secondary" data-i18n="在新窗口打开"
-                  style="padding: 6px 12px; font-size: 12px;">在新窗口打开</button>
+                  style="padding: 6px 12px; font-size: 12px;">🔗 新窗口</button>
               </div>
             </div>
             <div class="workspace-preview-frame">
@@ -1145,6 +1166,20 @@
             </section>
 
             <section class="card">
+              <div class="card-title" data-i18n="PDF 导出">PDF 导出</div>
+              <div class="field" style="max-width: 360px;">
+                <label data-i18n="默认导出引擎">默认导出引擎</label>
+                <select id="input-pdf-engine">
+                  <option value="puppeteer" data-i18n="高清图片 PDF（Puppeteer，保真度最高）">高清图片 PDF（Puppeteer，保真度最高）</option>
+                  <option value="weasyprint" data-i18n="矢量文字 PDF（WeasyPrint，文件小、文字可选中）">矢量文字 PDF（WeasyPrint，文件小、文字可选中）</option>
+                </select>
+              </div>
+              <p style="font-size: 12px; color: var(--ink); opacity: 0.5; margin-top: 8px;" data-i18n="注：WeasyPrint 不执行 JS，含 data-chart 动态图表的页面会空白。">
+                注：WeasyPrint 不执行 JS，含 data-chart 动态图表的页面会空白。
+              </p>
+            </section>
+
+            <section class="card">
               <div class="card-title" data-i18n="数据与备份">数据与备份</div>
               <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 12px;" data-i18n="所有数据保存在本地目录：projects/ 存放 PPT 作品，vault/ 存放知识库（速记、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。">所有数据保存在本地目录：projects/ 存放 PPT 作品，vault/ 存放知识库（速记、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。</p>
               <button id="btn-backup-now" class="btn-primary" style="padding: 8px 16px;" data-i18n="立即备份">立即备份</button>
@@ -1174,6 +1209,7 @@
       <div class="field">
         <label data-i18n="项目标识（英文/数字/中划线）">项目标识（英文/数字/中划线）</label>
         <input type="text" id="new-project-name" placeholder="q3-report">
+        <div class="field-hint hidden" id="name-validity"></div>
       </div>
       <div class="field">
         <label data-i18n="演示标题">演示标题</label>

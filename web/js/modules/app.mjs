@@ -91,7 +91,7 @@ function cacheEls() {
         btnPublishQuick: document.getElementById('btn-publish-quick'),
         toast: document.getElementById('toast'),
         btnHelp: document.getElementById('btn-help'),
-        btnSettings: document.getElementById('btn-settings'),
+        btnSettingsTopbar: document.getElementById('btn-settings-topbar'),
         helpPanel: document.getElementById('help-panel'),
         btnCloseHelp: document.getElementById('btn-close-help'),
         helpOverlay: document.querySelector('.help-panel-overlay'),
@@ -145,7 +145,11 @@ function switchSidebarTab(tab, subTab) {
     document.querySelectorAll('.sidebar-tab').forEach((tabEl) => {
         tabEl.classList.toggle('active', tabEl.dataset.tab === tab);
     });
-    if (S.els.btnSettings) S.els.btnSettings.classList.toggle('active', tab === 'settings');
+    // Settings tab icon highlighting (sidebar bottom button + topbar button)
+    const settingsTabBtn = document.getElementById('btn-settings-tab');
+    if (settingsTabBtn) settingsTabBtn.classList.toggle('active', tab === 'settings');
+    const settingsTopbarBtn = document.getElementById('btn-settings-topbar');
+    if (settingsTopbarBtn) settingsTopbarBtn.classList.toggle('active', tab === 'settings');
     hideAllMainPanels();
     stopPhysics();
     document.getElementById('fragments-sidebar-content').classList.add('hidden');
@@ -456,3 +460,7 @@ if ('serviceWorker' in navigator &&
         .then((reg) => { reg.update().catch(() => { /* 更新检查失败忽略 */ }); })
         .catch(() => { /* 注册失败静默（如隐私模式） */ });
 }
+
+// Settings tab button (sidebar bottom icon + topbar both open settings panel)
+document.getElementById('btn-settings-tab')?.addEventListener('click', () => switchSidebarTab('settings'));
+document.getElementById('btn-settings-topbar')?.addEventListener('click', () => switchSidebarTab('settings'));

@@ -24,6 +24,9 @@ export const DEFAULT_GLOBAL_CONFIG = {
     provider: 'arkcli',
     model: '',
   },
+  pdfConfig: {
+    defaultEngine: 'puppeteer',
+  },
 };
 
 function envModelConfig() {
@@ -73,6 +76,7 @@ export function readGlobalConfig() {
     modelConfig: envCfg || fileConfig?.modelConfig || DEFAULT_GLOBAL_CONFIG.modelConfig,
     imageModelConfig: { ...DEFAULT_GLOBAL_CONFIG.imageModelConfig, ...fileConfig?.imageModelConfig },
     videoModelConfig: { ...DEFAULT_GLOBAL_CONFIG.videoModelConfig, ...fileConfig?.videoModelConfig },
+    pdfConfig: { ...DEFAULT_GLOBAL_CONFIG.pdfConfig, ...fileConfig?.pdfConfig },
   };
 }
 
@@ -88,7 +92,7 @@ export function writeGlobalConfig(config) {
     }
   }
   const merged = { ...existing, ...safe };
-  for (const key of ['modelConfig', 'imageModelConfig', 'videoModelConfig']) {
+  for (const key of ['modelConfig', 'imageModelConfig', 'videoModelConfig', 'pdfConfig']) {
     if (safe[key]) merged[key] = { ...existing[key], ...safe[key] };
   }
   writeJsonAtomic(GLOBAL_CONFIG_PATH, merged);

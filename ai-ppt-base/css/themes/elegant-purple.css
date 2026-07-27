@@ -30,4 +30,15 @@ body.theme-elegant-purple {
   --danger: #DB2777;
   --success: #10B981;
   --info: #7C3AED;
+
+  /* Gradients & Effects */
+  --gradient-primary: linear-gradient(135deg, #7C3AED 0%, #8B5CF6 50%, #A78BFA 100%);
+  --text-gradient: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+  --gradient-hero: radial-gradient(ellipse 60% 50% at 10% 10%, rgba(124, 58, 237, 0.10), transparent 55%),
+                   radial-gradient(ellipse 40% 35% at 90% 90%, rgba(167, 139, 250, 0.08), transparent 55%),
+                   radial-gradient(ellipse 30% 25% at 60% 20%, rgba(139, 92, 246, 0.06), transparent 60%);
+  --shadow-glow: 0 8px 32px -4px rgba(124, 58, 237, 0.35);
+  --shadow-glow-sm: 0 4px 16px -2px rgba(124, 58, 237, 0.3);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(221, 214, 254, 0.8);
 }

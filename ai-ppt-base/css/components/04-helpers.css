@@ -1,0 +1,340 @@
+/* ==========================================================================
+   Visual Helpers
+   Big numbers, hero stats, badges, quotes, timelines, visual rows, etc.
+   ========================================================================== */
+
+/* ---- Big Number ---- */
+
+.big-number {
+  font-family: var(--font-heading);
+  font-size: clamp(52px, 6.5vw, 96px);
+  font-weight: var(--font-extrabold);
+  line-height: 1;
+  background: var(--text-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.big-number-label {
+  font-family: var(--font-heading);
+  font-size: clamp(13px, 1.4vw, 18px);
+  font-weight: var(--font-medium);
+  color: var(--muted);
+  margin-top: 12px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+/* ---- Hero Stat ---- */
+
+.hero-stat {
+  text-align: center;
+  padding: clamp(20px, 2.5vh, 32px) clamp(16px, 2vw, 24px);
+  position: relative;
+}
+
+.hero-stat::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(100px, 14vw, 180px);
+  height: clamp(100px, 14vw, 180px);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* .slide p 有 max-width: 680px，块级盒子在 hero-stat 内默认靠左，
+   需 auto 水平居中才能与大数字对齐 */
+.hero-stat p {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---- Metric Row (hero-stat in a row) ---- */
+
+.metric-row {
+  display: flex;
+  justify-content: center;
+  gap: clamp(16px, 2.5vw, 40px);
+  flex-wrap: wrap;
+  margin-top: clamp(20px, 3vh, 36px);
+}
+
+.metric-row .hero-stat {
+  flex: 1;
+  min-width: 120px;
+  max-width: 200px;
+}
+
+.metric-row .hero-stat .big-number {
+  font-size: clamp(40px, 5vw, 64px);
+}
+
+.metric-row .hero-stat .big-number-label {
+  font-size: clamp(12px, 1.1vw, 15px);
+  margin-top: 8px;
+}
+
+/* ---- Visual Row ---- */
+
+.visual-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(16px, 2vw, 24px);
+  margin-top: clamp(20px, 3vh, 32px);
+}
+
+.visual-card {
+  flex: 0 1 clamp(200px, 22vw, 300px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: clamp(24px, 3vh, 32px) clamp(20px, 2vw, 28px);
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: transform 0.3s var(--ease-out-expo), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.visual-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.06);
+  border-color: var(--border-strong);
+}
+
+.visual-card .icon,
+.tile .icon {
+  width: clamp(48px, 6vw, 72px);
+  height: clamp(48px, 6vw, 72px);
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: clamp(14px, 1.4vw, 18px);
+  font-weight: 700;
+}
+
+.visual-card .icon {
+  font-size: clamp(20px, 2.2vw, 28px);
+}
+
+.visual-card h3 {
+  font-size: clamp(17px, 1.8vw, 24px);
+  margin-bottom: 8px;
+}
+
+.visual-card p {
+  font-size: clamp(13px, 1.3vw, 17px);
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ---- Quote Block ---- */
+
+.quote-block {
+  position: relative;
+  padding: clamp(28px, 4vh, 40px) clamp(32px, 5vw, 48px);
+  border-left: 4px solid var(--accent);
+  background: var(--surface-subtle);
+  border-radius: 0 12px 12px 0;
+  margin: clamp(20px, 3vh, 32px) 0;
+}
+
+.quote-block,
+.quote-block p {
+  font-family: var(--font-heading);
+  font-size: clamp(22px, 3vw, 38px);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--ink);
+  margin: 0;
+}
+
+/* ---- Timeline (vertical) ---- */
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2vh, 22px);
+  margin-top: clamp(20px, 3vh, 32px);
+  padding-left: 20px;
+  border-left: 2px solid var(--border);
+}
+
+.timeline-item {
+  position: relative;
+  padding-left: 22px;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -27px;
+  top: 7px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--cream);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.timeline-item h3 {
+  font-size: clamp(17px, 1.8vw, 24px);
+  margin-bottom: 4px;
+}
+
+.timeline-item p {
+  font-size: clamp(13px, 1.3vw, 17px);
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ---- Badge Row ---- */
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: clamp(16px, 2vh, 24px);
+  justify-content: flex-start;
+}
+
+.badge {
+  display: inline-block;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: clamp(12px, 1.1vw, 14px);
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.badge.outline {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+}
+
+/* ---- Split Visual ---- */
+
+.split-visual {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: clamp(20px, 3vw, 40px);
+  margin-top: clamp(20px, 3vh, 32px);
+}
+
+.split-visual > * {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 240px;
+  text-align: center;
+}
+
+.split-visual .visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(160px, 25vh, 260px);
+  background: var(--surface-subtle);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+}
+
+.split-visual .big-number {
+  text-align: center;
+}
+
+.split-visual.wide-left {
+  flex-direction: row;
+}
+
+.split-visual.wide-left > :first-child {
+  flex: 0 0 60%;
+  max-width: 60%;
+}
+
+.split-visual.wide-left > :last-child {
+  flex: 0 0 36%;
+  max-width: 36%;
+}
+
+.split-visual.wide-right {
+  flex-direction: row-reverse;
+}
+
+.split-visual.wide-right > :first-child {
+  flex: 0 0 36%;
+  max-width: 36%;
+}
+
+.split-visual.wide-right > :last-child {
+  flex: 0 0 60%;
+  max-width: 60%;
+}
+
+/* ---- Gradient Text (deprecated, kept for compat) ---- */
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ---- Section Hero (centered hero section) ---- */
+
+.section-hero {
+  text-align: center;
+  max-width: clamp(960px, 85vw, 1100px);
+  width: 100%;
+  min-height: 64vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(14px, 2.2vh, 24px);
+  padding: clamp(40px, 6vh, 80px) 0;
+  position: relative;
+}
+
+.section-hero .kicker {
+  margin-bottom: clamp(8px, 1.2vh, 14px);
+}
+
+/* ---- Offset Layout ---- */
+
+.offset-layout {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: clamp(30px, 5vw, 60px);
+  align-items: start;
+  width: 100%;
+  max-width: 100%;
+}
+
+.offset-layout .offset-title {
+  position: sticky;
+  top: 10%;
+}
+
+.offset-layout .offset-title h2 {
+  font-size: clamp(28px, 3.5vw, 48px);
+  line-height: 1.15;
+}

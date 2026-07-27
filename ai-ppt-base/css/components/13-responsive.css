@@ -1,0 +1,38 @@
+/* ==========================================================================
+   Responsive Breakpoints
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  .two-col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .slide {
+    padding: clamp(1.5rem, 3vh, 3rem) clamp(5vw, 6vw, 5rem);
+  }
+
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .tile-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ppt-table th,
+  .ppt-table td {
+    padding: clamp(8px, 0.9vh, 11px) clamp(10px, 1.1vw, 12px);
+  }
+}
+
+@media (max-width: 480px) {
+  .slide h1 {
+    font-size: clamp(26px, 7vw, 34px);
+  }
+
+  .slide p.lead {
+    font-size: clamp(15px, 4vw, 18px);
+  }
+}

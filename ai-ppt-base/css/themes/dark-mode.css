@@ -30,6 +30,17 @@ body.theme-dark-mode {
   --danger: #FB7185;
   --success: #4ADE80;
   --info: #60A5FA;
+
+  /* Gradients & Effects */
+  --gradient-primary: linear-gradient(135deg, #22D3EE 0%, #06B6D4 50%, #67E8F9 100%);
+  --text-gradient: linear-gradient(135deg, #22D3EE 0%, #A5F3FC 100%);
+  --gradient-hero: radial-gradient(ellipse 55% 45% at 10% 0%, rgba(34, 211, 238, 0.15), transparent 55%),
+                   radial-gradient(ellipse 45% 40% at 100% 100%, rgba(103, 232, 249, 0.10), transparent 55%),
+                   radial-gradient(ellipse 30% 25% at 85% 15%, rgba(34, 211, 238, 0.08), transparent 60%);
+  --shadow-glow: 0 8px 32px -4px rgba(34, 211, 238, 0.45);
+  --shadow-glow-sm: 0 4px 16px -2px rgba(34, 211, 238, 0.35);
+  --glass-bg: rgba(15, 23, 42, 0.65);
+  --glass-border: rgba(51, 65, 85, 0.8);
 }
 
 /* Dark mode specific overrides */

@@ -1,0 +1,150 @@
+
+@media print {
+  /* One slide per page: the @page box is exactly the 1280×800 design canvas
+     with zero margin, so a slide sized to the canvas fills the page
+     edge-to-edge — no overflow, no clipped content, no blank pages. */
+  @page {
+    size: 1280px 800px;
+    margin: 0;
+  }
+
+  html, body {
+    overflow: visible;
+    height: auto;
+    margin: 0;
+    padding: 0;
+  }
+
+  #app {
+    width: 100%;
+    height: auto;
+    position: static;
+  }
+
+  .stage {
+    position: static;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .slide {
+    position: relative !important;
+    opacity: 1 !important;
+    pointer-events: auto;
+    page-break-after: always;
+    break-after: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    width: 1280px !important;
+    height: 800px !important;
+    overflow: hidden;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .slide:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .slide-content,
+  .slide.active .slide-content,
+  .overview-card .slide-content {
+    max-width: none !important;
+    width: 100% !important;
+    padding: clamp(24px, 3vh, 48px) clamp(36px, 5vw, 72px) !important;
+  }
+
+  .slide h1 { font-size: clamp(34px, 4.5vw, 60px) !important; }
+  .slide h2 { font-size: clamp(28px, 3.6vw, 48px) !important; }
+
+  /* Entrance animations never run to completion when printing (and only the
+     active slide would have them at all), so force every animatable element
+     to its visible final state — mirrors the thumbnail/presenter final-state
+     logic in ppt.js. */
+  .slide .kicker,
+  .slide h1,
+  .slide h2,
+  .slide .lead,
+  .slide .section-title,
+  .slide .tile,
+  .slide .two-col > *,
+  .slide table.ppt-table,
+  .slide .visual-card,
+  .slide .data-metric,
+  .slide .chart-bar-item,
+  .slide .progress-ring-item,
+  .slide .chart-step,
+  .slide [data-chart],
+  .slide .reveal-item {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Progress ring: fill to the configured final offset (same formula as the
+     fillProgress keyframe; --progress legacy, --progress-pct preferred). */
+  .slide .progress-ring-circle {
+    stroke-dashoffset: var(--progress, calc(314 - (314 * var(--progress-pct, 0) / 100))) !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Waterfall: fill to the configured final width (same as fillWidth). */
+  .slide .waterfall-fill {
+    width: var(--width, 0%) !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .overview-card .slide {
+    opacity: 1 !important;
+    transform: none !important;
+    position: relative !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    page-break-after: avoid !important;
+    margin-bottom: 16px !important;
+  }
+
+  .overview-card .slide-content {
+    opacity: 1 !important;
+    transform: scale(0.22) !important;
+    width: 454.5% !important;
+    max-width: none !important;
+  }
+
+  /* UI chrome never prints */
+  .progress,
+  .hud,
+  .overview,
+  .toast,
+  .help,
+  .sidebar,
+  .fullscreen-btn,
+  .marker-toolbar,
+  .marker-overlay,
+  .theme-switcher,
+  .theme-hint,
+  #ai-ppt-edit-toolbar {
+    display: none !important;
+  }
+
+  .tile {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
+
+/* ===== Data Visualization Components ===== */

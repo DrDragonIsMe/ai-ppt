@@ -1,0 +1,97 @@
+
+.ppt-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-body);
+  font-size: clamp(13px, 1.2vw, 16px);
+  margin: clamp(14px, 2vh, 24px) 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.ppt-table th,
+.ppt-table td {
+  padding: clamp(12px, 1.5vh, 16px) clamp(14px, 1.5vw, 20px);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.ppt-table th {
+  background: linear-gradient(180deg, var(--surface-subtle) 0%, color-mix(in srgb, var(--accent) 5%, var(--surface-subtle)) 100%);
+  color: var(--ink);
+  font-weight: var(--font-semibold);
+  font-size: clamp(11px, 1vw, 13px);
+  letter-spacing: 0.03em;
+  position: relative;
+  border-bottom: 2px solid var(--accent);
+}
+
+.ppt-table td {
+  background: var(--surface);
+  line-height: 1.7;
+  color: var(--slate);
+  transition: background 0.2s ease;
+}
+
+.ppt-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ppt-table tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
+}
+
+.ppt-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.ppt-table td strong {
+  color: var(--ink);
+  font-weight: var(--font-semibold);
+}
+
+.ppt-table.small {
+  font-size: clamp(12px, 1.1vw, 14px);
+}
+
+.ppt-table.small th,
+.ppt-table.small td {
+  padding: clamp(8px, 1vh, 12px) clamp(10px, 1.1vw, 14px);
+}
+
+.ppt-table.modern {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.ppt-table.modern th {
+  background: transparent;
+  border-bottom: 2px solid var(--border-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: clamp(10px, 0.9vw, 12px);
+}
+
+.ppt-table.modern td {
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+}
+
+.ppt-table.modern tr:nth-child(even) td {
+  background: transparent;
+}
+
+.ppt-table.first-col-bold td:first-child {
+  font-weight: var(--font-semibold);
+  color: var(--ink);
+}
+
+/* ===== Two Column ===== */

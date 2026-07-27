@@ -71,14 +71,16 @@ export function ruleHeadingIssues($, slides) {
   return issues;
 }
 
-// 渐变文字 .gradient-text（已弃用类；唯一的安全自动修复项：移除该类）
+// 渐变文字 .gradient-text：作为强调元素少量使用是现代设计趋势；
+// 但每页过多使用（>3 处）会显杂乱，触发警告。
 export function ruleGradientText($, slides) {
   const issues = [];
+  const GRADIENT_WARN_THRESHOLD = 3;
   slides.each((i, el) => {
     const count = $(el).find('.gradient-text').length + ($(el).hasClass('gradient-text') ? 1 : 0);
-    if (count > 0) {
+    if (count > GRADIENT_WARN_THRESHOLD) {
       issues.push(issue(i + 1, 'gradient-text', 'warning',
-        `使用了已弃用的 gradient-text 类（${count} 处），--fix 可自动移除`));
+        `gradient-text 使用过多（${count} 处，建议 ≤${GRADIENT_WARN_THRESHOLD}），作为强调元素应克制使用`));
     }
   });
   return issues;
@@ -220,7 +222,7 @@ export const RULES = [
 // ---- lint 主流程 ----
 
 // 对整份 index.html 跑全部规则。
-// options.fix=true 时应用安全自动修复（目前仅 gradient-text 移除）并返回修复后 html；
+// options.fix=true 时应用安全自动修复并返回修复后 html；
 // 无可修复项时 html 原样返回（不做 cheerio 整文档重序列化）。
 export function lintHtml(html, options = {}) {
   const { projectDir = null, fix = false } = options;
@@ -229,19 +231,8 @@ export function lintHtml(html, options = {}) {
   const issues = [];
   for (const rule of RULES) issues.push(...rule($, slides, { projectDir }));
 
-  let fixedHtml = html;
-  let fixedCount = 0;
-  if (fix && $('.gradient-text').length > 0) {
-    $('.gradient-text').each((_, el) => {
-      const cls = String($(el).attr('class') || '').split(/\s+/).filter((c) => c && c !== 'gradient-text');
-      if (cls.length) $(el).attr('class', cls.join(' '));
-      else $(el).removeAttr('class');
-    });
-    fixedHtml = $.html();
-    fixedCount = issues.filter((it) => it.rule === 'gradient-text').length;
-    for (const it of issues) if (it.rule === 'gradient-text') it.autoFixed = true;
-  }
-  return { issues, html: fixedHtml, fixedCount };
+  // 目前 gradient-text 不再自动移除（已成为正式设计元素，仅过度使用时警告）
+  return { issues, html, fixedCount: 0 };
 }
 
 // 项目级 lint：读 projects/<name>/index.html。
