@@ -32,6 +32,19 @@ export function isSafeName(name) {
   return true;
 }
 
+// 笔记名称：允许专题路径（如 "产品方法论/需求分析"），但拒绝路径穿越和非法字符
+export function isSafeNoteName(name) {
+  if (typeof name !== 'string' || name.length === 0) return false;
+  if (name.includes('..') || /[\\:*?"<>|]/.test(name)) return false;
+  // eslint-disable-next-line no-control-regex
+  if ((/[\x00-\x1f\x7f]/.test(name))) return false;
+  // 不允许空段、不允许以 / 开头或结尾
+  const segments = name.split('/');
+  if (segments.some((s) => !s.trim())) return false;
+  if (name.startsWith('/') || name.endsWith('/')) return false;
+  return true;
+}
+
 // 项目名称：仅允许字母、数字、中文、下划线、中划线
 const PROJECT_NAME_RE = /^[a-zA-Z0-9_\u4e00-\u9fa5-]+$/;
 export function isSafeProjectName(name) {
@@ -79,6 +92,26 @@ export function listProjects() {
         sourceSelection: cfg.sourceSelection || null,
       };
     });
+}
+
+// 查找与指定笔记/专题绑定的项目（PPT-笔记双向同步）
+// sourceKind: 'note' | 'topic' | 'selection'
+export function findProjectsBySource(sourceKind, sourceKey) {
+  ensureProjectsDir();
+  const results = [];
+  for (const entry of fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const cfg = readConfig(entry.name);
+    const ss = cfg.sourceSelection;
+    let matched = false;
+    if (sourceKind === 'note' && ss?.kind === 'note') {
+      matched = ss.noteName === sourceKey;
+    } else if (sourceKind === 'topic' && ss?.kind === 'topic') {
+      matched = ss.topicPath === sourceKey;
+    }
+    if (matched) results.push({ name: entry.name, ...cfg });
+  }
+  return results;
 }
 
 export function getProjectDir(name) {
@@ -157,7 +190,8 @@ export function writeDeckIndex(name, slidesHtml, { title, bodyClass, themeOverri
 }
 
 export function createStarterHtml(name, title, theme = 'web-ui', animation = 'slide') {
-  const subtitle = '由 ai-ppt 自动生成';
+  const brandName = readGlobalConfig().appConfig?.brandName || '小龙哥@薪灵AI';
+  const subtitle = `由 ${brandName} 自动生成`;
   const bodyClass = buildBodyClass({ theme, animation });
   const slidesHtml = `      <section class="slide active">
         <div class="slide-content" style="text-align: center;">
@@ -181,7 +215,7 @@ export function createStarterHtml(name, title, theme = 'web-ui', animation = 'sl
         </div>
       </section>
 `;
-  return wrapSlides(slidesHtml, title || name || 'ai-ppt', bodyClass);
+  return wrapSlides(slidesHtml, title || name || brandName, bodyClass);
 }
 
 export function createProject(name, title, template = null) {

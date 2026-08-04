@@ -24,8 +24,21 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 
+// 判断笔记名是否包含专题路径
+function hasTopicPath(name) {
+  return name && name.includes('/');
+}
+
+// 解析链接目标：若 target 不含 topic，则尝试用 sourceTopic 补全同专题优先解析
+function resolveWikiTarget(target, sourceTopic) {
+  const normalized = normalizeNoteName(target);
+  if (hasTopicPath(normalized) || !sourceTopic) return normalized;
+  // 同专题优先：sourceTopic/笔记名
+  return `${sourceTopic}/${normalized}`;
+}
+
 // 解析[[Wiki链接]]，返回所有找到的链接
-function parseWikiLinks(content) {
+function parseWikiLinks(content, sourceTopic) {
   const links = [];
   // 匹配 [[笔记名]] 或 [[笔记名|显示文本]]
   const regex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
@@ -35,7 +48,7 @@ function parseWikiLinks(content) {
     const display = match[2] ? match[2].trim() : target;
     links.push({
       target,
-      targetNormalized: normalizeNoteName(target),
+      targetNormalized: resolveWikiTarget(target, sourceTopic),
       display,
       raw: match[0],
     });
@@ -44,7 +57,7 @@ function parseWikiLinks(content) {
 }
 
 // 按行解析[[Wiki链接]]，同时截取链接所在行 ±40 字作为上下文
-function parseWikiLinksWithSnippets(body) {
+function parseWikiLinksWithSnippets(body, sourceTopic) {
   const results = [];
   const regex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
   for (const line of body.split('\n')) {
@@ -57,7 +70,7 @@ function parseWikiLinksWithSnippets(body) {
       if (start > 0) snippet = '…' + snippet;
       if (end < line.length) snippet += '…';
       results.push({
-        targetNormalized: normalizeNoteName(match[1].trim()),
+        targetNormalized: resolveWikiTarget(match[1].trim(), sourceTopic),
         snippet,
       });
     }
@@ -74,9 +87,11 @@ const defaultIO = { readIndex, writeIndex, listNotes, readNote };
 // 解析单个笔记内容，生成索引条目（纯函数，供增量/全量重建共用）
 function parseNoteContent(name, mtime, content) {
   const { frontMatter, content: body } = parseFrontMatter(content);
-  const links = parseWikiLinksWithSnippets(body);
+  const sourceTopic = hasTopicPath(name) ? name.split('/').slice(0, -1).join('/') : '';
+  const links = parseWikiLinksWithSnippets(body, sourceTopic);
   return {
     title: frontMatter.title || name,
+    topic: frontMatter.topic || sourceTopic || '',
     tags: frontMatter.tags || [],
     links: links.map(l => l.targetNormalized),
     snippets: links.map(l => l.snippet), // 与 links 等长，供反链上下文增量重算
@@ -181,31 +196,43 @@ function getNoteInfo(name) {
     normalizedToName.set(normalizeNoteName(n), n);
   }
   const normalized = normalizeNoteName(name);
-  const actualName = normalizedToName.get(normalized) || name;
+  // 优先精确匹配；若链接是简写，尝试同专题匹配
+  let actualName = normalizedToName.get(normalized);
+  if (!actualName && hasTopicPath(name)) {
+    const topic = name.split('/').slice(0, -1).join('/');
+    const base = name.split('/').pop();
+    actualName = normalizedToName.get(`${topic}/${base}`) || normalizedToName.get(base);
+  }
+  actualName = actualName || name;
 
   const note = index.notes[actualName];
   // 优先用索引缓存的原文，索引未覆盖时回退读文件
   const content = note && typeof note.content === 'string' ? note.content : readNote(actualName);
-  const links = content ? parseWikiLinks(content) : [];
+  const sourceTopic = hasTopicPath(actualName) ? actualName.split('/').slice(0, -1).join('/') : '';
+  const links = content ? parseWikiLinks(content, sourceTopic) : [];
 
-  // 解析出链目标的实际笔记名
+  // 解析出链目标的实际笔记名：优先同专题，再全局
   const resolvedOutlinks = [];
   for (const link of links) {
-    const targetName = normalizedToName.get(link.targetNormalized);
+    let targetName = normalizedToName.get(link.targetNormalized);
+    if (!targetName && sourceTopic) {
+      targetName = normalizedToName.get(`${sourceTopic}/${link.targetNormalized}`);
+    }
     if (targetName && !resolvedOutlinks.includes(targetName)) {
       resolvedOutlinks.push(targetName);
     }
   }
-  
+
   // 入链：对象数组 [{name, snippets}]
   const backlinks = (index.backlinks[actualName] || []).map(entry => ({
     name: entry.source,
     snippets: entry.snippets || [],
   }));
-  
+
   return {
     name: actualName,
     title: note?.title || actualName,
+    topic: note?.topic || sourceTopic || '',
     tags: note?.tags || [],
     tasks: note?.tasks || [],
     properties: note?.properties || {},

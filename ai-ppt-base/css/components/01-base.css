@@ -173,28 +173,39 @@ body {
   flex-direction: column;
 }
 
-.slide-content > .section-title,
-.slide-content > h1,
-.slide-content > h2 {
+/* 左对齐（默认）容器中，标题与正文元素靠左上排；
+   居中陈述容器（style*="text-align: center" 或 .centered）不适用，交由 09-cover 的居中规则接管 */
+.slide-content:not([style*="text-align: center"]):not(.centered) > .section-title,
+.slide-content:not([style*="text-align: center"]):not(.centered) > h1,
+.slide-content:not([style*="text-align: center"]):not(.centered) > h2 {
   align-self: flex-start;
   margin-bottom: 0;
 }
 
-.slide-content > *:not(.section-title):not(h1):not(h2):not(.hero-headline):not(.kicker):not(.lead):not(.badge-row):not(.hero-meta):not(.divider):not(.btn-primary):not(.btn-secondary) {
+.slide-content:not([style*="text-align: center"]):not(.centered) > *:not(.section-title):not(h1):not(h2):not(.hero-headline):not(.kicker):not(.lead):not(.badge-row):not(.hero-meta):not(.divider):not(.btn-primary):not(.btn-secondary) {
   align-self: center;
   justify-content: center;
   margin: auto 0;
   width: 100%;
 }
 
-.slide-content > .kicker,
-.slide-content > .lead,
-.slide-content > .badge-row,
-.slide-content > .hero-meta,
-.slide-content > .divider,
-.slide-content > .btn-primary,
-.slide-content > .btn-secondary {
+.slide-content:not([style*="text-align: center"]):not(.centered) > .kicker,
+.slide-content:not([style*="text-align: center"]):not(.centered) > .lead,
+.slide-content:not([style*="text-align: center"]):not(.centered) > .badge-row,
+.slide-content:not([style*="text-align: center"]):not(.centered) > .hero-meta,
+.slide-content:not([style*="text-align: center"]):not(.centered) > .divider,
+.slide-content:not([style*="text-align: center"]):not(.centered) > .btn-primary,
+.slide-content:not([style*="text-align: center"]):not(.centered) > .btn-secondary {
   align-self: flex-start;
+}
+
+/* 页尾总结句：跟在卡片组/双栏/表格后的 .lead 默认居中
+   （带与上面相同的 :not 限定以持平优先级，再用更长的选择器胜出） */
+.slide-content:not([style*="text-align: center"]):not(.centered) > .tile-row + .lead,
+.slide-content:not([style*="text-align: center"]):not(.centered) > .two-col + .lead,
+.slide-content:not([style*="text-align: center"]):not(.centered) > table + .lead {
+  align-self: center;
+  text-align: center;
 }
 
 /* ===== Typography ===== */

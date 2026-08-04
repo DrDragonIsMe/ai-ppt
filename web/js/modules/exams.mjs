@@ -344,7 +344,7 @@ function renderMistakesList() {
     container.querySelectorAll('.mistake-list-item').forEach(el => { el.addEventListener('click', () => selectMistake(el.dataset.id)); });
 }
 
-function selectMistake(id) {
+export function selectMistake(id) {
     const m = S.mistakes.find(x => x.id === id);
     if (!m) return;
     S.currentMistake = m;

@@ -16,12 +16,14 @@ import {
   sanitizeProjectName,
   assertSafeProjectName,
 } from './config.mjs';
+import { snapshotBeforeGenerate } from './snapshot.mjs';
 import {
   emit,
   emitError,
   emitDone,
   stripMarkdown,
   buildModelOptions,
+  getEffectiveTheme,
   buildSlidesPrompt,
   buildFallbackSlides,
   generateSlidesHtml,
@@ -140,14 +142,18 @@ async function generateFromNote(noteName, projectName, options = {}) {
 
   // 写入HTML（保持本脚本原有的 body class 写法：主题与动画类始终输出）
   emit('write', '写入index.html');
-  const theme = options.theme || 'web-ui';
+  // 主题优先级：笔记 FrontMatter theme → options.theme → 默认 web-ui
+  const noteInfo = getNoteInfo(noteName);
+  const { frontMatter } = parseFrontMatter(noteInfo.content || '');
+  const theme = getEffectiveTheme(frontMatter, options);
   const animation = options.animation || 'slide';
+  snapshotBeforeGenerate(projectName);
   writeDeckIndex(projectName, slidesHtml, {
     title: promptData.title,
     bodyClass: `theme-${theme} anim-${animation}`,
   });
 
-  // 创建配置
+  // 创建配置（记录主题覆盖来源：笔记 FrontMatter 或选项）
   const cfg = {
     name: projectName,
     sourceType: 'vault-note',
@@ -161,6 +167,7 @@ async function generateFromNote(noteName, projectName, options = {}) {
       slideCount: promptData.slideCount,
       language: promptData.language,
     },
+    theme, animation,
     status: 'ready',
     lastGeneratedAt: new Date().toISOString(),
     errorMessage: null,

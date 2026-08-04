@@ -1290,6 +1290,7 @@ import {
     readNoteOrder,
     writeNoteOrder,
 } from '../scripts/vault.mjs';
+import * as vaultMod from '../scripts/vault.mjs';
 
 describe('isValidBackupTs', () => {
     it('接受标准备份时间戳格式', () => {
@@ -1378,6 +1379,83 @@ describe('readNoteOrder / writeNoteOrder', () => {
             assert.deepEqual(readNoteOrder({ orderFile: file }), []);
         } finally {
             fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+});
+
+// ==================== 专题目录（scripts/vault.mjs + link-resolver） ====================
+import { isSafeNoteName } from '../scripts/config.mjs';
+import { getNoteInfo as getTopicNoteInfo } from '../scripts/link-resolver.mjs';
+
+describe('isSafeNoteName', () => {
+    it('接受平铺笔记名与专题路径', () => {
+        assert.equal(isSafeNoteName('hello'), true);
+        assert.equal(isSafeNoteName('产品方法论/需求分析'), true);
+        assert.equal(isSafeNoteName('a/b/c'), true);
+    });
+
+    it('拒绝路径穿越与非法字符', () => {
+        assert.equal(isSafeNoteName('../etc'), false);
+        assert.equal(isSafeNoteName('a/../b'), false);
+        assert.equal(isSafeNoteName('a//b'), false);
+        assert.equal(isSafeNoteName('/a/b'), false);
+        assert.equal(isSafeNoteName('a/b/'), false);
+        assert.equal(isSafeNoteName('a\\b'), false);
+        assert.equal(isSafeNoteName('a:b'), false);
+    });
+});
+
+describe('vault topic directories', () => {
+    const topicPrefix = `test-topic-${Date.now()}`;
+    const topicPath = `${topicPrefix}/产品方法论`;
+    const noteName = `${topicPath}/需求分析`;
+
+    it('创建专题并在其下创建笔记', () => {
+        vaultMod.createTopic(topicPath);
+        try {
+            const topics = vaultMod.listTopics();
+            assert.ok(topics.includes(topicPath));
+            vaultMod.createNote('需求分析', '', { topic: topicPath });
+            const notes = vaultMod.listNotes().map((n) => n.name);
+            assert.ok(notes.includes(noteName));
+        } finally {
+            vaultMod.deleteTopic(topicPrefix, { force: true });
+        }
+    });
+
+    it('专题内简写双链可解析为完整专题路径', () => {
+        vaultMod.createTopic(topicPath);
+        try {
+            vaultMod.createNote('需求分析', '', { topic: topicPath });
+            vaultMod.createNote('用户研究', '', { topic: topicPath });
+            const notePath = vaultMod.getNotePath(noteName);
+            const content = vaultMod.readNote(noteName);
+            vaultMod.writeNote(noteName, content + '\n\n详见 [[用户研究]]。');
+            rebuildIndex({ force: true });
+            const info = getTopicNoteInfo(noteName);
+            assert.deepEqual(info.outlinks, [`${topicPath}/用户研究`]);
+            assert.equal(info.topic, topicPath);
+        } finally {
+            vaultMod.deleteTopic(topicPrefix, { force: true });
+        }
+    });
+
+    it('重命名专题级联更新笔记路径与双链', () => {
+        vaultMod.createTopic(topicPath);
+        const newTopic = `${topicPrefix}/产品方法-新`;
+        try {
+            vaultMod.createNote('需求分析', '', { topic: topicPath });
+            vaultMod.createNote('用户研究', '', { topic: topicPath });
+            vaultMod.writeNote(noteName, vaultMod.readNote(noteName) + '\n\n详见 [[用户研究]]。');
+            rebuildIndex({ force: true });
+            vaultMod.renameTopic(topicPath, newTopic);
+            const notes = vaultMod.listNotes().map((n) => n.name);
+            assert.ok(notes.includes(`${newTopic}/需求分析`));
+            assert.ok(notes.includes(`${newTopic}/用户研究`));
+            const info = getTopicNoteInfo(`${newTopic}/需求分析`);
+            assert.deepEqual(info.outlinks, [`${newTopic}/用户研究`]);
+        } finally {
+            vaultMod.deleteTopic(topicPrefix, { force: true });
         }
     });
 });

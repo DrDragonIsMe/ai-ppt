@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ai-ppt Workspace</title>
+  <title>小龙哥@薪灵AI Workspace</title>
   <meta name="theme-color" content="#0D9488">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -25,7 +25,7 @@
           </svg>
         </button>
         <div class="brand">
-          <div class="logo">ai-ppt</div>
+          <div class="logo" id="app-logo">小龙哥@薪灵AI</div>
         </div>
       </div>
       <div class="topbar-right">
@@ -33,6 +33,10 @@
           <input type="search" id="input-global-search" placeholder="搜索项目或内容… (Ctrl+K)" data-i18n-placeholder="搜索项目或内容… (Ctrl+K)">
           <div id="search-results" class="search-results hidden"></div>
         </div>
+          <button id="btn-task-center" class="btn-secondary btn-icon btn-task-center" title="任务中心" aria-label="任务中心" data-i18n-title="任务中心" data-i18n-aria="任务中心">
+            <span class="task-center-icon">◎</span>
+            <span id="task-center-badge" class="task-center-badge hidden">0</span>
+          </button>
         <button id="btn-settings-topbar" class="btn-secondary btn-icon" title="系统设置（侧边栏也有）" data-i18n-title="系统设置（侧边栏也有）">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -59,6 +63,7 @@
         <div class="sidebar-tabs">
           <button class="sidebar-tab active" data-tab="fragments"><span data-i18n="速记">速记</span><span class="tab-badge hidden" id="badge-fragments"></span></button>
           <button class="sidebar-tab" data-tab="vault"><span data-i18n="知识库">知识库</span><span class="tab-badge hidden" id="badge-vault"></span></button>
+          <button class="sidebar-tab" data-tab="agent"><span data-i18n="薪小灵">薪小灵</span></button>
           <button class="sidebar-tab" data-tab="cards"><span data-i18n="知识卡片">知识卡片</span><span class="tab-badge hidden" id="badge-cards"></span></button>
           <button class="sidebar-tab" data-tab="study"><span data-i18n="学习">学习</span><span class="tab-badge hidden" id="badge-study"></span></button>
           <button class="sidebar-tab" data-tab="projects"><span data-i18n="PPT 作品">PPT 作品</span></button>
@@ -139,6 +144,7 @@
                   <path d="M22 12a10 10 0 0 0-20 0"></path>
                 </svg>
               </button>
+              <button id="btn-vault-new-topic" class="btn-icon" title="新建专题文件夹" data-i18n-title="新建专题文件夹">📁</button>
               <button id="btn-vault-new" class="btn-icon" title="新建笔记" data-i18n-title="新建笔记">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
@@ -159,6 +165,18 @@
             <button id="btn-note-select-clear" class="btn-secondary" style="padding:4px 10px;font-size:12px;" data-i18n="清空">清空</button>
           </div>
           <div id="vault-note-list" class="vault-note-list"></div>
+        </div>
+
+        <div id="agent-sidebar-content" class="sidebar-content hidden">
+          <div class="sidebar-header">
+            <div class="sidebar-title" data-i18n="薪小灵">薪小灵</div>
+            <div style="display:flex;gap:6px;">
+              <button id="btn-agent-upload" class="btn-icon" title="上传资料" data-i18n-title="上传资料">↑</button>
+              <button id="btn-agent-refresh" class="btn-icon" title="刷新知识清单" data-i18n-title="刷新知识清单">↻</button>
+            </div>
+          </div>
+          <div class="sidebar-hint" style="padding:0 16px 12px;opacity:0.68;font-size:13px;line-height:1.7;" data-i18n="直接问知识、管理知识库，或用自然语言调整系统设置。">直接问知识、管理知识库，或用自然语言调整系统设置。</div>
+          <input type="file" id="agent-file-input" multiple accept="image/*,video/*,audio/*,.pdf,.docx" style="display:none;">
         </div>
 
         <div id="cards-sidebar-content" class="sidebar-content hidden">
@@ -572,6 +590,33 @@
         </div>
         </div>
 
+        <div id="agent-panel" class="agent-panel hidden">
+          <div class="agent-panel-header">
+            <div>
+              <div id="agent-panel-title" class="agent-panel-title">薪小灵</div>
+              <div id="agent-panel-subtitle" class="agent-panel-subtitle" data-i18n="支持知识检索、知识库管理和系统设置指令">支持知识检索、知识库管理和系统设置指令</div>
+            </div>
+          </div>
+          <div class="agent-layout">
+            <section class="card agent-knowledge-card">
+              <div class="card-title" data-i18n="知识库资料">知识库资料</div>
+              <div class="agent-doc-toolbar">
+                <input type="search" id="agent-doc-search" placeholder="筛选资料、笔记或卡片…" data-i18n-placeholder="筛选资料、笔记或卡片…">
+              </div>
+              <div id="agent-doc-list" class="agent-doc-list"></div>
+              <div id="agent-doc-empty" class="agent-doc-empty" data-i18n="当前还没有知识资料，先上传文件或创建笔记吧。">当前还没有知识资料，先上传文件或创建笔记吧。</div>
+            </section>
+            <section class="card agent-chat-card">
+              <div class="card-title" data-i18n="对话">对话</div>
+              <div id="agent-chat-messages" class="agent-chat-messages"></div>
+              <div class="chat-input-row agent-chat-input-row">
+                <textarea id="agent-chat-input" placeholder="例如：总结公司差旅制度 / 创建专题 产品培训 / 把品牌名改成薪小灵知识台" data-i18n-placeholder="例如：总结公司差旅制度 / 创建专题 产品培训 / 把品牌名改成薪小灵知识台"></textarea>
+                <button id="btn-agent-send" class="btn-primary" data-i18n="发送">发送</button>
+              </div>
+            </section>
+          </div>
+        </div>
+
         <!-- 知识库笔记编辑器（不依赖项目选择） -->
         <div id="vault-panel" class="vault-panel hidden">
           <div id="vault-no-note-selected" class="empty-state" style="padding:40px 20px;">
@@ -759,19 +804,36 @@
               <span class="pipeline-dot">4</span><span class="pipeline-label" data-i18n="发布">发布</span>
             </button>
           </div>
+            <section id="workspace-guide" class="workspace-guide">
+              <div class="workspace-guide-copy">
+                <div id="workspace-guide-title" class="workspace-guide-title" data-i18n="先准备内容来源">先准备内容来源</div>
+                <div id="workspace-guide-text" class="workspace-guide-text" data-i18n="把文章、网页或知识库素材放进来后，就能直接生成第一版 PPT。">把文章、网页或知识库素材放进来后，就能直接生成第一版 PPT。</div>
+              </div>
+              <div class="workspace-guide-actions">
+                <button id="btn-guide-primary" class="btn-primary" data-i18n="去选材">去选材</button>
+                <button id="btn-guide-secondary" class="btn-secondary hidden" data-i18n="查看高级操作">查看高级操作</button>
+              </div>
+            </section>
+            <div class="mobile-workspace-switcher" id="mobile-workspace-switcher">
+              <button class="mobile-workspace-tab active" data-mobile-view="preview" data-i18n="预览">预览</button>
+              <button class="mobile-workspace-tab" data-mobile-view="config" data-i18n="设置">设置</button>
+              <button class="mobile-workspace-tab" data-mobile-view="tasks" data-i18n="任务">任务</button>
+            </div>
           <div class="workspace-canvas">
             <div class="workspace-preview-header">
               <div class="workspace-preview-title" data-i18n="实时预览">实时预览</div>
               <div class="workspace-preview-status" id="edit-status"></div>
               <div class="workspace-preview-actions">
-                <button id="btn-design-lint" class="btn-secondary" data-i18n="设计检查"
-                  style="padding: 6px 12px; font-size: 12px;">🔍 设计检查</button>
-                <button id="btn-ai-image" class="btn-secondary" data-i18n="生成配图"
-                  style="padding: 6px 12px; font-size: 12px;">🖼️ 生成配图</button>
                 <button id="btn-toggle-chat" class="btn-secondary btn-chat" style="padding: 6px 12px; font-size: 12px;" data-i18n="AI 修改">✨ AI 修改</button>
-                <button id="btn-fullscreen-preview" class="btn-secondary" title="全屏预览 (F)" data-i18n-title="全屏预览 (F)" style="padding: 6px 12px; font-size: 12px;" data-i18n="⛶ 全屏">⛶ 全屏</button>
-                <button id="btn-open-preview-header" class="btn-secondary" data-i18n="在新窗口打开"
-                  style="padding: 6px 12px; font-size: 12px;">🔗 新窗口</button>
+                  <div class="dropdown workspace-more-dropdown" id="preview-more-dropdown">
+                    <button id="btn-preview-more" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" data-i18n="更多操作">⋯ 更多</button>
+                    <div class="dropdown-menu hidden">
+                      <button id="btn-design-lint" data-i18n="设计检查"><span class="export-icon">🔍</span><span class="export-label">设计检查</span></button>
+                      <button id="btn-ai-image" data-i18n="生成配图"><span class="export-icon">🖼️</span><span class="export-label">生成配图</span></button>
+                      <button id="btn-open-preview-header" data-i18n="在新窗口打开"><span class="export-icon">🔗</span><span class="export-label">新窗口</span></button>
+                      <button id="btn-fullscreen-preview" title="全屏预览 (F)" data-i18n-title="全屏预览 (F)" data-i18n="⛶ 全屏"><span class="export-icon">⛶</span><span class="export-label">全屏</span></button>
+                    </div>
+                  </div>
               </div>
             </div>
             <div class="workspace-preview-frame">
@@ -903,6 +965,10 @@
                   <div id="progress-steps" class="progress-steps"></div>
                   <div id="progress-log" class="progress-log"></div>
                 </section>
+                  <section class="card mobile-task-card hidden" id="mobile-task-card">
+                    <div class="card-title" data-i18n="任务中心">任务中心</div>
+                    <div id="mobile-task-card-body" class="mobile-task-card-body" data-i18n="当前没有进行中的任务。">当前没有进行中的任务。</div>
+                  </section>
               </div>
 
               <div class="config-panel" data-panel="style">
@@ -1056,7 +1122,78 @@
           <div class="settings-header">
             <div class="settings-title" data-i18n="系统设置 · 对所有项目生效">系统设置 · 对所有项目生效</div>
           </div>
-          <div class="settings-body">
+            <div class="settings-mode-tabs">
+              <button class="settings-mode-tab active" data-mode="quick" data-i18n="快速配置">快速配置</button>
+              <button class="settings-mode-tab" data-mode="advanced" data-i18n="高级设置">高级设置</button>
+            </div>
+            <div class="settings-body settings-mode-panel active" data-mode="quick">
+              <section class="card settings-quick-card">
+                <div class="card-title" data-i18n="首次使用先配这 3 项">首次使用先配这 3 项</div>
+                <p class="settings-quick-intro" data-i18n="先把文本模型、API Key 和 PDF 导出偏好配好，就可以开始生成 PPT；配图和视频能力可以稍后再补。">先把文本模型、API Key 和 PDF 导出偏好配好，就可以开始生成 PPT；配图和视频能力可以稍后再补。</p>
+                <div class="settings-quick-grid">
+                  <div class="field field-wide">
+                    <label data-i18n="推荐文本模型">推荐文本模型</label>
+                    <select id="quick-model-preset">
+                      <option value="">加载中…</option>
+                    </select>
+                  </div>
+                  <div class="field field-wide">
+                    <label>API Key <span class="hint-inline" data-i18n="留空则继续使用环境变量或已保存配置">留空则继续使用环境变量或已保存配置</span></label>
+                    <input type="password" id="quick-model-api-key" placeholder="sk-...">
+                    <label class="checkbox-inline"><input type="checkbox" id="quick-model-persist-api-key">
+                      <span data-i18n="保存到本地配置（.ai-ppt-config.json，已 gitignore）">保存到本地配置（.ai-ppt-config.json，已 gitignore）</span></label>
+                  </div>
+                  <div class="field">
+                    <label data-i18n="PDF 导出偏好">PDF 导出偏好</label>
+                    <select id="quick-pdf-engine">
+                      <option value="puppeteer" data-i18n="高清图片 PDF（Puppeteer）">高清图片 PDF（Puppeteer）</option>
+                      <option value="weasyprint" data-i18n="矢量文字 PDF（WeasyPrint）">矢量文字 PDF（WeasyPrint）</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="settings-quick-actions">
+                  <button id="btn-quick-save-config" class="btn-primary" data-i18n="保存并开始使用">保存并开始使用</button>
+                  <button id="btn-open-advanced-settings" class="btn-secondary" data-i18n="继续配置配图 / 视频">继续配置配图 / 视频</button>
+                </div>
+              </section>
+              <section class="card">
+                <div class="card-title" data-i18n="推荐路径">推荐路径</div>
+                <div class="settings-shortcuts">
+                  <button id="btn-quick-ppt-only" class="settings-shortcut active" data-i18n="我先只生成 PPT">我先只生成 PPT</button>
+                  <button id="btn-quick-media-setup" class="settings-shortcut" data-i18n="我要继续配置配图 / 视频">我要继续配置配图 / 视频</button>
+                </div>
+                <p class="settings-quick-intro" id="settings-quick-tip" data-i18n="先用文本模型跑通第一版内容和导出，再决定要不要补图像或视频生成能力，最省心。">先用文本模型跑通第一版内容和导出，再决定要不要补图像或视频生成能力，最省心。</p>
+              </section>
+            </div>
+            <div class="settings-body settings-mode-panel" data-mode="advanced">
+            <section class="card">
+              <div class="card-title" data-i18n="项目品牌">项目品牌</div>
+              <div class="field" style="max-width: 420px;">
+                <label data-i18n="项目名称">项目名称</label>
+                <input type="text" id="input-app-brand-name" placeholder="小龙哥@薪灵AI">
+              </div>
+              <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-top: 8px;" data-i18n="会同步更新顶栏名称、页面标题和安装到桌面的应用名称。">会同步更新顶栏名称、页面标题和安装到桌面的应用名称。</p>
+            </section>
+            <section class="card">
+              <div class="card-title" data-i18n="薪小灵">薪小灵</div>
+              <div class="fields-grid">
+                <div class="field">
+                  <label data-i18n="助手名称">助手名称</label>
+                  <input type="text" id="input-agent-name" placeholder="薪小灵">
+                </div>
+                <div class="field">
+                  <label data-i18n="默认回答风格">默认回答风格</label>
+                  <select id="input-agent-response-style">
+                    <option value="concise" data-i18n="简洁">简洁</option>
+                    <option value="detailed" data-i18n="详细">详细</option>
+                  </select>
+                </div>
+              </div>
+              <label class="checkbox-inline"><input type="checkbox" id="input-agent-allow-settings">
+                <span data-i18n="允许薪小灵通过自然语言修改系统设置（仍会先确认）">允许薪小灵通过自然语言修改系统设置（仍会先确认）</span></label>
+              <label class="checkbox-inline"><input type="checkbox" id="input-agent-allow-knowledge">
+                <span data-i18n="允许薪小灵通过自然语言管理知识库（仍会先确认）">允许薪小灵通过自然语言管理知识库（仍会先确认）</span></label>
+            </section>
             <section class="card model-config-card">
               <div class="card-title"><span data-i18n="模型配置">模型配置</span> <span class="hint-inline" data-i18n="系统级别 · 对所有项目生效">系统级别 · 对所有项目生效</span></div>
               <div class="model-config-section" data-i18n="文本模型">文本模型</div>
@@ -1197,6 +1334,7 @@
               </div>
             </section>
           </div>
+            </div>
         </div>
       </main>
     </div>
@@ -1306,6 +1444,20 @@
     </div>
   </div>
 
+  <div id="task-center-panel" class="task-center-panel hidden">
+    <div class="task-center-header">
+      <div>
+        <div class="task-center-title" data-i18n="任务中心">任务中心</div>
+        <div class="task-center-subtitle" data-i18n="统一查看生成、导出、发布进度">统一查看生成、导出、发布进度</div>
+      </div>
+      <div class="task-center-header-actions">
+        <button id="btn-task-center-clear" class="btn-secondary" style="padding:6px 12px;font-size:12px;" data-i18n="清空已完成">清空已完成</button>
+        <button id="btn-task-center-close" class="btn-secondary" style="padding:6px 12px;font-size:12px;">关闭</button>
+      </div>
+    </div>
+    <div id="task-center-list" class="task-center-list"></div>
+    <div id="task-center-empty" class="task-center-empty" data-i18n="当前没有任务，开始生成、导出或发布后会出现在这里。">当前没有任务，开始生成、导出或发布后会出现在这里。</div>
+  </div>
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <!-- 笔记历史版本弹窗 -->
@@ -1546,13 +1698,24 @@
     </div>
   </div>
 
-  <!-- 资产库弹窗（vault/assets 管理：查看/插入笔记/删除，删除有引用保护） -->
+  <!-- 资产库弹窗（vault/assets 管理：查看/插入笔记/删除，删除有引用保护；Resources 标签页复用生成产物） -->
   <div id="assets-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-body modal-wide">
       <h3 data-i18n="资产库">资产库</h3>
       <div class="ai-image-hint" style="margin-bottom:12px;" data-i18n="知识库附件与 AI 生成产物；点击「插入」把 ![[文件名]] 加入当前笔记">知识库附件与 AI 生成产物；点击「插入」把 ![[文件名]] 加入当前笔记</div>
-      <div id="assets-list" class="assets-list"></div>
+      <!-- 资产 / 资源双标签页 -->
+      <div class="assets-tabs" style="display:flex;gap:2px;margin-bottom:12px;border-bottom:1px solid var(--tile-strong);">
+        <button id="btn-assets-tab" class="btn-secondary assets-tab-btn active" data-target="assets-list-wrap" style="padding:6px 16px;font-size:13px;" data-i18n="全部资产">全部资产</button>
+        <button id="btn-resources-tab" class="btn-secondary assets-tab-btn" data-target="resources-list-wrap" style="padding:6px 16px;font-size:13px;" data-i18n="可复用资源">可复用资源<span id="badge-resources-count" class="tab-badge hidden"></span></button>
+      </div>
+      <div id="assets-list-wrap">
+        <div id="assets-list" class="assets-list"></div>
+      </div>
+      <div id="resources-list-wrap" class="hidden">
+        <div class="ai-image-hint" style="margin-bottom:12px;" data-i18n="AI 生成过的图片 / 视频，会自动记录到资源库；再次生成相同内容时优先复用，避免重复消费。">AI 生成过的图片 / 视频，会自动记录到资源库；再次生成相同内容时优先复用，避免重复消费。</div>
+        <div id="resources-list" class="assets-list"></div>
+      </div>
       <div class="modal-actions">
         <button id="btn-close-assets" class="btn-secondary" data-i18n="关闭">关闭</button>
       </div>
@@ -1659,6 +1822,8 @@
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>G</kbd><span data-i18n="生成幻灯片">生成幻灯片</span></div>
             <div class="help-key-row"><kbd>Ctrl</kbd>+<kbd>O</kbd><span data-i18n="打开预览">打开预览</span></div>
             <div class="help-key-row"><kbd>Tab</kbd><span data-i18n="配置面板内切换标签">配置面板内切换标签</span></div>
+            <div class="help-key-row"><kbd>↻</kbd><span data-i18n="同步笔记到 PPT">同步笔记到 PPT</span></div>
+            <div class="help-key-row"><kbd>📝</kbd><span data-i18n="从 PPT 生成笔记">从 PPT 生成笔记</span></div>
           </div>
         </div>
       </div>

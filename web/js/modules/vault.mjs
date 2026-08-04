@@ -46,7 +46,7 @@ function getVaultEls() {
 }
 
 // ============================================================
-// 笔记列表加载与渲染
+// 笔记列表加载与渲染（专题树形）
 // ============================================================
 export async function loadNotes() {
     try {
@@ -59,27 +59,105 @@ export async function loadNotes() {
     }
 }
 
+// 构建专题树：{ topicPath: [note, ...] }，根层笔记归入 '' key
+function buildTopicTree(notes) {
+    const tree = {};
+    for (const note of notes) {
+        // 专题路径来自后端返回的 topic 字段（目录相对路径）或 name 中的 '/'
+        let topicPath = note.topic;
+        if (!topicPath && typeof note.name === 'string' && note.name.includes('/')) {
+            topicPath = note.name.split('/').slice(0, -1).join('/');
+        }
+        const key = (typeof topicPath === 'string' && topicPath) || '';
+        if (!tree[key]) tree[key] = [];
+        tree[key].push(note);
+    }
+    return tree;
+}
+
 function renderNoteList(filter) {
     const els = getVaultEls();
-    const query = (filter !== undefined ? filter : els.vaultSearchInput.value || '').trim();
+    const query = (filter !== undefined ? filter : (els.vaultSearchInput?.value || '')).trim();
     if (query) { scheduleVaultSearch(query); return; }
     S.vaultSearchQuery = '';
+
+    // 收集已存在的专题路径，用于渲染树
+    const tree = buildTopicTree(S.notes);
+    const topicPaths = Object.keys(tree).filter((k) => k && !tree[k + '/'] && true).sort();
+
     let html = '';
     if (S.notes.length === 0) {
         html = `<div class="vault-empty" style="padding:20px;text-align:center;opacity:0.6;font-size:13px;">${t('暂无笔记')}</div>`;
     } else {
-        for (const note of S.notes) {
-            html += `<div class="vault-note-item ${S.currentNote === note.name ? 'active' : ''}" data-name="${escapeHtmlAttr(note.name)}" draggable="true" title="${t('拖拽可调整顺序')}">
-          <input type="checkbox" class="vault-note-check" data-name="${escapeHtmlAttr(note.name)}" title="${t('选择笔记')}" ${S.selectedNotes.has(note.name) ? 'checked' : ''}>
-          <div class="vault-note-item-main">
-            <div class="vault-note-item-title">${escapeHtml(note.name)}</div>
-            <div class="vault-note-item-meta">${note.mtime ? new Date(note.mtime).toLocaleDateString() : ''}</div>
-          </div>
-        </div>`;
+        // 根层笔记（无专题）
+        const rootNotes = tree[''] || [];
+        if (rootNotes.length > 0) {
+            for (const note of rootNotes) {
+                html += renderNoteItem(note);
+            }
+        }
+        // 专题目录树
+        for (const tp of topicPaths) {
+            const notes = tree[tp] || [];
+            if (!notes.length) continue;
+            const shortName = tp.split('/').pop();
+            html += `<div class="vault-topic-row" data-path="${escapeHtmlAttr(tp)}">
+              <div class="vault-topic-header" data-path="${escapeHtmlAttr(tp)}" title="${t('点击展开/折叠')}">
+                <span class="vault-topic-toggle">▼</span>
+                <span class="vault-topic-icon">📁</span>
+                <span class="vault-topic-name">${escapeHtml(shortName)}</span>
+                <div class="vault-topic-actions" data-path="${escapeHtmlAttr(tp)}">
+                  <button class="btn-icon btn-vault-topic-action" data-action="new-note" data-path="${escapeHtmlAttr(tp)}" title="${t('新建笔记')}">+</button>
+                  <button class="btn-icon btn-vault-topic-action" data-action="rename" data-path="${escapeHtmlAttr(tp)}" title="${t('重命名专题')}">✎</button>
+                  <button class="btn-icon btn-vault-topic-action danger" data-action="delete" data-path="${escapeHtmlAttr(tp)}" title="${t('删除专题')}">×</button>
+                </div>
+              </div>
+              <div class="vault-topic-notes vault-topic-collapse" data-path="${escapeHtmlAttr(tp)}">`;
+            for (const note of notes) {
+                html += renderNoteItem(note, true);
+            }
+            html += `</div></div>`;
         }
     }
     els.vaultNoteList.innerHTML = html;
     updateNoteSelectBar();
+}
+
+// 渲染单个笔记行（inTopic=true 时用于专题内缩进）
+// P4: 缓存笔记 → 链接 PPT 的映射，避免每次渲染都请求
+const linkedPptCache = new Map();
+
+function renderNoteItem(note, inTopic = false) {
+    const active = S.currentNote === note.name ? 'active' : '';
+    // P4: 显示链接的 PPT 数量
+    let linkBadge = '';
+    if (linkedPptCache.has(note.name)) {
+        const projects = linkedPptCache.get(note.name);
+        if (projects.length > 0) {
+            linkBadge = `<span class="note-ppt-link" title="${t('已关联 PPT')}" style="margin-left:6px;font-size:11px;opacity:0.6;">🔗${projects.length}</span>`;
+        }
+    }
+    return `<div class="vault-note-item ${active} ${inTopic ? 'topic-child' : ''}" data-name="${escapeHtmlAttr(note.name)}" draggable="true" title="${t('拖拽可调整顺序')}">
+      <input type="checkbox" class="vault-note-check" data-name="${escapeHtmlAttr(note.name)}" title="${t('选择笔记')}" ${S.selectedNotes.has(note.name) ? 'checked' : ''}>
+      <div class="vault-note-item-main">
+        <div class="vault-note-item-title">${escapeHtml(note.name)}${linkBadge}</div>
+        <div class="vault-note-item-meta">${note.mtime ? new Date(note.mtime).toLocaleDateString() : ''}</div>
+      </div>
+    </div>`;
+}
+
+// 异步加载笔记的链接 PPT（P4）
+async function loadLinkedProjectsForNote(name) {
+    try {
+        const result = await api('GET', `/api/vault/notes/${encodeURIComponent(name)}/linked-projects`);
+        if (result.projects && Array.isArray(result.projects)) {
+            linkedPptCache.set(name, result.projects);
+            // 重新渲染笔记列表以显示链接标志
+            renderNoteList();
+        }
+    } catch (err) {
+        console.error('加载链接 PPT 失败:', err.message);
+    }
 }
 
 // ============================================================
@@ -97,6 +175,66 @@ function updateNoteSelectBar() {
 function clearSelectedNotes() {
     S.selectedNotes.clear();
     renderNoteList();
+}
+
+// ============================================================
+// 专题目录管理
+// ============================================================
+async function createNewTopic() {
+    const input = await showInputModal({ title: t('新建专题'), label: t('专题名称'), placeholder: t('输入专题名称') });
+    if (!input) return;
+    const topicPath = input.trim();
+    if (!topicPath || !isSafeTopicName(topicPath)) { showToast(t('非法专题名称')); return; }
+    try {
+        const res = await api('POST', '/api/vault/topics', { path: topicPath });
+        if (res.ok) { showToast(t('创建成功')); await loadNotes(); }
+    } catch (e) { console.error(e); showToast(t('创建失败')); }
+}
+
+async function renameTopic(topicPath, newPath) {
+    if (!newPath || !isSafeTopicName(newPath)) { showToast(t('非法专题名称')); return; }
+    try {
+        const res = await api('POST', `/api/vault/topics/${encodeURIComponent(topicPath)}/rename`, { newPath });
+        if (res.ok) { showToast(t('重命名成功')); await loadNotes(); }
+    } catch (e) { console.error(e); showToast(t('重命名失败')); }
+}
+
+async function deleteTopic(topicPath) {
+    const ok = await showConfirmModal({ title: t('删除专题'), message: t('确定删除专题「{name}」吗？该专题下的所有笔记将一并删除。', { name: topicPath }), confirmText: t('删除'), danger: true });
+    if (!ok) return;
+    try {
+        const res = await api('DELETE', `/api/vault/topics/${encodeURIComponent(topicPath)}?force=true`);
+        if (res.ok) { showToast(t('删除成功')); await loadNotes(); }
+    } catch (e) { console.error(e); showToast(t('删除失败')); }
+}
+
+function isSafeTopicName(name) {
+    return typeof name === 'string' && name.length > 0 && !name.includes('..') && /^[^\/\\:*?"<>|]+$/.test(name.replace(/\/[^\/]+$/, '')) || /^\w[\w\s\/\u4e00-\u9fa5-]*$/.test(name);
+}
+
+// 校验专题路径（允许 a/b/c，但不含 ..、非法字符）
+function isValidTopicPath(p) {
+    if (typeof p !== 'string' || !p.length) return false;
+    if (p.includes('..')) return false;
+    const segments = p.split('/');
+    for (const s of segments) {
+        if (!s.trim()) return false;
+        if (/[\\:*?"<>|]/.test(s)) return false;
+    }
+    return true;
+}
+
+async function openTopicRenameModal(topicPath) {
+    const input = await showInputModal({ title: t('重命名专题'), label: t('新专题名称'), placeholder: topicPath, defaultValue: topicPath });
+    if (!input || !isValidTopicPath(input)) { showToast(t('非法专题名称')); return; }
+    if (input === topicPath) return;
+    await renameTopic(topicPath, input);
+}
+
+async function openTopicGenerateModal(topicPath) {
+    const notes = S.notes.filter((n) => n.topic === topicPath).map((n) => n.name);
+    if (!notes.length) { showToast(t('该专题下暂无笔记')); return; }
+    if (_cb.openGenerateModal) _cb.openGenerateModal({ kind: 'topic', notes, topic: topicPath });
 }
 
 // 批量删除：逐个 DELETE（服务端删前自动备份到 .snapshots/_vault）
@@ -293,6 +431,10 @@ export async function selectNote(name) {
         resetNoteDirtyState();
         checkNoteDraft(name, frontmatterText + contentWithoutFrontmatter);
         await loadNoteLinks(name);
+        // P4: 加载该笔记绑定的 PPT，显示在笔记列表链接标记上
+        if (!linkedPptCache.has(name)) {
+            loadLinkedProjectsForNote(name);
+        }
         renderNoteList();
         setNotePreviewMode(false);
         buildOutline();
@@ -676,6 +818,11 @@ async function saveNote(opts = {}) {
         });
         if (res.ok) {
             if (!auto) showToast(t('保存成功'));
+            // P5: 如果有绑定的 PPT，提示用户同步已触发（后端会自动触发 chat-modify）
+            const linked = linkedPptCache.get(name);
+            if (linked && linked.length > 0) {
+                showToast(t('检测到 {count} 个关联 PPT，正在后台同步', { count: linked.length }), 'info');
+            }
             // 保存期间又有新输入则保持脏标记，交给下一次自动保存
             if (S.currentNote === name && els.vaultNoteFrontmatter.value + els.vaultNoteContent.value === content) {
                 S.noteDirty = false;
@@ -683,6 +830,8 @@ async function saveNote(opts = {}) {
                 removeNoteDraft(name);
             }
             await loadNotes();
+            // P4: 刷新链接 PPT 缓存
+            linkedPptCache.delete(name);
             if (S.currentNote === name) await loadNoteLinks(name);
         } else {
             showToast(auto ? t('自动保存失败，请检查网络后重试') : t('保存失败'), 'error');
@@ -716,17 +865,17 @@ async function deleteNote() {
     } catch (e) { console.error('Failed to delete note:', e); showToast(t('删除失败')); }
 }
 
-export async function createNewNote() {
-    const input = await showInputModal({ title: t('新建笔记'), label: t('笔记名称'), placeholder: t('输入笔记名称') });
+export async function createNewNote(topicPath = '') {
+    const input = await showInputModal({ title: t('新建笔记'), label: topicPath ? `${t('专题')} / ${topicPath} / ${t('笔记名称')}` : t('笔记名称'), placeholder: t('输入笔记名称') });
     if (input === null) return;
     const name = input.trim();
     if (!name) { showToast(t('请输入笔记名称')); return; }
     try {
         const res = await fetch('/api/vault/notes', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ name, topic: topicPath || undefined })
         });
-        if (res.ok) { showToast(t('创建成功')); await loadNotes(); selectNote(name); }
+        if (res.ok) { showToast(t('创建成功')); await loadNotes(); selectNote(topicPath ? `${topicPath}/${name}` : name); }
     } catch (e) { console.error('Failed to create note:', e); showToast(t('创建失败')); }
 }
 
@@ -1765,6 +1914,141 @@ async function deleteAsset(name, force = false) {
     }
 }
 
+// ---- 可复用资源库（resource-registry 注册的媒体资产）----
+
+async function loadResourcesIntoModal() {
+    const list = document.getElementById('resources-list');
+    if (!list) return;
+    list.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('加载中…')}</div>`;
+    try {
+        const data = await api('GET', '/api/media/resources?type=image');
+        renderResourcesList(data.assets || []);
+    } catch (e) {
+        console.error('Failed to load resources:', e);
+        list.innerHTML = `<div style="opacity:0.5;font-size:13px;">${t('加载失败：{msg}', { msg: escapeHtml(e.message) })}</div>`;
+    }
+}
+
+function renderResourcesList(assets) {
+    const list = document.getElementById('resources-list');
+    if (!list) return;
+    updateResourcesBadge(assets.length);
+    if (!assets.length) {
+        list.innerHTML = `<div style="opacity:0.5;font-size:13px;text-align:center;padding:24px 0;">${t('暂无可复用资源，生成配图 / 视频后会自动记录')}</div>`;
+        return;
+    }
+    list.innerHTML = assets.map((a) => {
+        const preview = a.type === 'image' && a.filePath
+            ? `<img class="asset-thumb" src="${a.webPath}" alt="">`
+            : (a.type === 'video' ? '<div class="asset-thumb">🎬</div>' : '<div class="asset-thumb">📎</div>');
+        const usedCount = a.usedBy?.length || 0;
+        const created = a.created ? new Date(a.created).toLocaleDateString('zh-CN') : '';
+        return `<div class="resource-item" data-id="${escapeHtmlAttr(a.id)}" style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--tile-strong);">
+          ${preview}
+          <div class="asset-info" style="flex:1;">
+            <div class="asset-name">${escapeHtml(a.fileName)}</div>
+            <div class="asset-meta" style="font-size:12px;opacity:0.65;">${created}${usedCount > 0 ? ` · ${t('复用 {count} 次', { count: usedCount })}` : ''}</div>
+            <div class="resource-prompt" style="font-size:12px;opacity:0.8;margin-top:4px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml((a.prompt || '').slice(0, 80))}</div>
+          </div>
+          <div class="asset-actions">
+            <button class="btn-secondary resource-btn-reuse" style="padding:4px 10px;font-size:12px;" title="${t('插入到笔记')}" data-i18n-title="插入到笔记">${t('插入')}</button>
+            <button class="btn-secondary resource-btn-delete" style="color:var(--danger);padding:4px 10px;font-size:12px;" title="${t('删除资源')}">🗑</button>
+          </div>
+        </div>`;
+    }).join('');
+    // 绑定插入事件（插入 ![[fileName]] 到当前笔记）
+    list.querySelectorAll('.resource-btn-reuse').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const item = btn.closest('.resource-item');
+            if (!S.currentNote) { showToast(t('请先选择一篇笔记')); return; }
+            // 从注册表查找对应的物理文件名
+            const assetId = item.dataset.id;
+            reuseResource(assetId);
+        });
+    });
+    // 绑定删除事件（从注册表移除，force 删除物理文件）
+    list.querySelectorAll('.resource-btn-delete').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const assetId = btn.closest('.resource-item').dataset.id;
+            deleteResource(assetId);
+        });
+    });
+}
+
+function updateResourcesBadge(count) {
+    const badge = document.getElementById('badge-resources-count');
+    if (!badge) return;
+    if (count > 0) {
+        badge.textContent = String(count);
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+// 插入资源到笔记：查找注册表条目，插入 ![[fileName]]
+async function reuseResource(assetId) {
+    try {
+        // 获取最新列表，从中找到对应的 fileName
+        const data = await api('GET', '/api/media/resources?type=image');
+        const asset = (data.assets || []).find((a) => a.id === assetId);
+        if (!asset) return showToast(t('资源不存在或已删除'), 'error');
+        insertTextAtCursor(`![[${asset.fileName}]]`);
+        showToast(t('已插入到笔记：{name}', { name: asset.fileName }));
+    } catch (e) {
+        console.error('reuseResource failed:', e);
+        showToast(t('插入失败'), 'error');
+    }
+}
+
+// 删除资源：从注册表移除，force=true 同时删除物理文件
+async function deleteResource(assetId) {
+    try {
+        const ok = await showConfirmModal({
+            title: t('删除可复用资源'),
+            message: t('确认从资源库中删除该条目？此操作会一并删除物理文件。'),
+            confirmText: t('删除'),
+            danger: true,
+        });
+        if (!ok) return;
+        await api('DELETE', `/api/media/resources/${encodeURIComponent(assetId)}?force=true`);
+        showToast(t('已从资源库移除'));
+        loadResourcesIntoModal();
+    } catch (e) {
+        console.error('deleteResource failed:', e);
+        showToast(t('删除失败：{msg}', { msg: e.message }), 'error');
+    }
+}
+
+// 初始化资产库双标签页事件（绑定在 app.mjs 中调用）
+export function initAssetsModalTabs() {
+    const assetsTabBtn = document.getElementById('btn-assets-tab');
+    const resourcesTabBtn = document.getElementById('btn-resources-tab');
+    if (assetsTabBtn) assetsTabBtn.addEventListener('click', () => switchResourcesTab('assets'));
+    if (resourcesTabBtn) resourcesTabBtn.addEventListener('click', () => switchResourcesTab('resources'));
+
+    function switchResourcesTab(tab) {
+        const isAssets = tab === 'assets';
+        document.getElementById('btn-assets-tab')?.classList.toggle('active', isAssets);
+        document.getElementById('btn-resources-tab')?.classList.toggle('active', !isAssets);
+        const assetsWrap = document.getElementById('assets-list-wrap');
+        const resourcesWrap = document.getElementById('resources-list-wrap');
+        if (assetsWrap) { assetsWrap.style.display = isAssets ? '' : 'none'; }
+        if (resourcesWrap) resourcesWrap.classList.toggle('hidden', isAssets);
+        if (!isAssets && resourcesWrap) loadResourcesIntoModal();
+    }
+}
+
+// 重置资产库弹窗为默认标签页（assets）
+export function resetAssetsModalTab() {
+    document.getElementById('btn-assets-tab')?.classList.add('active');
+    document.getElementById('btn-resources-tab')?.classList.remove('active');
+    const assetsWrap = document.getElementById('assets-list-wrap');
+    const resourcesWrap = document.getElementById('resources-list-wrap');
+    if (assetsWrap) assetsWrap.style.display = '';
+    if (resourcesWrap) { resourcesWrap.classList.add('hidden'); }
+}
+
 // ============================================================
 // 任务面板（#tasks-panel）
 // ============================================================
@@ -1871,6 +2155,33 @@ export function bindVaultEvents() {
             }
             return;
         }
+        // 专题操作按钮
+        const actionBtn = e.target.closest('.btn-vault-topic-action');
+        if (actionBtn) {
+            e.stopPropagation();
+            const tp = actionBtn.dataset.path;
+            const act = actionBtn.dataset.action;
+            if (act === 'new-note') createNewNote(tp);
+            else if (act === 'rename') openTopicRenameModal(tp);
+            else if (act === 'delete') deleteTopic(tp);
+            return;
+        }
+        // 专题标题点击展开/折叠
+        const topicHeader = e.target.closest('.vault-topic-header');
+        if (topicHeader) {
+            const tp = topicHeader.dataset.path;
+            const collapse = els.vaultNoteList.querySelector(`.vault-topic-collapse[data-path="${escapeHtmlAttr(tp)}"]`);
+            if (collapse) collapse.classList.toggle('collapsed');
+            return;
+        }
+        // 专题生成按钮（右键菜单或操作栏）
+        const genBtn = e.target.closest('.btn-vault-topic-gen');
+        if (genBtn) {
+            e.stopPropagation();
+            const tp = genBtn.dataset.path;
+            openTopicGenerateModal(tp);
+            return;
+        }
         const item = e.target.closest('.vault-note-item');
         const linkItem = e.target.closest('.vault-link-item');
         if (linkItem) { const name = linkItem.dataset.name; if (name) selectNote(name); return; }
@@ -1878,7 +2189,13 @@ export function bindVaultEvents() {
     });
     els.vaultSearchInput.addEventListener('input', e => renderNoteList(e.target.value));
     els.btnVaultRefresh.addEventListener('click', loadNotes);
-    els.btnVaultNew.addEventListener('click', createNewNote);
+    document.getElementById('btn-vault-new-topic')?.addEventListener('click', () => {
+        showInputModal({ title: t('新建专题'), label: t('专题名称（可含层级 /）'), placeholder: '例如：产品方法论' }).then((input) => {
+            if (!input || !isValidTopicPath(input)) return;
+            createNewTopic(input);
+        });
+    });
+    els.btnVaultNew.addEventListener('click', () => createNewNote());
     document.getElementById('btn-vault-journal')?.addEventListener('click', openTodayNote);
     document.getElementById('btn-vault-tasks')?.addEventListener('click', showTasksPanel);
     document.getElementById('btn-tasks-close')?.addEventListener('click', hideTasksPanel);

@@ -259,6 +259,10 @@
 
 .split-visual .big-number {
   text-align: center;
+  /* 240px 列宽减去 padding 后内宽 192px；96px 下 "1.4万" 这类含全角字符的组合
+     约 214px 会溢出盒子，渐变背景（background-clip: text）覆盖不到溢出部分，
+     导致末字右侧被"切掉"。按 AGENTS 约定收敛到 80px 上限（此时约 177px，留有余量）。 */
+  font-size: clamp(44px, 5.5vw, 80px);
 }
 
 .split-visual.wide-left {

@@ -11,9 +11,14 @@ const PROVIDER_OPENAI = 'openai';
 const PROVIDER_KIMI = 'kimi';
 const PROVIDER_BAILIAN = 'bailian';
 
+// 记录最近一次 LLM 调用失败原因，供上层在事件中展示（避免"未配置 LLM"的误导性提示）
+let lastLlmError = null;
+export function getLastLlmError() { return lastLlmError; }
+
 export async function generateSlides(prompt, options = {}) {
   const provider = options.provider || detectProvider(options);
   const fallbackChain = [];
+  lastLlmError = null;
 
   // 1. Try configured provider first
   try {
@@ -31,6 +36,7 @@ export async function generateSlides(prompt, options = {}) {
     fallbackChain.push({ provider, status: 'empty' });
   } catch (err) {
     fallbackChain.push({ provider, status: 'error', error: err.message });
+    lastLlmError = `${provider}: ${err.message}`;
     if (process.env.AI_PPT_DEBUG) console.error(`[llm] ${provider} failed:`, err.message);
   }
 
@@ -51,6 +57,7 @@ export async function generateSlides(prompt, options = {}) {
       fallbackChain.push({ provider: fb, status: 'empty' });
     } catch (err) {
       fallbackChain.push({ provider: fb, status: 'error', error: err.message });
+      lastLlmError = `${fb}: ${err.message}`;
       if (process.env.AI_PPT_DEBUG) console.error(`[llm] fallback ${fb} failed:`, err.message);
     }
   }

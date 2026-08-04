@@ -9,17 +9,18 @@ import { initGraphModule, hideAllMainPanels, bindGraphEvents, bindGraphDeckEvent
 import {
     initVaultModule, loadNotes, selectNote, openQuickOpen, openTodayNote,
     appendFragmentToToday, openAiImageModal, confirmAiImage,
-    insertAiImageIntoNote, insertAiImageIntoSlide, openAssetsModal,
+    insertAiImageIntoNote, insertAiImageIntoSlide, openAssetsModal, resetAssetsModalTab, initAssetsModalTabs,
     bindVaultEvents, bindQuickOpenEvents, createNewNote, saveCurrentNote,
 } from './vault.mjs';
 import {
     initCardsModule, showCardsPanel, loadCards, selectCard,
     openReviewDeckModal, bindCardsEvents, bindReviewDeckEvents,
 } from './cards.mjs';
-import { showTrainingWelcome, bindTrainingEvents, loadExams, loadMistakes, bindExamsMistakesEvents } from './exams.mjs';
-import { initFragmentsModule, loadFragments, focusFragmentInput, openOrganizeModal, bindFragmentEvents } from './fragments.mjs';
+import { showTrainingWelcome, bindTrainingEvents, loadExams, loadMistakes, selectMistake, bindExamsMistakesEvents } from './exams.mjs';
+import { initFragmentsModule, loadFragments, revealFragment, focusFragmentInput, openOrganizeModal, bindFragmentEvents } from './fragments.mjs';
 import { bindModalEvents } from './modals.mjs';
 import { initGenerateModule, openGenerateModal, bindGenerateEvents } from './generate.mjs';
+import { initAgentModule, loadAgentWorkspace, bindAgentEvents } from './agent.mjs';
 import { t, applyStaticI18n, getLang, setLang } from './i18n.mjs';
 
 // ============================================================
@@ -92,6 +93,7 @@ function cacheEls() {
         toast: document.getElementById('toast'),
         btnHelp: document.getElementById('btn-help'),
         btnSettingsTopbar: document.getElementById('btn-settings-topbar'),
+        appLogo: document.getElementById('app-logo'),
         helpPanel: document.getElementById('help-panel'),
         btnCloseHelp: document.getElementById('btn-close-help'),
         helpOverlay: document.querySelector('.help-panel-overlay'),
@@ -132,6 +134,33 @@ function cacheEls() {
         previewFrame: document.getElementById('preview-frame'),
         btnOpenPreview: document.getElementById('btn-open-preview'),
         btnOpenPreviewHeader: document.getElementById('btn-open-preview-header'),
+          btnTaskCenter: document.getElementById('btn-task-center'),
+          taskCenterBadge: document.getElementById('task-center-badge'),
+          taskCenterPanel: document.getElementById('task-center-panel'),
+          taskCenterList: document.getElementById('task-center-list'),
+          taskCenterEmpty: document.getElementById('task-center-empty'),
+          btnTaskCenterClose: document.getElementById('btn-task-center-close'),
+          btnTaskCenterClear: document.getElementById('btn-task-center-clear'),
+          workspaceGuide: document.getElementById('workspace-guide'),
+          workspaceGuideTitle: document.getElementById('workspace-guide-title'),
+          workspaceGuideText: document.getElementById('workspace-guide-text'),
+          btnGuidePrimary: document.getElementById('btn-guide-primary'),
+          btnGuideSecondary: document.getElementById('btn-guide-secondary'),
+          mobileWorkspaceTabs: document.querySelectorAll('.mobile-workspace-tab'),
+          mobileTaskCardBody: document.getElementById('mobile-task-card-body'),
+          btnPreviewMore: document.getElementById('btn-preview-more'),
+          previewMoreDropdown: document.getElementById('preview-more-dropdown'),
+          settingsModeTabs: document.querySelectorAll('.settings-mode-tab'),
+          quickModelPreset: document.getElementById('quick-model-preset'),
+          inputAppBrandName: document.getElementById('input-app-brand-name'),
+          quickModelApiKey: document.getElementById('quick-model-api-key'),
+          quickModelPersistApiKey: document.getElementById('quick-model-persist-api-key'),
+          quickPdfEngine: document.getElementById('quick-pdf-engine'),
+          btnQuickSaveConfig: document.getElementById('btn-quick-save-config'),
+          btnOpenAdvancedSettings: document.getElementById('btn-open-advanced-settings'),
+          btnQuickPptOnly: document.getElementById('btn-quick-ppt-only'),
+          btnQuickMediaSetup: document.getElementById('btn-quick-media-setup'),
+          settingsQuickTip: document.getElementById('settings-quick-tip'),
     });
 }
 
@@ -155,6 +184,7 @@ function switchSidebarTab(tab, subTab) {
     document.getElementById('fragments-sidebar-content').classList.add('hidden');
     document.getElementById('project-sidebar-content').classList.add('hidden');
     document.getElementById('vault-sidebar-content').classList.add('hidden');
+    document.getElementById('agent-sidebar-content').classList.add('hidden');
     document.getElementById('cards-sidebar-content').classList.add('hidden');
 
     if (tab === 'fragments') {
@@ -171,6 +201,10 @@ function switchSidebarTab(tab, subTab) {
         document.getElementById('vault-sidebar-content').classList.remove('hidden');
         document.getElementById('vault-panel').classList.remove('hidden');
         loadNotes();
+    } else if (tab === 'agent') {
+        document.getElementById('agent-sidebar-content').classList.remove('hidden');
+        document.getElementById('agent-panel').classList.remove('hidden');
+        loadAgentWorkspace();
     } else if (tab === 'cards') {
         document.getElementById('cards-sidebar-content').classList.remove('hidden');
         showCardsPanel();
@@ -234,7 +268,12 @@ function bindAiImageEvents() {
     document.getElementById('btn-confirm-ai-image')?.addEventListener('click', confirmAiImage);
     document.getElementById('btn-ai-image-insert-note')?.addEventListener('click', insertAiImageIntoNote);
     document.getElementById('btn-ai-image-insert-slide')?.addEventListener('click', insertAiImageIntoSlide);
-    document.getElementById('btn-vault-assets')?.addEventListener('click', openAssetsModal);
+    document.getElementById('btn-vault-assets')?.addEventListener('click', () => {
+        resetAssetsModalTab();
+        openAssetsModal();
+    });
+    // 初始化资源库标签页事件（双标签页切换）
+    initAssetsModalTabs();
     document.getElementById('btn-close-assets')?.addEventListener('click', () => {
         document.getElementById('assets-modal').classList.add('hidden');
     });
@@ -386,7 +425,11 @@ const commonCbs = {
     loadCards,
     selectCard,
     loadFragments,
+      revealFragment,
     loadDashboard,
+    loadGlobalConfig,
+      loadMistakes,
+      selectMistake,
     showTagsPanel,
     stopPhysics,
     focusFragmentInput,
@@ -394,6 +437,7 @@ const commonCbs = {
     openSmartExamModal,
     showGraphPanel,
     openTodayNote,
+    loadNotes,
     openReviewDeckModal,
     openGenerateModal,
     confirmAiImage,
@@ -408,6 +452,7 @@ initVaultModule(commonCbs);
 initCardsModule(commonCbs);
 initFragmentsModule(commonCbs);
 initGenerateModule(commonCbs);
+initAgentModule(commonCbs);
 
 // 启动加载链
 loadModels().then(loadGlobalConfig).then(() => {
@@ -426,6 +471,7 @@ loadModels().then(loadGlobalConfig).then(() => {
     bindAiImageEvents();
     bindModalEvents();
     bindGenerateEvents();
+    bindAgentEvents();
     bindEmptyStateEvents();
     bindStudyEvents();
     bindSidebarDrawerEvents();
@@ -452,13 +498,34 @@ if (uiLangSelect) {
     uiLangSelect.addEventListener('change', () => setLang(uiLangSelect.value));
 }
 
-// PWA：注册 Service Worker（静态壳离线缓存 + 安装到桌面）。
-// 仅 https 或本机回环环境下尝试；注册/更新失败静默，不影响主流程。
-if ('serviceWorker' in navigator &&
-    (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    navigator.serviceWorker.register('/sw.js')
-        .then((reg) => { reg.update().catch(() => { /* 更新检查失败忽略 */ }); })
-        .catch(() => { /* 注册失败静默（如隐私模式） */ });
+// PWA：线上保留 Service Worker；本地开发/本机回环禁用并清理缓存，
+// 避免 index.html 与模块脚本被旧 SW 交叉缓存后出现“加载失败”。
+const isLoopbackHost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
+if ('serviceWorker' in navigator) {
+    if (isLoopbackHost) {
+        navigator.serviceWorker.getRegistrations()
+            .then((regs) => Promise.all(regs.map((reg) => reg.unregister())))
+            .catch(() => { /* 注销失败静默 */ });
+        if ('caches' in window) {
+            caches.keys()
+                .then((keys) => Promise.all(keys
+                    .filter((key) => key.startsWith('ai-ppt-v'))
+                    .map((key) => caches.delete(key))))
+                .catch(() => { /* 清缓存失败静默 */ });
+        }
+    } else if (location.protocol === 'https:') {
+        navigator.serviceWorker.register('/sw.js')
+            .then((reg) => {
+                let reloading = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (reloading) return;
+                    reloading = true;
+                    location.reload();
+                });
+                reg.update().catch(() => { /* 更新检查失败忽略 */ });
+            })
+            .catch(() => { /* 注册失败静默（如隐私模式） */ });
+    }
 }
 
 // Settings tab button (sidebar bottom icon + topbar both open settings panel)

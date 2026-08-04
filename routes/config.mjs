@@ -1,4 +1,4 @@
-// routes/config.mjs — 模型配置与预设相关路由
+// routes/config.mjs — 全局配置（品牌名 / 模型 / 预设）相关路由
 export default function configRoutes({ send, readBody, presentGlobalConfig, readGlobalConfig, writeGlobalConfig, PRESET_MODELS, listModels }) {
     return [
         {
@@ -7,11 +7,46 @@ export default function configRoutes({ send, readBody, presentGlobalConfig, read
             }
         },
         {
+            method: 'GET', pattern: /^\/manifest\.webmanifest$/, handler: async (_req, res) => {
+                const cfg = readGlobalConfig();
+                const brandName = String(cfg.appConfig?.brandName || '小龙哥@薪灵AI').trim() || '小龙哥@薪灵AI';
+                send(res, 200, {
+                    name: `${brandName} 知识中枢`,
+                    short_name: brandName,
+                    description: '笔记 → 幻灯片 → 复习 的本地知识工作台',
+                    lang: 'zh-CN',
+                    start_url: '/',
+                    scope: '/',
+                    display: 'standalone',
+                    theme_color: '#0D9488',
+                    background_color: '#0D9488',
+                    icons: [
+                        { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+                        { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+                    ],
+                }, 'application/manifest+json; charset=utf-8');
+            }
+        },
+        {
             method: 'POST', pattern: /^\/api\/config$/, handler: async (req, res) => {
                 const body = await readBody(req);
                 // 三组配置可任一/全部提交；persistApiKey === true 时 apiKey 允许落盘，否则一律剥离
                 const persistApiKey = body.persistApiKey === true;
                 const safe = {};
+                if (body.appConfig && typeof body.appConfig === 'object') {
+                    const brandName = String(body.appConfig.brandName || '').trim();
+                    safe.appConfig = { brandName: brandName || '小龙哥@薪灵AI' };
+                }
+                if (body.agentConfig && typeof body.agentConfig === 'object') {
+                    const assistantName = String(body.agentConfig.assistantName || '').trim() || '薪小灵';
+                    const responseStyle = body.agentConfig.responseStyle === 'detailed' ? 'detailed' : 'concise';
+                    safe.agentConfig = {
+                        assistantName,
+                        responseStyle,
+                        allowSettingsMutation: body.agentConfig.allowSettingsMutation !== false,
+                        allowKnowledgeMutation: body.agentConfig.allowKnowledgeMutation !== false,
+                    };
+                }
                 for (const key of ['modelConfig', 'imageModelConfig', 'videoModelConfig']) {
                     if (body[key] && typeof body[key] === 'object') {
                         if (persistApiKey) {

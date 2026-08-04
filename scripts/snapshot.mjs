@@ -101,6 +101,18 @@ export function createSnapshot(name, description = '', protectIds = []) {
   return meta;
 }
 
+// 生成类脚本覆盖已有 deck 前的安全快照：index.html 不存在（新建项目）时跳过，
+// 快照失败不阻断生成（返回 null）。
+export function snapshotBeforeGenerate(name, description = '生成覆盖前自动快照') {
+  try {
+    const indexPath = path.join(getProjectDir(name), 'index.html');
+    if (!fs.existsSync(indexPath)) return null;
+    return createSnapshot(name, description);
+  } catch {
+    return null;
+  }
+}
+
 export function listSnapshots(name) {
   const dir = snapshotDir(name);
   if (!fs.existsSync(dir)) return [];

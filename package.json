@@ -1,6 +1,6 @@
 {
   "name": "ai-ppt-skills",
-  "version": "2.8.1",
+  "version": "2.8.3",
   "description": "Personal knowledge hub + HTML slide engine: notes/fragments knowledge base, AI-generated decks from URL/article/notes, with Claude Code / Kimi CLI skills (个人知识中枢：双链笔记知识库 + AI 生成 HTML 幻灯片).",
   "bin": {
     "ai-ppt-skills": "./install-skills.js"

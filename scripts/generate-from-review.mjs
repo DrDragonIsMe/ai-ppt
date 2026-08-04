@@ -9,6 +9,7 @@ import {
   assertSafeProjectName,
   sanitizeProjectName,
 } from './config.mjs';
+import { snapshotBeforeGenerate } from './snapshot.mjs';
 import {
   emit, emitError, emitDone,
   stripMarkdown,
@@ -148,6 +149,7 @@ async function generateFromReview(type, projectName, options = {}) {
 
   // 写入 HTML
   emit('write', '写入 index.html');
+  snapshotBeforeGenerate(projectName);
   writeDeckIndex(projectName, slidesHtml, {
     title: promptData.title,
     bodyClass: buildBodyClass(options),

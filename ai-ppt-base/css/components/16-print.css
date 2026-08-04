@@ -1,5 +1,13 @@
 
 @media print {
+  /* 浏览器打印默认丢弃背景（“背景图形”复选框默认不勾），会导致：
+     幻灯片背景渐变消失、tile 底色丢失、渐变文字（background-clip: text +
+     透明填充）整段隐形。强制精确打印颜色，等价于用户手动勾上背景图形。 */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   /* One slide per page: the @page box is exactly the 1280×800 design canvas
      with zero margin, so a slide sized to the canvas fills the page
      edge-to-edge — no overflow, no clipped content, no blank pages. */
@@ -139,6 +147,27 @@
   .theme-hint,
   #ai-ppt-edit-toolbar {
     display: none !important;
+  }
+
+  /* 渐变文字（background-clip: text + 透明填充）在打印栅格化时会留下背景
+     框痕；打印一律退化为纯色 accent，清晰且不再依赖背景打印。 */
+  .slide .big-number,
+  .slide .gradient-text,
+  .slide .chart-bar-value,
+  .slide .progress-ring-value,
+  .slide .data-metric-value,
+  .slide .data-compare-value,
+  .slide .data-matrix-value,
+  .slide .timeline-horizontal-title,
+  .slide .cover-hero h1,
+  .slide .cover-left-aligned .cover-text h1,
+  .slide .cover-centered-gradient h1,
+  .slide .cover-split .cover-text h1 .accent,
+  .slide .cover-minimal h1 .accent,
+  .slide .chapter-hero .chapter-number {
+    background: none !important;
+    -webkit-text-fill-color: currentColor !important;
+    color: var(--accent) !important;
   }
 
   .tile {

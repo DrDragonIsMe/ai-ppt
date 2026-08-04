@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import {
   listProjects,
+  findProjectsBySource,
   createProject,
   deleteProject,
   readConfig,
@@ -16,6 +17,7 @@ import {
   applyThemeAndAnimation,
   defaultModelConfig,
   isSafeName,
+  isSafeNoteName,
   isSafeProjectName,
 } from './scripts/config.mjs';
 import { readGlobalConfig, writeGlobalConfig } from './scripts/global-config.mjs';
@@ -41,6 +43,7 @@ import configRoutes from './routes/config.mjs';
 import mediaRoutes from './routes/media.mjs';
 import vaultRoutes from './routes/vault.mjs';
 import projectRoutes from './routes/projects.mjs';
+import agentRoutes from './routes/agent.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -395,6 +398,15 @@ function validName(name, res, error = '非法名称') {
   return true;
 }
 
+// Validate a note name (supports topic paths like "topic/note")
+function validNoteName(name, res, error = '非法笔记名称') {
+  if (!isSafeNoteName(name)) {
+    send(res, 400, { error });
+    return false;
+  }
+  return true;
+}
+
 // 多模态模型配置默认值（契约 E）：空 model 表示使用 CLI 默认模型
 const DEFAULT_MEDIA_MODEL_CONFIG = { provider: 'arkcli', model: '' };
 
@@ -412,10 +424,18 @@ async function ensureVaultApi() {
   const generateReportMod = await import(path.join(ROOT, 'scripts', 'generate-report.mjs'));
   vaultApi = {
     listNotes: vaultMod.listNotes,
+    listTopics: vaultMod.listTopics,
     readNote: vaultMod.readNote,
     writeNote: vaultMod.writeNote,
     createNote: vaultMod.createNote,
     deleteNote: vaultMod.deleteNote,
+    renameNote: vaultMod.renameNote,
+    createTopic: vaultMod.createTopic,
+    deleteTopic: vaultMod.deleteTopic,
+    renameTopic: vaultMod.renameTopic,
+    readTopicMeta: vaultMod.readTopicMeta,
+    writeTopicMeta: vaultMod.writeTopicMeta,
+    syncNoteTopicField: vaultMod.syncNoteTopicField,
     parseFrontMatter: vaultMod.parseFrontMatter,
     stringifyFrontMatter: vaultMod.stringifyFrontMatter,
     normalizeNoteName: vaultMod.normalizeNoteName,
@@ -424,7 +444,6 @@ async function ensureVaultApi() {
     rebuildIndex: linkResolverMod.rebuildIndex,
     getNoteInfo: linkResolverMod.getNoteInfo,
     searchNotes: linkResolverMod.searchNotes,
-    renameNote: vaultMod.renameNote,
     findUnlinkedMentions: linkResolverMod.findUnlinkedMentions,
     linkMentions: linkResolverMod.linkMentions,
     getAllTags: linkResolverMod.getAllTags,
@@ -458,6 +477,15 @@ function presentGlobalConfigFn(cfg) {
     return rest;
   };
   return {
+    appConfig: {
+      brandName: cfg.appConfig?.brandName || '小龙哥@薪灵AI',
+    },
+    agentConfig: {
+      assistantName: cfg.agentConfig?.assistantName || '薪小灵',
+      responseStyle: cfg.agentConfig?.responseStyle === 'detailed' ? 'detailed' : 'concise',
+      allowSettingsMutation: cfg.agentConfig?.allowSettingsMutation !== false,
+      allowKnowledgeMutation: cfg.agentConfig?.allowKnowledgeMutation !== false,
+    },
     modelConfig: strip(cfg.modelConfig, {}),
     imageModelConfig: strip(cfg.imageModelConfig, DEFAULT_MEDIA_MODEL_CONFIG),
     videoModelConfig: strip(cfg.videoModelConfig, DEFAULT_MEDIA_MODEL_CONFIG),
@@ -478,8 +506,9 @@ function assertDeps(moduleName, deps, required) {
 // vault（知识库：笔记/碎片/资产/学习/星图，按域拆分于 routes/vault-*.mjs）
 const vaultDeps = {
   // 基础工具
-  send, readBody, validName, sendFile, ROOT,
+  send, readBody, validName, validNoteName, sendFile, ROOT,
   ensureVaultApi, backupVaultNote,
+  listProjects, findProjectsBySource,
   // NDJSON 任务
   hasActiveTask, spawnNdjsonTask, serveSse,
   generators, noteChats,
@@ -497,8 +526,9 @@ const vaultDeps = {
   generateVideo, taskRegistry,
 };
 assertDeps('vault', vaultDeps, [
-  'send', 'readBody', 'validName', 'sendFile', 'ROOT',
+  'send', 'readBody', 'validName', 'validNoteName', 'sendFile', 'ROOT',
   'ensureVaultApi', 'backupVaultNote',
+  'listProjects', 'findProjectsBySource',
   'hasActiveTask', 'spawnNdjsonTask', 'serveSse',
   'generators', 'noteChats',
   'getCards', 'loadCard', 'saveCard', 'deleteCard', 'recordReview', 'getDueCards',
@@ -522,14 +552,14 @@ assertDeps('config', configDeps, [
   'readGlobalConfig', 'writeGlobalConfig', 'PRESET_MODELS', 'listModels',
 ]);
 
-// media（图片/视频生成与任务轮询）
+// media（图片/视频生成与任务轮询 + 统一生成矩阵）
 const mediaDeps = {
-  send, readBody, validName, readGlobalConfig, DEFAULT_MEDIA_MODEL_CONFIG,
+  send, readBody, validName, isSafeNoteName, ensureVaultApi, DEFAULT_MEDIA_MODEL_CONFIG,
   ensureDir, randomUUID, generateImage, generateVideo, probeMediaProvider,
   taskRegistry, ROOT, projectExists, getProjectDir,
 };
 assertDeps('media', mediaDeps, [
-  'send', 'readBody', 'validName', 'readGlobalConfig', 'DEFAULT_MEDIA_MODEL_CONFIG',
+  'send', 'readBody', 'validName', 'isSafeNoteName', 'ensureVaultApi', 'DEFAULT_MEDIA_MODEL_CONFIG',
   'ensureDir', 'randomUUID', 'generateImage', 'generateVideo', 'probeMediaProvider',
   'taskRegistry', 'ROOT', 'projectExists', 'getProjectDir',
 ]);
@@ -556,6 +586,18 @@ assertDeps('projects', projectDeps, [
   'exportSingleHtml',
   'loadHtml', 'injectThemeOverrides', 'saveEditedHtml', 'search', 'invalidateSearchIndex',
   'createSnapshot', 'listSnapshots', 'restoreSnapshot', 'deleteSnapshot',
+]);
+
+// agent（薪小灵：知识检索 / 设置 / 知识库管理）
+const agentDeps = {
+  send, readBody, validName, validNoteName, ROOT,
+  ensureVaultApi, backupVaultNote,
+  readGlobalConfig, writeGlobalConfig, buildSearchIndex,
+};
+assertDeps('agent', agentDeps, [
+  'send', 'readBody', 'validName', 'validNoteName', 'ROOT',
+  'ensureVaultApi', 'backupVaultNote',
+  'readGlobalConfig', 'writeGlobalConfig', 'buildSearchIndex',
 ]);
 
 // 路由表：系统路由（主题/Dashboard/备份）+ 4 个路由模块
@@ -615,6 +657,7 @@ const routes = [
   ...vaultRoutes(vaultDeps),
   ...configRoutes(configDeps),
   ...mediaRoutes(mediaDeps),
+  ...agentRoutes(agentDeps),
   ...projectRoutes(projectDeps),
 ];
 

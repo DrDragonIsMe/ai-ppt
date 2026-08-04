@@ -2,6 +2,9 @@
 import fs from 'node:fs';
 import { readConfig, writeConfig, getProjectDir, writeDeckIndex } from './config.mjs';
 import { extractFromUrl } from './content-extractor.mjs';
+import { readNote } from './vault.mjs';
+import { splitFrontMatter } from './front-matter.mjs';
+import { snapshotBeforeGenerate } from './snapshot.mjs';
 import {
   emit,
   emitError,
@@ -141,6 +144,18 @@ async function main() {
     } else if (cfg.sourceType === 'article') {
       content = cfg.articleText || '';
       emit('extract', `使用用户提供的文章内容，长度 ${content.length}`);
+    } else if (cfg.sourceType === 'note' || cfg.sourceSelection?.notes?.length) {
+      // 知识库笔记来源：按 sourceSelection 选材读取笔记正文（去 Front Matter）
+      const noteNames = cfg.sourceSelection?.notes?.length
+        ? cfg.sourceSelection.notes
+        : [];
+      const parts = [];
+      for (const noteName of noteNames) {
+        const raw = readNote(noteName);
+        if (raw) parts.push(splitFrontMatter(raw).body.trim());
+      }
+      content = parts.filter(Boolean).join('\n\n');
+      emit('extract', `使用知识库笔记 ${noteNames.length} 篇，内容长度 ${content.length}`);
     }
 
     if (!content.trim()) {
@@ -167,6 +182,7 @@ async function main() {
     });
 
     emit('build', '正在写入 index.html');
+    snapshotBeforeGenerate(name);
     writeDeckIndex(name, slidesHtml, {
       title: cfg.params?.title || cfg.name,
       bodyClass: buildBodyClass(cfg),

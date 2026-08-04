@@ -1,0 +1,59 @@
+{
+  "id": "高考英语北京卷2025",
+  "title": "2025 年高考英语（北京卷）考点复盘",
+  "subject": "高考英语",
+  "description": "2025 年北京卷真题考点自测：客观题答案速查、语法填空考点、书面表达、语篇主题。详见笔记 [[高考英语北京卷-2025]]",
+  "questions": [
+    {
+      "question": "2025 年北京卷完形填空（1–10 题）的答案序列是什么？",
+      "answer": "C A B C B / A D C B D",
+      "explanation": "语篇为 15 岁的「我」为出风头演示开锁被误认为偷窃、父亲坚定信任的故事——真正的认可来自高尚行为。考点为实词语境辨析（desire / demonstrate / falsely / shame / tearfully 等）。",
+      "type": "简答题",
+      "difficulty": "easy",
+      "tags": ["高考", "英语", "北京卷", "2025", "完形填空", "答案速查"]
+    },
+    {
+      "question": "2025 年北京卷语法填空 10 空的答案分别是什么？各考了哪些语法点？",
+      "answer": "11. peaceful（词性转换 peace→peaceful）12. scared（过去分词作宾补）13. what（表语从句）14. longer（比较级）15. had made（过去完成时 by the time…）16. are achieved（一般现在时被动）17. traveling（状语从句省略 When traveling）18. left（一般过去时）19. which（非限制性定语从句）20. at（固定搭配 at the expense of）",
+      "explanation": "三篇语篇：森林散步亲近自然 / 理性决策 / 旅行食物浪费与负责任旅行。官方评析：重点考查时态、非谓语动词、从句等主干知识。",
+      "type": "简答题",
+      "difficulty": "medium",
+      "tags": ["高考", "英语", "北京卷", "2025", "语法填空", "考点"]
+    },
+    {
+      "question": "2025 年北京卷阅读理解（21–34 题）和七选五（35–39 题）的答案序列是什么？",
+      "answer": "阅读：A 篇 21–23 D B C；B 篇 24–27 D A B A；C 篇 28–30 B D A；D 篇 31–34 C C D A。七选五：G E D C A",
+      "explanation": "A 篇 TransForm 夏令营；B 篇重新定义「成功」；C 篇社会比较的再思考（词义猜测 nuances = fine differences）；D 篇「人生故事」身份模型。七选五主题：什么是真正的「成年」。",
+      "type": "简答题",
+      "difficulty": "easy",
+      "tags": ["高考", "英语", "北京卷", "2025", "阅读理解", "答案速查"]
+    },
+    {
+      "question": "2025 年北京卷应用文写作（20 分）题目是什么？属于哪种信件类型？",
+      "answer": "假设你是李华，联合国面向全球青少年开展倡议征集活动，外国好友 Jim 打算参加并就倡议内容询问建议，用英文回复：1. 提出的建议；2. 建议的理由。提示词 proposal，词数 100 左右。题型：建议信。",
+      "explanation": "可从国际体育赛事、新能源发展、绿色低碳等角度切入，考查跨文化交际中「传播中国声音、讲好中国故事」的综合语言运用能力。",
+      "type": "简答题",
+      "difficulty": "easy",
+      "tags": ["高考", "英语", "北京卷", "2025", "写作", "建议信"]
+    },
+    {
+      "question": "2025 年北京卷阅读表达语篇讲了哪两个青少年的故事？42 题的错误点在哪？",
+      "answer": "Mark Lee 用旧 3D 打印机把废塑料瓶熔制成砖块为社区建自行车棚；13 岁 Sally Carter 自学编程开发标注本地小公园的 App 获青年创新奖。42 题错误部分为「With encouragement from his friends and parents」——原文是朋友嘲笑、父母劝他放弃。",
+      "explanation": "43 题开放：How can you put your imagination into practice as Mark and Sally did?（约 40 词）。主题：青少年把想象力变成现实。",
+      "type": "简答题",
+      "difficulty": "medium",
+      "tags": ["高考", "英语", "北京卷", "2025", "阅读表达"]
+    },
+    {
+      "question": "网络上搜「2025 北京高考英语真题」时需要注意什么？",
+      "answer": "大量标题含「2025 北京真题及答案」的页面为 AI 编造或往年旧题改标（如出现「听力 30 分」「科技赋能传统手工艺作文」等与真卷结构明显不符的内容），需以与官方评析语篇描述互相印证的来源为准。",
+      "explanation": "北京卷笔试 100 分且不含听力；作文常年为李华信件。符合这两点是最基本的真伪校验。",
+      "type": "简答题",
+      "difficulty": "medium",
+      "tags": ["高考", "英语", "北京卷", "2025", "信息甄别"]
+    }
+  ],
+  "tags": ["高考", "英语", "北京卷", "2025"],
+  "createdAt": "2026-07-30T16:45:00.000Z",
+  "updatedAt": "2026-07-30T16:45:00.000Z"
+}

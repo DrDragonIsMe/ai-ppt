@@ -38,6 +38,23 @@ export async function loadFragments() {
     } catch (e) { console.error('Failed to load fragments:', e); showToast(t('加载速记列表失败')); }
 }
 
+export async function revealFragment(id) {
+    if (!id) return;
+    S.fragmentFilter = 'all';
+    document.querySelectorAll('.fragment-filter').forEach((btn) => btn.classList.toggle('active', btn.dataset.filter === 'all'));
+    await loadFragments();
+    const safeId = String(id).replace(/"/g, '\\"');
+    const item = document.querySelector(`.fragment-item[data-id="${safeId}"]`);
+    if (!item) {
+        showToast(t('已切换到速记'));
+        return;
+    }
+    item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    item.classList.add('fragment-highlight');
+    clearTimeout(revealFragment._timer);
+    revealFragment._timer = setTimeout(() => item.classList.remove('fragment-highlight'), 1800);
+}
+
 // 附件文件名白名单（渲染端防注入，与服务端落盘命名规则一致）
 const SAFE_ASSET_NAME = /^[\w.\-()（）一-龥 ]+$/;
 const FRAGMENT_MEDIA_KINDS = {

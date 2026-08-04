@@ -6,7 +6,7 @@
 //   /projects/、/published/、/base/ → network-first，成功回写缓存，离线读缓存副本
 // 版本维护：CACHE_VERSION 必须与 package.json 的 version 保持同步；
 // 改动任何静态资源后 bump 版本号，activate 阶段会清理旧版本 cache。
-const CACHE_VERSION = '2.8.1';
+const CACHE_VERSION = '2.8.3';
 const CACHE_NAME = `ai-ppt-v${CACHE_VERSION}`;
 const CACHE_PREFIX = 'ai-ppt-v';
 
@@ -49,6 +49,11 @@ function offlineApiResponse() {
 function isStaticAsset(url) {
   if (PRECACHE_URLS.includes(url.pathname)) return true;
   return /\.(css|m?js|svg|png|jpe?g|webp|ico|webmanifest|woff2?)$/.test(url.pathname);
+}
+
+// 应用壳的关键脚本/样式优先走网络，避免页面壳与模块版本错位。
+function isCriticalShellAsset(url) {
+  return url.pathname.startsWith('/js/') || url.pathname === '/css/web.css';
 }
 
 async function cacheFirst(request) {
@@ -119,6 +124,12 @@ self.addEventListener('fetch', (event) => {
 
   // 动态内容（deck / 发布站点 / 基座引擎）：network-first + 缓存副本
   if (url.pathname.startsWith('/projects/') || url.pathname.startsWith('/published/') || url.pathname.startsWith('/base/')) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  // 关键应用壳资源：network-first，在线时优先拿最新模块；离线再退缓存。
+  if (isCriticalShellAsset(url)) {
     event.respondWith(networkFirst(request));
     return;
   }

@@ -11,9 +11,19 @@ let chatBusy = false;
 let searchTimer = null;
 let editModeActive = false;
 let vaultSourceSelection = { notes: [], cards: [], fragments: [], mistakes: [] };
+let globalSearchResults = [];
+let activeSearchIndex = -1;
+let uiTasks = [];
+let taskSeq = 0;
+let currentGuideActions = { primary: null, secondary: null };
 const els = () => S.els;
 
-const SOURCE_BADGE_LABELS = { article: t('文章'), url: t('网页'), 'vault-note': t('笔记'), 'vault-cards': t('卡片'), 'vault-mistakes': t('错题'), 'vault-graph': t('星图') };
+const SOURCE_BADGE_LABELS = { 
+    article: t('文章'), url: t('网页'), 
+    'vault-note': t('笔记'), 'vault-topic': t('专题'), 
+    'vault-notes': t('多选笔记'), 'vault-graph': t('星图'),
+    selection: t('选区'),
+};
 const VAULT_SOURCE_GROUPS = [
     { key: 'notes', label: '笔记' }, { key: 'cards', label: '知识卡片' },
     { key: 'fragments', label: '碎片' }, { key: 'mistakes', label: '错题' }
@@ -39,8 +49,35 @@ export async function loadModels() {
 }
 
 export async function loadGlobalConfig() {
-    try { S.globalConfig = await api('GET', '/api/config'); }
+    try {
+        S.globalConfig = await api('GET', '/api/config');
+        applyAppBranding();
+    }
     catch (err) { S.globalConfig = { modelConfig: {} }; showToast(t('加载模型配置失败：{msg}', { msg: err.message }), 'error'); }
+}
+
+function getBrandName() {
+    return String(S.globalConfig?.appConfig?.brandName || '小龙哥@薪灵AI').trim() || '小龙哥@薪灵AI';
+}
+
+function applyAppBranding() {
+    const e = els();
+    const brandName = getBrandName();
+    document.title = `${brandName} Workspace`;
+    if (e.appLogo) e.appLogo.textContent = brandName;
+    if (e.inputAppBrandName) e.inputAppBrandName.value = brandName;
+}
+
+function renderAgentConfigUI() {
+    const cfg = S.globalConfig?.agentConfig || {};
+    const agentName = document.getElementById('input-agent-name');
+    const responseStyle = document.getElementById('input-agent-response-style');
+    const allowSettings = document.getElementById('input-agent-allow-settings');
+    const allowKnowledge = document.getElementById('input-agent-allow-knowledge');
+    if (agentName) agentName.value = cfg.assistantName || '薪小灵';
+    if (responseStyle) responseStyle.value = cfg.responseStyle === 'detailed' ? 'detailed' : 'concise';
+    if (allowSettings) allowSettings.checked = cfg.allowSettingsMutation !== false;
+    if (allowKnowledge) allowKnowledge.checked = cfg.allowKnowledgeMutation !== false;
 }
 
 // === 项目列表 ===
@@ -50,14 +87,84 @@ export async function loadProjects(selectName = null) {
         renderProjects();
         if (selectName) selectProject(selectName);
     } catch (e) {
-        showToast('加载项目列表失败', 'error');
+        console.error('加载项目列表失败:', e);
+        showToast('加载项目列表失败：' + e.message, 'error');
     }
 }
 
 function sourceBadgeLabel(p) {
     const sel = p.sourceSelection;
-    if (sel && typeof sel === 'object' && Object.values(sel).some((arr) => Array.isArray(arr) && arr.length)) return t('知识选材');
-    return SOURCE_BADGE_LABELS[p.sourceType] || '';
+    // 统一生成矩阵的 context 来源：topic/note/selection
+    if (sel && typeof sel === 'object') {
+        if (sel.kind === 'topic' && sel.topicPath) return `${t('专题')}·${escapeHtml(sel.topicPath)}`;
+        if (sel.kind === 'note' && sel.noteName) return `${t('笔记')}·${escapeHtml(sel.noteName.split('/').pop())}`;
+        // 兼容旧的知识选材格式
+        if (Object.values(sel).some((arr) => Array.isArray(arr) && arr.length)) return t('知识选材');
+    }
+    const label = SOURCE_BADGE_LABELS[p.sourceType] || '';
+    // 如果有 sourceNote，显示笔记名缩写
+    if (!label && p.sourceNote) return `${t('笔记')}·${escapeHtml(p.sourceNote.split('/').pop())}`;
+    return label;
+}
+
+// 构建来源链接信息：从 project config 中提取可跳转的笔记名称
+function buildSourceLink(cfg) {
+    const sel = cfg.sourceSelection;
+    if (sel && typeof sel === 'object') {
+        if (sel.kind === 'note' && sel.noteName) return { noteName: sel.noteName, label: t('来源笔记') };
+        // 专题来源：跳转到专题下的第一篇笔记（或专题本身）
+        if (sel.kind === 'topic' && sel.topicPath) return { noteName: `${sel.topicPath}/`, label: `→ ${t('专题')}` };
+    }
+    if (cfg.sourceType === 'vault-note' && cfg.sourceNote) return { noteName: cfg.sourceNote, label: t('来源笔记') };
+    return null;
+}
+
+// 跳转到来源笔记（在知识库 tab 中选中并滚动到该笔记）
+function navigateToSourceNote(noteName) {
+    if (!noteName) return;
+    // 在当前项目面板的上下文中，切换到 vault tab 并选中笔记
+    if (_cb.switchSidebarTab) _cb.switchSidebarTab('vault');
+    setTimeout(() => {
+        const noteList = document.getElementById('vault-note-list');
+        if (noteList) {
+            const items = noteList.querySelectorAll('.note-item');
+            for (const item of items) {
+                if (item.dataset.name === noteName || item.textContent.includes(noteName)) {
+                    item.click();
+                    break;
+                }
+            }
+        }
+    }, 100);
+}
+
+// P5: 触发笔记 → PPT 的同步（手动点击刷新按钮）
+async function triggerPptSyncFromNote(projectName, cfg) {
+    const sourceLink = buildSourceLink(cfg);
+    if (!sourceLink || !sourceLink.noteName) return;
+    // 通过 chat-modify 实现 PPT 同步更新
+    try {
+        await api('POST', `/api/projects/${encodeURIComponent(projectName)}/chat`, {
+            instruction: '请根据来源笔记的最新内容，同步更新 PPT 中的相关幻灯片文字，保持与笔记一致'
+        });
+        showToast(t('PPT 同步已启动，请在聊天视图查看进度'), 'info');
+    } catch (err) {
+        console.error(err);
+        showToast(err.message || t('同步失败'), 'error');
+    }
+}
+
+// P6: 从 PPT 生成/更新笔记（用于没有来源笔记的 PPT）
+async function generateNoteFromProject(projectName) {
+    try {
+        const result = await api('POST', `/api/projects/${encodeURIComponent(projectName)}/generate-note`, {});
+        if (result.taskId || result.message) {
+            showToast(t('笔记生成已启动'), 'info');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast(err.message || t('生成失败'), 'error');
+    }
 }
 
 function renderProjects() {
@@ -71,9 +178,29 @@ function renderProjects() {
         item.className = 'project-item' + (p.name === S.currentProject ? ' active' : '');
         item.dataset.index = idx;
         const statusBadgeClass = p.status === 'error' ? 'error' : (p.status === 'ready' || p.status === 'published') ? 'ready' : (p.status === 'generating' ? 'generating' : 'draft');
-        item.innerHTML = `<div style="display:flex;align-items:center;gap:10px;min-width:0;"><img class="project-cover" src="${coverUrl}" alt="" loading="lazy" onerror="this.remove()"><div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-mono);background:${idx < 9 ? 'var(--tile)' : 'transparent'};border-radius:4px;color:var(--ink);opacity:0.6;flex-shrink:0;">${idx < 9 ? idx + 1 : ''}</div><div style="min-width:0;"><div class="project-name">${escapeHtml(p.title || p.name)}</div><div class="project-meta">${escapeHtml(p.name)}<span class="status-badge ${statusBadgeClass}">${statusLabel(p.status)}</span>${badge ? `<span class="source-badge">${escapeHtml(badge)}</span>` : ''}</div></div></div><button class="project-delete" title="${t('删除')}">×</button>`;
+        // P5/P6: 双向同步按钮 — 有来源笔记则显示「同步到 PPT」，无来源则显示「生成笔记」
+        const hasSourceNote = !!(buildSourceLink(p));
+        item.innerHTML = `<div style="display:flex;align-items:center;gap:10px;min-width:0;"><img class="project-cover" src="${coverUrl}" alt="" loading="lazy" onerror="this.remove()"><div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-mono);background:${idx < 9 ? 'var(--tile)' : 'transparent'};border-radius:4px;color:var(--ink);opacity:0.6;flex-shrink:0;">${idx < 9 ? idx + 1 : ''}</div><div style="min-width:0;"><div class="project-name">${escapeHtml(p.title || p.name)}</div><div class="project-meta">${escapeHtml(p.name)}<span class="status-badge ${statusBadgeClass}">${statusLabel(p.status)}</span>${badge ? `<span class="source-badge">${escapeHtml(badge)}</span>` : ''}${hasSourceNote ? ` <button type="button" class="sync-btn" data-project="${escapeHtmlAttr(p.name)}" title="${t('同步笔记到 PPT')}" style="margin-left:4px;padding:0;font-size:11px;opacity:0.5;color:inherit;background:none;border:none;cursor:pointer;">↻</button>` : ` <button type="button" class="gen-note-btn" data-project="${escapeHtmlAttr(p.name)}" title="${t('从 PPT 生成笔记')}" style="margin-left:4px;padding:0;font-size:11px;opacity:0.5;color:inherit;background:none;border:none;cursor:pointer;">📝</button>`}</div></div></div><button class="project-delete" title="${t('删除')}">×</button>`;
+        // 显示来源笔记的跳转链接（专题/笔记来源）
+        const sourceLink = buildSourceLink(p);
+        if (sourceLink) {
+            const metaDiv = item.querySelector('.project-meta');
+            if (metaDiv) {
+                metaDiv.innerHTML += ` <a href="#" class="source-link" data-source="${escapeHtmlAttr(sourceLink.noteName)}" style="margin-left:6px;font-size:12px;opacity:0.7;text-decoration:underline;" title="${t('跳转到来源笔记')}">↗ ${escapeHtml(sourceLink.label)}</a>`;
+            }
+        }
+
         item.addEventListener('click', (e) => {
             if (e.target.classList.contains('project-delete')) { e.stopPropagation(); deleteProject(p.name); }
+            else if (e.target.closest('.source-link')) { e.stopPropagation(); navigateToSourceNote(e.target.closest('.source-link').dataset.source); }
+            else if (e.target.classList.contains('sync-btn') || e.target.closest('.sync-btn')) {
+                e.stopPropagation();
+                triggerPptSyncFromNote(p.name, p);
+            }
+            else if (e.target.classList.contains('gen-note-btn') || e.target.closest('.gen-note-btn')) {
+                e.stopPropagation();
+                generateNoteFromProject(p.name);
+            }
             else selectProject(p.name);
         });
         projectListEl.appendChild(item);
@@ -111,6 +238,8 @@ function renderConfig(cfg) {
     e.projectTitle.textContent = cfg.params?.title || cfg.name;
     e.projectStatus.textContent = statusLabel(cfg.status);
     e.projectStatus.className = 'status ' + cfg.status;
+    if (e.projectPanel) e.projectPanel.dataset.status = cfg.status || 'draft';
+    if (e.projectPanel && !e.projectPanel.dataset.mobileView) e.projectPanel.dataset.mobileView = 'preview';
     setSourceTab(cfg.sourceType || 'article');
     e.inputUrl.value = cfg.sourceUrl || '';
     e.inputArticle.value = cfg.articleText || '';
@@ -136,6 +265,7 @@ function renderConfig(cfg) {
     e.progressCard.classList.add('hidden');
     editModeActive = false;
     updateEditModeUI();
+    updateWorkspaceGuide(cfg);
     checkProjectFiles();
 }
 
@@ -154,6 +284,37 @@ export function renderModelConfigUI() {
     updateModelPresetUI(presetId);
     renderMediaModelConfigs();
     renderPdfConfigUI();
+    applyAppBranding();
+    renderAgentConfigUI();
+      syncQuickSetupFromAdvanced();
+}
+
+function syncQuickSetupFromAdvanced() {
+    const e = els();
+    if (e.quickModelPreset) e.quickModelPreset.innerHTML = e.inputModelPreset.innerHTML;
+    if (e.quickModelPreset) e.quickModelPreset.value = e.inputModelPreset.value;
+    if (e.quickModelApiKey) {
+        e.quickModelApiKey.value = '';
+        e.quickModelApiKey.placeholder = e.inputModelApiKey.placeholder;
+    }
+    if (e.quickModelPersistApiKey) e.quickModelPersistApiKey.checked = false;
+    if (e.quickPdfEngine) e.quickPdfEngine.value = document.getElementById('input-pdf-engine')?.value || 'puppeteer';
+}
+
+function applyQuickSetupToAdvanced() {
+    const e = els();
+    if (e.quickModelPreset?.value) {
+        e.inputModelPreset.value = e.quickModelPreset.value;
+        e.inputModelPreset.dispatchEvent(new Event('change'));
+    }
+    if (e.quickModelApiKey) e.inputModelApiKey.value = e.quickModelApiKey.value;
+    if (e.quickModelPersistApiKey) e.inputModelPersistApiKey.checked = !!e.quickModelPersistApiKey.checked;
+    if (e.quickPdfEngine && document.getElementById('input-pdf-engine')) document.getElementById('input-pdf-engine').value = e.quickPdfEngine.value;
+}
+
+function switchSettingsMode(mode) {
+    els().settingsModeTabs?.forEach((tab) => tab.classList.toggle('active', tab.dataset.mode === mode));
+    document.querySelectorAll('.settings-mode-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.mode === mode));
 }
 
 function updateModelPresetUI(presetId) {
@@ -249,6 +410,13 @@ async function testMediaModel(kind) {
 export async function saveGlobalModelConfig() {
     const e = els();
     try {
+        const appConfig = { brandName: String(e.inputAppBrandName?.value || '').trim() || '小龙哥@薪灵AI' };
+        const agentConfig = {
+            assistantName: String(document.getElementById('input-agent-name')?.value || '').trim() || '薪小灵',
+            responseStyle: document.getElementById('input-agent-response-style')?.value === 'detailed' ? 'detailed' : 'concise',
+            allowSettingsMutation: !!document.getElementById('input-agent-allow-settings')?.checked,
+            allowKnowledgeMutation: !!document.getElementById('input-agent-allow-knowledge')?.checked,
+        };
         const modelConfig = getModelConfigFromUI();
         const imageModelConfig = getMediaModelConfigFromUI('image');
         const videoModelConfig = getMediaModelConfigFromUI('video');
@@ -259,10 +427,14 @@ export async function saveGlobalModelConfig() {
         if (e.inputModelPersistApiKey?.checked && e.inputModelApiKey.value.trim()) { modelConfig.apiKey = e.inputModelApiKey.value.trim(); keyPersisted = true; }
         if (e.inputImageModelPersistApiKey?.checked && e.inputImageModelApiKey.value.trim()) { imageModelConfig.apiKey = e.inputImageModelApiKey.value.trim(); keyPersisted = true; }
         if (e.inputVideoModelPersistApiKey?.checked && e.inputVideoModelApiKey.value.trim()) { videoModelConfig.apiKey = e.inputVideoModelApiKey.value.trim(); keyPersisted = true; }
-        const body = { modelConfig, imageModelConfig, videoModelConfig, ...(persistApiKey ? { persistApiKey: true } : {}) };
+        const body = { appConfig, agentConfig, modelConfig, imageModelConfig, videoModelConfig, ...(persistApiKey ? { persistApiKey: true } : {}) };
         if (pdfConfig) body.pdfConfig = pdfConfig;
         S.globalConfig = await api('POST', '/api/config', body);
         renderModelConfigUI();
+          syncQuickSetupFromAdvanced();
+        applyAppBranding();
+        const manifestLink = document.querySelector('link[rel="manifest"]');
+        if (manifestLink) manifestLink.href = `/manifest.webmanifest?t=${Date.now()}`;
         showToast(keyPersisted ? t('模型配置已保存（含 API Key）') : t('配置已保存'));
     } catch (err) { showToast(t('保存配置失败：{msg}', { msg: err.message }), 'error'); }
 }
@@ -272,25 +444,260 @@ export async function backupNow() {
     catch (err) { showToast(t('备份失败：{msg}', { msg: err.message }), 'error'); }
 }
 
+// === 任务中心 ===
+function taskStatusLabel(status) {
+    return { running: t('进行中'), success: t('已完成'), error: t('失败') }[status] || status;
+}
+
+function renderTaskCenter() {
+    const e = els();
+    if (!e.taskCenterList || !e.taskCenterEmpty || !e.taskCenterBadge) return;
+    const items = [...uiTasks].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    e.taskCenterList.innerHTML = items.map((task) => `
+        <div class="task-item ${escapeHtmlAttr(task.status)}" data-task-id="${escapeHtmlAttr(task.id)}">
+          <div class="task-item-head">
+            <div>
+              <div class="task-item-title">${escapeHtml(task.title)}</div>
+              <div class="task-item-meta">${escapeHtml(task.meta || '')}</div>
+            </div>
+            <span class="task-item-status">${escapeHtml(taskStatusLabel(task.status))}</span>
+          </div>
+          <div class="task-item-message">${escapeHtml(task.message || t('等待更新…'))}</div>
+          <div class="task-item-actions">
+            ${task.downloadUrl ? `<button class="btn-secondary" data-task-action="download" data-task-id="${escapeHtmlAttr(task.id)}">${t('下载')}</button>` : ''}
+            ${task.openUrl ? `<button class="btn-secondary" data-task-action="open" data-task-id="${escapeHtmlAttr(task.id)}">${t('打开')}</button>` : ''}
+            ${task.copyText ? `<button class="btn-secondary" data-task-action="copy" data-task-id="${escapeHtmlAttr(task.id)}">${t('复制链接')}</button>` : ''}
+            ${task.status !== 'running' ? `<button class="btn-secondary" data-task-action="dismiss" data-task-id="${escapeHtmlAttr(task.id)}">${t('移除')}</button>` : ''}
+          </div>
+        </div>`).join('');
+    e.taskCenterEmpty.classList.toggle('hidden', items.length > 0);
+    const badgeCount = items.filter((task) => task.status === 'running' || task.status === 'error').length;
+    e.taskCenterBadge.textContent = String(badgeCount);
+    e.taskCenterBadge.classList.toggle('hidden', badgeCount === 0);
+    if (e.mobileTaskCardBody) {
+        if (!items.length) e.mobileTaskCardBody.textContent = t('当前没有任务，开始生成、导出或发布后会出现在这里。');
+        else {
+            const latest = items[0];
+            e.mobileTaskCardBody.textContent = `${latest.title} · ${taskStatusLabel(latest.status)} · ${latest.message || ''}`.trim();
+        }
+    }
+}
+
+function upsertTask(task, { openPanel = false } = {}) {
+    const existing = uiTasks.findIndex((item) => item.id === task.id);
+    const merged = { updatedAt: new Date().toISOString(), status: 'running', ...task };
+    if (existing >= 0) uiTasks.splice(existing, 1, { ...uiTasks[existing], ...merged });
+    else uiTasks.unshift(merged);
+    renderTaskCenter();
+    if (openPanel) els().taskCenterPanel?.classList.remove('hidden');
+    return merged.id;
+}
+
+function createTask(title, meta, message, options = {}) {
+    return upsertTask({ id: options.id || `task-${++taskSeq}`, title, meta, message, ...options }, { openPanel: options.openPanel !== false });
+}
+
+function updateTask(id, patch) {
+    if (!id) return;
+    upsertTask({ id, ...patch });
+}
+
+function clearFinishedTasks() {
+    uiTasks = uiTasks.filter((task) => task.status === 'running' || task.status === 'error');
+    renderTaskCenter();
+}
+
+function dismissTask(id) {
+    uiTasks = uiTasks.filter((task) => task.id !== id);
+    renderTaskCenter();
+}
+
+async function handleTaskAction(action, id) {
+    const task = uiTasks.find((item) => item.id === id);
+    if (!task) return;
+    if (action === 'download' && task.downloadUrl) {
+        const a = document.createElement('a');
+        a.href = task.downloadUrl;
+        a.download = task.downloadName || '';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    } else if (action === 'open' && task.openUrl) {
+        window.open(task.openUrl, '_blank', 'noopener');
+    } else if (action === 'copy' && task.copyText) {
+        try { await navigator.clipboard.writeText(task.copyText); showToast(t('链接已复制')); }
+        catch { showToast(t('复制失败，请手动复制'), 'error'); }
+    } else if (action === 'dismiss') {
+        dismissTask(id);
+    }
+}
+
+function toggleTaskCenter(force) {
+    const panel = els().taskCenterPanel;
+    if (!panel) return;
+    const shouldShow = typeof force === 'boolean' ? force : panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !shouldShow);
+}
+
 // === Search ===
+function matchText(value, query) {
+    return String(value || '').toLowerCase().includes(query);
+}
+
+function makeSnippet(text, query) {
+    const content = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!content) return '';
+    const lower = content.toLowerCase();
+    const hit = lower.indexOf(query);
+    if (hit < 0) return content.slice(0, 80) + (content.length > 80 ? '…' : '');
+    const start = Math.max(0, hit - 36);
+    const end = Math.min(content.length, hit + query.length + 48);
+    return `${start > 0 ? '…' : ''}${content.slice(start, end)}${end < content.length ? '…' : ''}`;
+}
+
+function buildGlobalSearchResults(query, datasets) {
+    const q = query.toLowerCase().trim();
+    const results = [];
+    for (const project of datasets.projects || []) {
+        if (matchText(project.title, q) || matchText(project.name, q)) {
+            results.push({ type: 'project', id: project.name, title: project.title || project.name, meta: `${project.name} · ${statusLabel(project.status)}`, snippet: '', action: () => selectProject(project.name) });
+        }
+    }
+    for (const note of datasets.notes || []) {
+        results.push({ type: 'note', id: note.name, title: note.title || note.name, meta: note.name, snippet: note.snippet || '', action: () => { _cb.switchSidebarTab('vault'); _cb.selectNote(note.name); } });
+    }
+    for (const card of datasets.cards || []) {
+        if (!(matchText(card.question, q) || matchText(card.answer, q) || matchText(card.explanation, q) || (card.tags || []).some((tag) => matchText(tag, q)))) continue;
+        results.push({ type: 'card', id: card.id, title: card.question || card.title || card.id, meta: `${t('知识卡片')} · ${(card.tags || []).slice(0, 2).join(' / ')}`, snippet: makeSnippet(`${card.answer || ''} ${card.explanation || ''}`, q), action: () => { _cb.switchSidebarTab('cards'); _cb.loadCards().then(() => _cb.selectCard(card.id)); } });
+    }
+    for (const fragment of datasets.fragments || []) {
+        if (!(matchText(fragment.content, q) || (fragment.tags || []).some((tag) => matchText(tag, q)))) continue;
+        results.push({ type: 'fragment', id: fragment.id, title: makeSnippet(fragment.content, q) || t('速记碎片'), meta: `${t('速记')} · ${(fragment.tags || []).slice(0, 2).join(' / ')}`, snippet: makeSnippet(fragment.content, q), action: () => { _cb.switchSidebarTab('fragments'); if (_cb.revealFragment) _cb.revealFragment(fragment.id); } });
+    }
+    for (const mistake of datasets.mistakes || []) {
+        if (!(matchText(mistake.question, q) || matchText(mistake.correctAnswer, q) || matchText(mistake.analysis, q) || (mistake.tags || []).some((tag) => matchText(tag, q)))) continue;
+        results.push({ type: 'mistake', id: mistake.id, title: mistake.question || mistake.id, meta: `${t('错题')} · ${mistake.subject || t('未分类')}`, snippet: makeSnippet(`${mistake.correctAnswer || ''} ${mistake.analysis || ''}`, q), action: () => { _cb.switchSidebarTab('study', 'mistakes'); _cb.loadMistakes().then(() => _cb.selectMistake(mistake.id)); } });
+    }
+    return results.slice(0, 12);
+}
+
 async function performSearch(query) {
     const e = els();
-    if (!query.trim()) { e.searchResults.classList.add('hidden'); return; }
-    try { const results = await api('GET', `/api/search?q=${encodeURIComponent(query)}`); renderSearchResults(results); }
+    if (!query.trim()) { globalSearchResults = []; activeSearchIndex = -1; e.searchResults.classList.add('hidden'); return; }
+    try {
+        const [projects, notes, cards, fragments, mistakes] = await Promise.all([
+            api('GET', `/api/search?q=${encodeURIComponent(query)}`).catch(() => []),
+            api('GET', `/api/vault/search?q=${encodeURIComponent(query)}`).catch(() => []),
+            api('GET', '/api/vault/cards').catch(() => []),
+            api('GET', '/api/vault/fragments').then((data) => data.fragments || []).catch(() => []),
+            api('GET', '/api/mistakes').catch(() => []),
+        ]);
+        renderSearchResults(buildGlobalSearchResults(query, { projects, notes, cards, fragments, mistakes }));
+    }
     catch { e.searchResults.classList.add('hidden'); }
 }
 
 function renderSearchResults(results) {
     const e = els();
-    if (!results || results.length === 0) { e.searchResults.innerHTML = `<div class="search-result-empty">${t('无匹配结果')}</div>`; e.searchResults.classList.remove('hidden'); return; }
-    e.searchResults.innerHTML = results.map((r) => `<div class="search-result-item" data-name="${escapeHtml(r.name)}"><div class="search-result-title">${escapeHtml(r.title || r.name)}</div><div class="search-result-meta">${escapeHtml(r.name)} · ${statusLabel(r.status)}</div></div>`).join('');
+    const items = Array.isArray(results) ? results : [];
+    globalSearchResults = items;
+    activeSearchIndex = items.length ? 0 : -1;
+    if (!items.length) {
+        e.searchResults.innerHTML = `<div class="search-result-empty">${t('无匹配结果')}</div>`;
+        e.searchResults.classList.remove('hidden');
+        return;
+    }
+    const typeLabel = { project: t('项目'), note: t('笔记'), card: t('卡片'), fragment: t('碎片'), mistake: t('错题') };
+    e.searchResults.innerHTML = items.map((r, index) => `
+        <div class="search-result-item ${index === activeSearchIndex ? 'active' : ''}" data-index="${index}">
+          <div class="search-result-topline">
+            <div class="search-result-title">${escapeHtml(r.title || r.id || '')}</div>
+            <span class="search-result-type">${escapeHtml(typeLabel[r.type] || r.type || '')}</span>
+          </div>
+          <div class="search-result-meta">${escapeHtml(r.meta || '')}</div>
+          ${r.snippet ? `<div class="search-result-snippet">${escapeHtml(r.snippet)}</div>` : ''}
+        </div>`).join('') + `<div class="search-result-hint">${t('↑↓ 选择，Enter 打开，Esc 关闭')}</div>`;
     e.searchResults.classList.remove('hidden');
     e.searchResults.querySelectorAll('.search-result-item').forEach((item) => {
-        item.addEventListener('click', () => { e.searchResults.classList.add('hidden'); e.inputGlobalSearch.value = ''; selectProject(item.dataset.name); });
+        item.addEventListener('click', () => openSearchResult(Number(item.dataset.index)));
     });
 }
 
 function closeSearchResults() { els().searchResults.classList.add('hidden'); }
+
+function moveSearchSelection(direction) {
+    if (!globalSearchResults.length) return;
+    activeSearchIndex = (activeSearchIndex + direction + globalSearchResults.length) % globalSearchResults.length;
+    renderSearchResults(globalSearchResults);
+}
+
+function openSearchResult(index = activeSearchIndex) {
+    const item = globalSearchResults[index];
+    if (!item?.action) return;
+    closeSearchResults();
+    els().inputGlobalSearch.value = '';
+    item.action();
+}
+
+function updateWorkspaceGuide(cfg) {
+    const e = els();
+    if (!e.workspaceGuideTitle || !e.workspaceGuideText || !e.btnGuidePrimary || !e.btnGuideSecondary) return;
+    const hasSourceText = !!(String(cfg.articleText || '').trim() || String(cfg.sourceUrl || '').trim()
+        || Object.values(normalizeSourceSelection(cfg.sourceSelection)).some((items) => Array.isArray(items) && items.length));
+    let title = t('先准备内容来源');
+    let text = t('把文章、网页或知识库素材放进来后，就能直接生成第一版 PPT。');
+    currentGuideActions = { primary: 'open-content', secondary: 'switch-vault' };
+    e.btnGuidePrimary.textContent = t('去选材');
+    e.btnGuideSecondary.textContent = t('打开知识库');
+    e.btnGuideSecondary.classList.remove('hidden');
+
+    if (!hasSourceText) {
+        title = t('先准备内容来源');
+        text = t('推荐先从文章内容或知识库素材开始，确认标题和页数后再生成。');
+    } else if (cfg.status === 'draft') {
+        title = t('素材已准备好，下一步生成 PPT');
+        text = t('建议先保存配置，再生成第一版，生成完成后再做设计检查和 AI 修改。');
+        currentGuideActions = { primary: 'generate', secondary: 'save-config' };
+        e.btnGuidePrimary.textContent = t('立即生成');
+        e.btnGuideSecondary.textContent = t('先保存配置');
+    } else if (cfg.status === 'generating') {
+        title = t('正在生成中');
+        text = t('进度会同步到任务中心；你可以继续查看预览、切换设置，或等待任务完成后导出。');
+        currentGuideActions = { primary: 'open-tasks', secondary: 'preview' };
+        e.btnGuidePrimary.textContent = t('查看任务');
+        e.btnGuideSecondary.textContent = t('回到预览');
+    } else if (cfg.status === 'ready') {
+        title = t('这一版已经可预览、导出和发布');
+        text = t('如果内容已稳定，建议先做设计检查；若还要润色，可以直接用 AI 修改或编辑模式微调。');
+        currentGuideActions = { primary: 'open-export', secondary: 'toggle-chat' };
+        e.btnGuidePrimary.textContent = t('去导出');
+        e.btnGuideSecondary.textContent = t('AI 修改');
+    } else if (cfg.status === 'error') {
+        title = t('上次生成没有完成');
+        text = t('先看任务中心里的报错，再回到选材或设置修正内容后重新生成。');
+        currentGuideActions = { primary: 'open-tasks', secondary: 'open-content' };
+        e.btnGuidePrimary.textContent = t('查看报错');
+        e.btnGuideSecondary.textContent = t('回到选材');
+    }
+
+    e.workspaceGuideTitle.textContent = title;
+    e.workspaceGuideText.textContent = text;
+}
+
+function runGuideAction(action) {
+    if (!action) return;
+    if (action === 'open-content') activateConfigTab('content');
+    else if (action === 'switch-vault') _cb.switchSidebarTab('vault');
+    else if (action === 'generate') generate();
+    else if (action === 'save-config') saveConfig();
+    else if (action === 'open-tasks') toggleTaskCenter(true);
+    else if (action === 'preview') {
+        if (els().projectPanel) els().projectPanel.dataset.mobileView = 'preview';
+        els().mobileWorkspaceTabs?.forEach((tab) => tab.classList.toggle('active', tab.dataset.mobileView === 'preview'));
+    }
+    else if (action === 'open-export') openExportDropdown();
+    else if (action === 'toggle-chat') toggleChatDock();
+}
 
 // === Chat ===
 function toggleChatDock() { els().chatDock.classList.toggle('hidden'); }
@@ -733,21 +1140,66 @@ function updateProgress(step, state, message) {
 async function generate() {
     if (!S.currentProject) return;
     const e = els();
+    const projectName = S.currentProject;
     const sessionApiKey = e.inputModelApiKey.value.trim();
-    await saveConfig(); initProgress();
+    const taskId = createTask(t('生成 PPT'), projectName, t('正在保存配置并启动生成…'));
+    try {
+        await saveConfig();
+    } catch (err) {
+        updateTask(taskId, { status: 'error', message: err.message || t('保存配置失败') });
+        showToast(t('保存配置失败：{msg}', { msg: err.message || t('未知错误') }), 'error');
+        return;
+    }
+    initProgress();
     e.btnGenerate.disabled = true; if (e.btnGenerateContent) e.btnGenerateContent.disabled = true;
     updateProgress('start', 'active', t('开始生成'));
-    try { await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/generate`, sessionApiKey ? { apiKey: sessionApiKey } : undefined); }
-    catch (err) { updateProgress('start', 'error', withLlmSettingsHint(err.message)); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; return; }
-    const es = new EventSource(`/api/projects/${encodeURIComponent(S.currentProject)}/generate/events`);
+    try { await api('POST', `/api/projects/${encodeURIComponent(projectName)}/generate`, sessionApiKey ? { apiKey: sessionApiKey } : undefined); }
+    catch (err) {
+        updateProgress('start', 'error', withLlmSettingsHint(err.message));
+        updateTask(taskId, { status: 'error', message: withLlmSettingsHint(err.message) });
+        e.btnGenerate.disabled = false;
+        if (e.btnGenerateContent) e.btnGenerateContent.disabled = false;
+        return;
+    }
+    const es = new EventSource(`/api/projects/${encodeURIComponent(projectName)}/generate/events`);
     es.onmessage = (ev) => {
         let event; try { event = JSON.parse(ev.data); } catch { event = { type: 'log', message: ev.data }; }
-        if (event.type === 'progress') { updateProgress(event.step, 'done', event.message); const idx = steps.findIndex((s) => s.key === event.step); if (idx >= 0 && idx < steps.length - 1) updateProgress(steps[idx + 1].key, 'active'); }
-        else if (event.type === 'log' || event.type === 'stderr') e.progressLog.textContent += event.message + '\n';
-        else if (event.type === 'error') { updateProgress(event.step || 'ready', 'error', withLlmSettingsHint(event.message)); es.close(); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; showToast(t('生成失败：{msg}', { msg: withLlmSettingsHint(event.message) })); }
-        else if (event.type === 'done') { updateProgress('ready', 'done', t('生成完成')); es.close(); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; loadProjects(S.currentProject).then(() => updatePreview()); }
+        if (event.type === 'progress') {
+            updateProgress(event.step, 'done', event.message);
+            updateTask(taskId, { message: event.message || t('生成进行中…') });
+            const idx = steps.findIndex((s) => s.key === event.step);
+            if (idx >= 0 && idx < steps.length - 1) updateProgress(steps[idx + 1].key, 'active');
+        }
+        else if (event.type === 'log' || event.type === 'stderr') {
+            e.progressLog.textContent += event.message + '\n';
+            updateTask(taskId, { message: event.message || t('生成进行中…') });
+        }
+        else if (event.type === 'error') {
+            const message = withLlmSettingsHint(event.message);
+            updateProgress(event.step || 'ready', 'error', message);
+            updateTask(taskId, { status: 'error', message });
+            es.close();
+            e.btnGenerate.disabled = false;
+            if (e.btnGenerateContent) e.btnGenerateContent.disabled = false;
+            showToast(t('生成失败：{msg}', { msg: message }));
+        }
+        else if (event.type === 'done') {
+            updateProgress('ready', 'done', t('生成完成'));
+            updateTask(taskId, { status: 'success', message: t('生成完成，可继续预览、导出或发布。') });
+            es.close();
+            e.btnGenerate.disabled = false;
+            if (e.btnGenerateContent) e.btnGenerateContent.disabled = false;
+            loadProjects(projectName).then(() => updatePreview());
+        }
     };
-    es.onerror = () => { es.close(); e.btnGenerate.disabled = false; if (e.btnGenerateContent) e.btnGenerateContent.disabled = false; updateProgress('ready', 'error', t('生成连接中断')); showToast(t('生成连接中断，请重试')); };
+    es.onerror = () => {
+        es.close();
+        e.btnGenerate.disabled = false;
+        if (e.btnGenerateContent) e.btnGenerateContent.disabled = false;
+        updateProgress('ready', 'error', t('生成连接中断'));
+        updateTask(taskId, { status: 'error', message: t('生成连接中断，请重试') });
+        showToast(t('生成连接中断，请重试'));
+    };
 }
 
 function openPreview() { window.open(`/projects/${encodeURIComponent(S.currentProject)}/`, '_blank'); }
@@ -756,29 +1208,47 @@ function openPreview() { window.open(`/projects/${encodeURIComponent(S.currentPr
 function exportAsync(type, label, downloadName) {
     if (!S.currentProject) return;
     const name = S.currentProject;
+    const taskId = createTask(t('{label} 导出', { label }), name, t('正在启动导出…'));
     showToast(t('{label}导出已启动...', { label }));
     api('POST', `/api/projects/${encodeURIComponent(name)}/export/${type}`)
         .then(() => {
             const es = new EventSource(`/api/projects/${encodeURIComponent(name)}/export/${type}/events`);
             es.onmessage = (ev) => {
                 let event; try { event = JSON.parse(ev.data); } catch { event = { type: 'log', message: ev.data }; }
-                if (event.type === 'progress') { if (event.message) showToast(event.message); }
-                else if (event.type === 'error') { es.close(); showToast(t('{label}导出失败：{msg}', { label, msg: event.message }), 'error'); }
+                if (event.type === 'progress') {
+                    if (event.message) showToast(event.message);
+                    updateTask(taskId, { message: event.message || t('导出进行中…') });
+                }
+                else if (event.type === 'error') {
+                    es.close();
+                    updateTask(taskId, { status: 'error', message: event.message || t('导出失败') });
+                    showToast(t('{label}导出失败：{msg}', { label, msg: event.message }), 'error');
+                }
                 else if (event.type === 'done') {
                     es.close();
                     if (event.downloadUrl) {
                         const a = document.createElement('a'); a.href = event.downloadUrl; a.download = downloadName; document.body.appendChild(a); a.click(); a.remove();
+                        updateTask(taskId, { status: 'success', message: t('{label}已下载', { label }), downloadUrl: event.downloadUrl, downloadName });
                         showToast(t('{label}已下载', { label }));
                     } else if (event.note) {
+                        updateTask(taskId, { status: 'success', message: event.note });
                         showToast(event.note);
                     } else {
+                        updateTask(taskId, { status: 'error', message: t('{label}导出完成但未返回下载地址', { label }) });
                         showToast(t('{label}导出完成但未返回下载地址', { label }), 'error');
                     }
                 }
             };
-            es.onerror = () => { es.close(); showToast(t('{label}导出连接中断，请重试', { label }), 'error'); };
+            es.onerror = () => {
+                es.close();
+                updateTask(taskId, { status: 'error', message: t('{label}导出连接中断，请重试', { label }) });
+                showToast(t('{label}导出连接中断，请重试', { label }), 'error');
+            };
         })
-        .catch((err) => { showToast(t('{label}导出失败：{msg}', { label, msg: err.message }), 'error'); });
+        .catch((err) => {
+            updateTask(taskId, { status: 'error', message: err.message });
+            showToast(t('{label}导出失败：{msg}', { label, msg: err.message }), 'error');
+        });
 }
 
 async function exportPptx() {
@@ -791,9 +1261,20 @@ async function exportPptxImage() {
 
 async function exportHtml() {
     if (!S.currentProject) return;
+    const taskId = createTask(t('单文件 HTML 导出'), S.currentProject, t('正在打包单文件 HTML…'));
     showToast(t('正在生成单文件 HTML...'));
-    try { const res = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/export/html`); if (res.downloadUrl) { const a = document.createElement('a'); a.href = res.downloadUrl; a.download = `${S.currentProject}.html`; document.body.appendChild(a); a.click(); a.remove(); showToast(t('单文件 HTML 已下载')); } }
-    catch (err) { showToast(t('单文件 HTML 导出失败：{msg}', { msg: err.message })); }
+    try {
+        const res = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/export/html`);
+        if (res.downloadUrl) {
+            const a = document.createElement('a'); a.href = res.downloadUrl; a.download = `${S.currentProject}.html`; document.body.appendChild(a); a.click(); a.remove();
+            updateTask(taskId, { status: 'success', message: t('单文件 HTML 已下载'), downloadUrl: res.downloadUrl, downloadName: `${S.currentProject}.html` });
+            showToast(t('单文件 HTML 已下载'));
+        }
+    }
+    catch (err) {
+        updateTask(taskId, { status: 'error', message: err.message });
+        showToast(t('单文件 HTML 导出失败：{msg}', { msg: err.message }));
+    }
 }
 
 async function exportVideo() {
@@ -806,21 +1287,38 @@ async function exportPdfVector() {
 
 async function exportSite() {
     if (!S.currentProject) return;
+    const taskId = createTask(t('静态站点导出'), S.currentProject, t('正在打包静态站点…'));
     showToast(t('正在打包静态站点...'));
-    try { const res = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/export/site`); if (res.downloadUrl) { const a = document.createElement('a'); a.href = res.downloadUrl; a.download = `${S.currentProject}-site.zip`; document.body.appendChild(a); a.click(); a.remove(); showToast(t('静态站点包已下载')); } }
-    catch (err) { showToast(t('静态站点包导出失败：{msg}', { msg: err.message })); }
+    try {
+        const res = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/export/site`);
+        if (res.downloadUrl) {
+            const a = document.createElement('a'); a.href = res.downloadUrl; a.download = `${S.currentProject}-site.zip`; document.body.appendChild(a); a.click(); a.remove();
+            updateTask(taskId, { status: 'success', message: t('静态站点包已下载'), downloadUrl: res.downloadUrl, downloadName: `${S.currentProject}-site.zip` });
+            showToast(t('静态站点包已下载'));
+        }
+    }
+    catch (err) {
+        updateTask(taskId, { status: 'error', message: err.message });
+        showToast(t('静态站点包导出失败：{msg}', { msg: err.message }));
+    }
 }
 
 async function doPublish() {
     if (!S.currentProject) return;
+    const taskId = createTask(t('发布站点'), S.currentProject, t('正在发布当前版本…'));
     showToast(t('正在发布...'));
     try {
         const res = await api('POST', `/api/projects/${encodeURIComponent(S.currentProject)}/publish`);
+        const publishedUrl = res?.lanUrl || `${window.location.origin}/published/${encodeURIComponent(S.currentProject)}/latest/index.html`;
+        updateTask(taskId, { status: 'success', message: t('发布成功，可直接分享链接。'), openUrl: publishedUrl, copyText: publishedUrl });
         showToast(t('发布成功！'));
         loadPublishHistory();
         showPublishModal(res);
     }
-    catch (err) { showToast(t('发布失败：{msg}', { msg: err.message })); }
+    catch (err) {
+        updateTask(taskId, { status: 'error', message: err.message });
+        showToast(t('发布失败：{msg}', { msg: err.message }));
+    }
 }
 
 // 发布结果弹窗：完整链接（优先局域网 IP 形态）+ 复制 + 二维码
@@ -864,6 +1362,14 @@ function openExportDropdown() {
     if (!S.currentProject) { showToast(t('请先选择项目')); return; }
     if (S.currentSidebarTab !== 'projects' && _cb.switchSidebarTab) _cb.switchSidebarTab('projects');
     els().exportDropdown.querySelector('.dropdown-menu').classList.remove('hidden');
+}
+
+function togglePreviewMoreDropdown() {
+    els().previewMoreDropdown?.querySelector('.dropdown-menu')?.classList.toggle('hidden');
+}
+
+function closePreviewMoreDropdown() {
+    els().previewMoreDropdown?.querySelector('.dropdown-menu')?.classList.add('hidden');
 }
 function openCreateModal() {
     const e = els();
@@ -1110,6 +1616,12 @@ export function bindEvents() {
         if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); toggleExportDropdown(); });
         document.addEventListener('click', () => closeExportDropdown());
     }
+    if (e.previewMoreDropdown) {
+        e.btnPreviewMore?.addEventListener('click', (ev) => { ev.stopPropagation(); togglePreviewMoreDropdown(); });
+        document.addEventListener('click', (ev) => {
+            if (!ev.target.closest('#preview-more-dropdown')) closePreviewMoreDropdown();
+        });
+    }
     e.tabs.forEach((t) => t.addEventListener('click', () => setSourceTab(t.dataset.source)));
     document.querySelectorAll('#pipeline-bar .pipeline-step').forEach((step) => step.addEventListener('click', () => handlePipelineStep(step.dataset.stage)));
     const vsge = document.querySelector('.vault-source-groups');
@@ -1132,9 +1644,45 @@ export function bindEvents() {
     e.btnTestImageModel.addEventListener('click', () => testMediaModel('image'));
     e.btnTestVideoModel.addEventListener('click', () => testMediaModel('video'));
     e.btnSaveModelConfig?.addEventListener('click', saveGlobalModelConfig);
+    e.quickModelPreset?.addEventListener('change', () => {
+        e.inputModelPreset.value = e.quickModelPreset.value;
+        e.inputModelPreset.dispatchEvent(new Event('change'));
+    });
+    e.btnQuickSaveConfig?.addEventListener('click', async () => {
+        applyQuickSetupToAdvanced();
+        await saveGlobalModelConfig();
+        switchSettingsMode('quick');
+    });
+    e.btnOpenAdvancedSettings?.addEventListener('click', () => switchSettingsMode('advanced'));
+    e.settingsModeTabs?.forEach((tab) => tab.addEventListener('click', () => switchSettingsMode(tab.dataset.mode)));
+    e.btnQuickPptOnly?.addEventListener('click', () => {
+        e.btnQuickPptOnly.classList.add('active');
+        e.btnQuickMediaSetup?.classList.remove('active');
+        if (e.settingsQuickTip) e.settingsQuickTip.textContent = t('先用文本模型跑通第一版内容和导出，再决定要不要补图像或视频生成能力，最省心。');
+    });
+    e.btnQuickMediaSetup?.addEventListener('click', () => {
+        e.btnQuickMediaSetup.classList.add('active');
+        e.btnQuickPptOnly?.classList.remove('active');
+        if (e.settingsQuickTip) e.settingsQuickTip.textContent = t('如果你已经确定要做配图或视频，可以继续到高级设置里补充生图和生视频模型。');
+        switchSettingsMode('advanced');
+    });
     document.getElementById('btn-backup-now')?.addEventListener('click', backupNow);
     e.btnCreateSnapshot.addEventListener('click', createSnapshotNow);
     e.btnToggleChat.addEventListener('click', toggleChatDock);
+    e.btnTaskCenter?.addEventListener('click', (ev) => { ev.stopPropagation(); toggleTaskCenter(); });
+    e.btnTaskCenterClose?.addEventListener('click', () => toggleTaskCenter(false));
+    e.btnTaskCenterClear?.addEventListener('click', clearFinishedTasks);
+    e.taskCenterList?.addEventListener('click', (ev) => {
+        const btn = ev.target.closest('[data-task-action]');
+        if (!btn) return;
+        handleTaskAction(btn.dataset.taskAction, btn.dataset.taskId);
+    });
+    e.btnGuidePrimary?.addEventListener('click', () => runGuideAction(currentGuideActions.primary));
+    e.btnGuideSecondary?.addEventListener('click', () => runGuideAction(currentGuideActions.secondary));
+    e.mobileWorkspaceTabs?.forEach((tab) => tab.addEventListener('click', () => {
+        e.mobileWorkspaceTabs.forEach((item) => item.classList.toggle('active', item === tab));
+        if (e.projectPanel) e.projectPanel.dataset.mobileView = tab.dataset.mobileView;
+    }));
     // Fullscreen preview toggle (button + F key when in project panel)
     document.getElementById('btn-fullscreen-preview')?.addEventListener('click', () => {
         const canvas = document.querySelector('.workspace-canvas');
@@ -1164,13 +1712,17 @@ export function bindEvents() {
         reader.readAsText(file);
     });
     e.inputGlobalSearch.addEventListener('input', (ev) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => performSearch(ev.target.value), 300); });
-    e.inputGlobalSearch.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { closeSearchResults(); e.inputGlobalSearch.blur(); } });
-    document.addEventListener('click', (ev) => { if (!ev.target.closest('.topbar-search')) closeSearchResults(); });
-    e.configTabs.forEach((tab) => tab.addEventListener('click', () => {
-        e.configTabs.forEach((t) => t.classList.remove('active'));
-        tab.classList.add('active');
-        document.querySelectorAll('.config-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === tab.dataset.tab));
-    }));
+    e.inputGlobalSearch.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') { closeSearchResults(); e.inputGlobalSearch.blur(); return; }
+        if (ev.key === 'ArrowDown') { ev.preventDefault(); moveSearchSelection(1); return; }
+        if (ev.key === 'ArrowUp') { ev.preventDefault(); moveSearchSelection(-1); return; }
+        if (ev.key === 'Enter') { ev.preventDefault(); openSearchResult(); }
+    });
+    document.addEventListener('click', (ev) => {
+        if (!ev.target.closest('.topbar-search')) closeSearchResults();
+        if (!ev.target.closest('#task-center-panel') && !ev.target.closest('#btn-task-center')) toggleTaskCenter(false);
+    });
+    e.configTabs.forEach((tab) => tab.addEventListener('click', () => activateConfigTab(tab.dataset.tab)));
     e.btnSave.addEventListener('click', saveConfig);
     e.btnSaveTheme.addEventListener('click', saveConfig);
     e.btnSaveAnimation.addEventListener('click', saveConfig);

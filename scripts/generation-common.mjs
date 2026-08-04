@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import { readGlobalConfig } from './global-config.mjs';
-import { generateSlides } from './llm-adapter.mjs';
+import { generateSlides, getLastLlmError } from './llm-adapter.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -235,6 +235,24 @@ export function syncThemeLinksBlock(html) {
     + html.slice(end);
 }
 
+// ---- 主题解析：FrontMatter → options.theme → 默认 web-ui，校验合法性 ----
+const THEME_DEFAULT = 'web-ui';
+
+export function loadThemeIds() {
+    return loadThemesMeta().map((t) => t.id);
+}
+
+// 获取有效主题：优先 FrontMatter theme，其次 options.theme，最后默认
+// frontMatter 来自笔记的 parseFrontMatter 结果；options 是生成参数
+export function getEffectiveTheme(frontMatter, options = {}) {
+    const fmTheme = frontMatter?.theme;
+    const optTheme = options.theme || options.params?.theme;
+    const raw = typeof fmTheme === 'string' && fmTheme.trim() ? fmTheme.trim() : (optTheme || THEME_DEFAULT);
+    // 校验：仅允许 themes.json 中定义的主题 id，否则降级到默认
+    if (!loadThemeIds().includes(raw)) return THEME_DEFAULT;
+    return raw;
+}
+
 // ---- 统一提示词脚手架（各源只提供任务描述、素材与差异化规则） ----
 
 export function buildSlidesPrompt({
@@ -365,7 +383,10 @@ export async function generateSlidesHtml({ prompt, modelOptions, minSections = 3
       slidesHtml = '';
     }
   } else {
-    emit('llm', '未配置 LLM 或无可用模型，使用确定性模板生成');
+    const reason = getLastLlmError();
+    emit('llm', reason
+      ? `LLM 调用失败（${reason}），使用确定性模板生成`
+      : '未配置 LLM 或无可用模型，使用确定性模板生成');
   }
 
   if (!slidesHtml || slidesHtml.length < 200) {

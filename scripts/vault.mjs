@@ -12,6 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 const VAULT_DIR = path.join(ROOT, 'vault');
+const TOPICS_DIR = path.join(VAULT_DIR, 'topics');
 const META_DIR = path.join(VAULT_DIR, '.meta');
 const VAULT_INDEX = path.join(META_DIR, 'index.json');
 // 旧索引位置（仓库根目录），仅用于一次性迁移
@@ -60,6 +61,9 @@ function ensureVaultDirs() {
   if (!fs.existsSync(REPORTS_DIR)) {
     fs.mkdirSync(REPORTS_DIR, { recursive: true });
   }
+  if (!fs.existsSync(TOPICS_DIR)) {
+    fs.mkdirSync(TOPICS_DIR, { recursive: true });
+  }
 }
 
 // 索引迁移：新路径不存在而旧的根目录索引存在时，复制后删除旧文件
@@ -94,26 +98,53 @@ function writeIndex(index) {
 }
 
 // 规范化笔记名（用于链接匹配）
+// 支持专题路径："产品方法论/需求分析" → "产品方法论/需求分析"
 function normalizeNoteName(name) {
   return name.trim().replace(/\.md$/i, '').toLowerCase();
 }
 
+// 判断笔记名是否包含专题路径
+function hasTopicPath(name) {
+  const clean = name.trim().replace(/\.md$/i, '');
+  return clean.includes('/');
+}
+
+// 专题路径段安全校验：禁止 ..、空段、绝对路径、非法字符
+function validateTopicSegments(segments) {
+  for (const seg of segments) {
+    const s = seg.trim();
+    if (!s) throw new Error('专题路径段不能为空');
+    if (s === '..') throw new Error('专题路径不能包含 ..');
+    if (/[\\:*?"<>|]/.test(s)) throw new Error(`专题路径段包含非法字符：${s}`);
+  }
+}
+
 // 获取笔记文件路径
+// - 平铺笔记："需求分析" → vault/需求分析.md
+// - 专题笔记："产品方法论/需求分析" → vault/topics/产品方法论/需求分析.md
 function getNotePath(name) {
-  const baseName = name.trim().replace(/\.md$/i, '') + '.md';
+  const cleanName = name.trim().replace(/\.md$/i, '');
+  const baseName = cleanName + '.md';
   // 纵深防御：拒绝路径穿越
-  if (/[/\\]/.test(baseName) || baseName.includes('..')) {
+  if (baseName.includes('..') || path.isAbsolute(baseName)) {
     throw new Error(`非法笔记名称：${name}`);
   }
+  if (cleanName.includes('/')) {
+    const segments = cleanName.split('/');
+    validateTopicSegments(segments);
+    return path.join(TOPICS_DIR, ...segments) + '.md';
+  }
+  // 平铺笔记保留在 vault/ 根目录
   return path.join(VAULT_DIR, baseName);
 }
 
-// 列出所有笔记
+// 列出所有笔记（平铺 + 专题递归）
 function listNotes() {
   ensureVaultDirs();
   const notes = [];
   if (!fs.existsSync(VAULT_DIR)) return notes;
-  
+
+  // 平铺笔记
   for (const entry of fs.readdirSync(VAULT_DIR, { withFileTypes: true })) {
     if (entry.isFile() && entry.name.endsWith('.md')) {
       const notePath = path.join(VAULT_DIR, entry.name);
@@ -127,6 +158,30 @@ function listNotes() {
       });
     }
   }
+
+  // 专题目录递归
+  function scanTopics(dir, prefix) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanTopics(fullPath, prefix ? `${prefix}/${entry.name}` : entry.name);
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        const stat = fs.statSync(fullPath);
+        const relativeName = prefix ? `${prefix}/${entry.name.replace(/\.md$/, '')}` : entry.name.replace(/\.md$/, '');
+        notes.push({
+          name: relativeName,
+          fileName: entry.name,
+          path: fullPath,
+          topic: prefix || null,
+          mtime: stat.mtime.toISOString(),
+          size: stat.size,
+        });
+      }
+    }
+  }
+  scanTopics(TOPICS_DIR, '');
+
   return notes.sort((a, b) => b.mtime.localeCompare(a.mtime));
 }
 
@@ -146,24 +201,28 @@ function writeNote(name, content) {
 }
 
 // 创建新笔记
-function createNote(name, content = '') {
-  const notePath = getNotePath(name);
+// options.topic: 专题路径，如 "产品方法论"，笔记会落到 vault/topics/产品方法论/<name>.md
+function createNote(name, content = '', { topic } = {}) {
+  const fullName = topic ? `${topic}/${name}` : name;
+  const notePath = getNotePath(fullName);
   if (fs.existsSync(notePath)) {
-    throw new Error(`笔记 "${name}" 已存在`);
+    throw new Error(`笔记 "${fullName}" 已存在`);
   }
   // 自动添加简单的Front Matter
+  const displayTitle = name.includes('/') ? name.split('/').pop() : name;
   const finalContent = content.trim()
     ? content
     : `---
-title: ${name}
+title: ${displayTitle}
+topic: ${topic || ''}
 created: ${new Date().toISOString().slice(0, 10)}
 ---
 
-# ${name}
+# ${displayTitle}
 
 在此处添加内容...
 `;
-  return writeNote(name, finalContent);
+  return writeNote(fullName, finalContent);
 }
 
 // 删除笔记
@@ -174,6 +233,175 @@ function deleteNote(name) {
   }
   fs.unlinkSync(notePath);
   return true;
+}
+
+// ---- 专题目录管理 ----
+
+// 列出所有专题（递归返回路径列表）
+function listTopics() {
+  ensureVaultDirs();
+  const topics = [];
+  if (!fs.existsSync(TOPICS_DIR)) return topics;
+
+  function scan(dir, prefix) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const fullPath = path.join(dir, entry.name);
+      const topicPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      topics.push(topicPath);
+      scan(fullPath, topicPath);
+    }
+  }
+  scan(TOPICS_DIR, '');
+  return topics.sort();
+}
+
+// 获取专题元数据文件路径
+function getTopicMetaPath(topicPath) {
+  const segments = topicPath.split('/').filter(Boolean);
+  validateTopicSegments(segments);
+  return path.join(TOPICS_DIR, ...segments, '_topic-meta.json');
+}
+
+// 读取专题元数据
+function readTopicMeta(topicPath) {
+  const metaPath = getTopicMetaPath(topicPath);
+  if (!fs.existsSync(metaPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+// 写入专题元数据
+function writeTopicMeta(topicPath, meta) {
+  const metaPath = getTopicMetaPath(topicPath);
+  const dir = path.dirname(metaPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  writeJsonAtomic(metaPath, { ...meta, updated: new Date().toISOString() });
+}
+
+// 创建专题目录
+function createTopic(topicPath) {
+  const segments = topicPath.split('/').filter(Boolean);
+  validateTopicSegments(segments);
+  const dir = path.join(TOPICS_DIR, ...segments);
+  if (fs.existsSync(dir)) {
+    throw new Error(`专题 "${topicPath}" 已存在`);
+  }
+  fs.mkdirSync(dir, { recursive: true });
+  writeTopicMeta(topicPath, { name: segments[segments.length - 1], created: new Date().toISOString() });
+  return dir;
+}
+
+// 删除专题目录（要求为空，或 force=true 时连同笔记一起删除）
+function deleteTopic(topicPath, { force = false } = {}) {
+  const segments = topicPath.split('/').filter(Boolean);
+  validateTopicSegments(segments);
+  const dir = path.join(TOPICS_DIR, ...segments);
+  if (!fs.existsSync(dir)) {
+    throw new Error(`专题 "${topicPath}" 不存在`);
+  }
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const hasNotes = entries.some((e) => e.isFile() && e.name.endsWith('.md'));
+  const hasSubTopics = entries.some((e) => e.isDirectory());
+  if ((hasNotes || hasSubTopics) && !force) {
+    throw new Error(`专题 "${topicPath}" 非空，请使用 force=true 强制删除`);
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+  return true;
+}
+
+// 更新笔记 Front Matter 的 topic 字段，使其与所在目录一致
+function syncNoteTopicField(noteName) {
+  const notePath = getNotePath(noteName);
+  if (!fs.existsSync(notePath)) return false;
+  const content = fs.readFileSync(notePath, 'utf8');
+  const { frontMatter, content: body } = parseFrontMatter(content);
+  const topic = hasTopicPath(noteName) ? noteName.split('/').slice(0, -1).join('/') : '';
+  if (frontMatter.topic !== topic) {
+    frontMatter.topic = topic;
+    const newContent = stringifyFrontMatter(frontMatter) + body;
+    writeFileAtomic(notePath, newContent);
+    return true;
+  }
+  return false;
+}
+
+// 重命名/移动专题目录
+function renameTopic(oldTopicPath, newTopicPath) {
+  const oldSegments = oldTopicPath.split('/').filter(Boolean);
+  const newSegments = newTopicPath.split('/').filter(Boolean);
+  validateTopicSegments(oldSegments);
+  validateTopicSegments(newSegments);
+  const oldDir = path.join(TOPICS_DIR, ...oldSegments);
+  const newDir = path.join(TOPICS_DIR, ...newSegments);
+  if (!fs.existsSync(oldDir)) {
+    throw new Error(`专题 "${oldTopicPath}" 不存在`);
+  }
+  if (fs.existsSync(newDir)) {
+    throw new Error(`专题 "${newTopicPath}" 已存在`);
+  }
+
+  // 收集所有受影响的笔记，用于后续级联替换链接
+  const affectedNotes = listNotes()
+    .filter((n) => n.topic && (n.topic === oldTopicPath || n.topic.startsWith(`${oldTopicPath}/`)))
+    .map((n) => n.name);
+
+  // 重命名目录
+  fs.renameSync(oldDir, newDir);
+
+  // 更新受影响笔记的 topic 字段，并级联替换正文中的 [[旧路径/笔记]] → [[新路径/笔记]
+  for (const noteName of affectedNotes) {
+    const notePath = getNotePath(noteName);
+    if (!fs.existsSync(notePath)) continue;
+    const newNoteName = noteName.replace(
+      new RegExp(`^${escapeRegExp(oldTopicPath)}(/|$)`),
+      `${newTopicPath}$1`
+    );
+    syncNoteTopicField(newNoteName);
+  }
+
+  // 级联替换全局所有笔记/碎片/卡片中的 [[oldTopicPath/...]] 链接
+  const updatedRefs = cascadeRenameTopicLinks(oldTopicPath, newTopicPath);
+
+  rebuildIndex();
+  return { newTopicPath, affectedNotes: affectedNotes.length, updatedRefs };
+}
+
+// 级联替换专题路径前缀：[[oldTopic/笔记]] → [[newTopic/笔记]]
+function cascadeRenameTopicLinks(oldTopicPath, newTopicPath) {
+  const regex = new RegExp(`\\[\\[\\s*${escapeRegExp(oldTopicPath)}(?=\\s*(?:\\||\\]\\]))`, 'gi');
+  let updatedRefs = 0;
+  for (const dir of [VAULT_DIR, TOPICS_DIR, FRAGMENTS_DIR, CARDS_DIR]) {
+    if (!fs.existsSync(dir)) continue;
+    const files = [];
+    function collectFiles(currentDir) {
+      for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+        const filePath = path.join(currentDir, entry.name);
+        if (entry.isDirectory()) {
+          collectFiles(filePath);
+        } else if (entry.isFile() && entry.name.endsWith('.md')) {
+          files.push(filePath);
+        }
+      }
+    }
+    collectFiles(dir);
+    for (const filePath of files) {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const replaced = content.replace(regex, () => {
+        updatedRefs++;
+        return `[[${newTopicPath}`;
+      });
+      if (replaced !== content) {
+        writeFileAtomic(filePath, replaced);
+      }
+    }
+  }
+  return updatedRefs;
 }
 
 // 转义正则特殊字符
@@ -237,11 +465,21 @@ export function writeNoteOrder(order, { orderFile = NOTE_ORDER_FILE } = {}) {
 function cascadeRenameLinks(oldBase, newBase) {
   const regex = new RegExp(`\\[\\[\\s*${escapeRegExp(oldBase)}(?=\\s*(?:\\||\\]\\]))`, 'gi');
   let updatedRefs = 0;
-  for (const dir of [VAULT_DIR, FRAGMENTS_DIR, CARDS_DIR]) {
+  for (const dir of [VAULT_DIR, TOPICS_DIR, FRAGMENTS_DIR, CARDS_DIR]) {
     if (!fs.existsSync(dir)) continue;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
-      const filePath = path.join(dir, entry.name);
+    const files = [];
+    function collectFiles(currentDir) {
+      for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+        const filePath = path.join(currentDir, entry.name);
+        if (entry.isDirectory()) {
+          collectFiles(filePath);
+        } else if (entry.isFile() && entry.name.endsWith('.md')) {
+          files.push(filePath);
+        }
+      }
+    }
+    collectFiles(dir);
+    for (const filePath of files) {
       const content = fs.readFileSync(filePath, 'utf8');
       const replaced = content.replace(regex, () => {
         updatedRefs++;
@@ -256,6 +494,7 @@ function cascadeRenameLinks(oldBase, newBase) {
 }
 
 // 重命名笔记：备份原文件、fs 重命名、级联更新所有 [[Wiki链接]] 引用，最后重建索引
+// 支持在同一专题内重命名，也支持跨专题移动（newName 可含 topic 路径）
 function renameNote(oldName, newName) {
   // getNotePath 内含非法名称（/、\、..）防御
   const oldPath = getNotePath(oldName);
@@ -284,6 +523,10 @@ function renameNote(oldName, newName) {
     console.error('笔记自动备份失败:', err);
   }
   fs.renameSync(oldPath, newPath);
+
+  // 若跨专题移动，同步更新 Front Matter 的 topic 字段
+  syncNoteTopicField(newName);
+
   const oldBase = oldName.trim().replace(/\.md$/i, '');
   const updatedRefs = cascadeRenameLinks(oldBase, newBase);
   rebuildIndex();
@@ -298,15 +541,24 @@ export {
   writeIndex,
   normalizeNoteName,
   getNotePath,
+  hasTopicPath,
   listNotes,
+  listTopics,
   readNote,
   writeNote,
   createNote,
   deleteNote,
   renameNote,
+  createTopic,
+  deleteTopic,
+  renameTopic,
+  readTopicMeta,
+  writeTopicMeta,
+  syncNoteTopicField,
   parseFrontMatter,
   stringifyFrontMatter,
   VAULT_DIR,
+  TOPICS_DIR,
   ASSETS_DIR,
   REPORTS_DIR,
 };

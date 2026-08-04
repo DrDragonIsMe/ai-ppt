@@ -13,6 +13,7 @@ import {
   assertSafeProjectName,
   sanitizeProjectName,
 } from './config.mjs';
+import { snapshotBeforeGenerate } from './snapshot.mjs';
 import {
   emit,
   emitError,
@@ -165,6 +166,7 @@ async function generateFromNotes(projectName, noteNames, options = {}) {
   emit('write', '写入 index.html');
   const theme = options.theme || 'web-ui';
   const animation = options.animation || 'slide';
+  snapshotBeforeGenerate(projectName);
   writeDeckIndex(projectName, slidesHtml, {
     title: promptData.title,
     bodyClass: `theme-${theme} anim-${animation}`,

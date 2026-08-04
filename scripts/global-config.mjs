@@ -10,6 +10,15 @@ const ROOT = path.resolve(__dirname, '..');
 const GLOBAL_CONFIG_PATH = path.join(ROOT, '.ai-ppt-config.json');
 
 export const DEFAULT_GLOBAL_CONFIG = {
+  appConfig: {
+    brandName: '小龙哥@薪灵AI',
+  },
+  agentConfig: {
+    assistantName: '薪小灵',
+    responseStyle: 'concise',
+    allowSettingsMutation: true,
+    allowKnowledgeMutation: true,
+  },
   modelConfig: {
     presetId: 'volc-ark-doubao-seed-2.0-lite',
     provider: 'openai',
@@ -73,6 +82,8 @@ export function readGlobalConfig() {
 
   const envCfg = envModelConfig();
   return {
+    appConfig: { ...DEFAULT_GLOBAL_CONFIG.appConfig, ...fileConfig?.appConfig },
+    agentConfig: { ...DEFAULT_GLOBAL_CONFIG.agentConfig, ...fileConfig?.agentConfig },
     modelConfig: envCfg || fileConfig?.modelConfig || DEFAULT_GLOBAL_CONFIG.modelConfig,
     imageModelConfig: { ...DEFAULT_GLOBAL_CONFIG.imageModelConfig, ...fileConfig?.imageModelConfig },
     videoModelConfig: { ...DEFAULT_GLOBAL_CONFIG.videoModelConfig, ...fileConfig?.videoModelConfig },
@@ -92,7 +103,7 @@ export function writeGlobalConfig(config) {
     }
   }
   const merged = { ...existing, ...safe };
-  for (const key of ['modelConfig', 'imageModelConfig', 'videoModelConfig', 'pdfConfig']) {
+  for (const key of ['appConfig', 'agentConfig', 'modelConfig', 'imageModelConfig', 'videoModelConfig', 'pdfConfig']) {
     if (safe[key]) merged[key] = { ...existing[key], ...safe[key] };
   }
   writeJsonAtomic(GLOBAL_CONFIG_PATH, merged);

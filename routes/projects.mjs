@@ -350,6 +350,39 @@ export default function projectRoutes(ctx) {
                 catch (err) { send(res, err.statusCode || 500, { error: err.message }); }
             }
         },
+        // P6: 生成/同步笔记（从 PPT 反向生成笔记）——用于没有来源笔记的 PPT，或更新已有笔记
+        {
+            method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/generate-note$/, handler: async (req, res, matches) => {
+                const name = matches[1];
+                if (!validName(name, res, '非法项目名称')) return;
+                if (!projectExists(name)) return send(res, 404, { error: '项目不存在' });
+
+                const cfg = readConfig(name);
+                const htmlPath = path.join(getProjectDir(name), 'index.html');
+                if (!fs.existsSync(htmlPath)) return send(res, 404, { error: 'PPT 尚未生成，请先生成 PPT' });
+
+                // 如果已有来源笔记，同步更新该笔记；否则创建新笔记
+                const sourceNote = cfg.sourceSelection?.kind === 'note' ? cfg.sourceSelection.noteName : null;
+                if (sourceNote) {
+                    spawnNdjsonTask(
+                        generators, `sync:${sourceNote}`,
+                        'chat-note.mjs', [sourceNote, `--ppt=${name}`], undefined,
+                    );
+                    return send(res, 202, { message: '笔记同步已启动', name, sourceNote });
+                }
+
+                // 无来源笔记 — 从 PPT 生成新笔记
+                const body = await readBody(req);
+                const noteName = (body.noteName || `PPT-${name}`).trim();
+                if (!hasActiveTask(generators, `gen-note:${noteName}`)) {
+                    spawnNdjsonTask(
+                        generators, `gen-note:${noteName}`,
+                        'generate-note-from-deck.mjs', [name, noteName], undefined,
+                    );
+                }
+                send(res, 202, { message: '笔记生成已启动', name, sourceNote });
+            }
+        },
         // Generate
         {
             method: 'POST', pattern: /^\/api\/projects\/([^/]+)\/generate$/, handler: async (req, res, matches) => {
