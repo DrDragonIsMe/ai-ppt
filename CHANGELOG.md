@@ -2,6 +2,33 @@
 
 本文件记录 ai-ppt 的版本历史。现行有效约定见 AGENTS.md。
 
+## v2.9.0 — 素材库 → 营销大纲 → 批量 PPT（2026-11）
+
+> 本版本为发布目标版本；`package.json` 的 `version` 与 `web/sw.js` 的 `CACHE_VERSION` 由塔在发布时统一对齐。
+
+### 多数据源素材库
+
+- 四种源类型 `dir / url / site / vault`（`scripts/sources/registry.mjs` 的 `SOURCE_TYPES`）。注册表 `sources.json`（已 gitignore），抓取缓存 `vault/.meta/source-cache/<sourceId>/`（`manifest.json` + `items/<itemId>.md`，已 gitignore）。
+- 增量刷新：同一 origin 的 itemId 稳定（`<sourceId>--<12位sha256hex>`），hash 未变的条目不重写，上游消失的条目在整批成功后清理（`scripts/sources/refresh.mjs`）。
+- 默认参数物化：`maxPages=30`、`maxBytesPerItem=512KB`、`depth=1`（site），`dir` 默认仅收文本类，`vault` 仅 `**/*.md`。`maxPages` 截断、部分失败 stale 保命、安全清单跳过均通过 SSE 事件与 `GET /api/sources` 可观测。
+- 安全红线：禁入目录段 `.git/.backup/.snapshots/node_modules`；敏感位置/文件名拒绝清单（`.ssh/.aws/.docker/.config`、keychain、`/etc`、`/var/root`、`.env*`、`*.pem/key`、credentials、`.ai-ppt-config.json`、`.ai-ppt-tasks.json` 等）；词法路径与 `realpath` 双重检查，仅文本类条目入库。越 ROOT 外部目录需 `AI_PPT_ALLOW_EXTERNAL_SOURCES=1` + `acknowledgeExternalPath:true`，刷新时授权重查。
+- HTTP 端点：`GET/POST /api/sources`、`PUT/DELETE /api/sources/:id`、`POST /api/sources/:id/refresh`、`GET /api/sources/:id/refresh/events`、`GET /api/sources/:id/items`、`GET /api/sources/items`、`POST /api/sources/preview`；错误枚举 `{400,403,404,409,500}`，全局并发上限 2 → 429。
+
+### 营销大纲与批量生成
+
+- 大纲产物 `marketing/outlines/<mo-<base36>>.json`，契约形状：`{id,title,createdAt,sourceIds,angleSet,product,angles:[{key,title,thesis,audience,evidenceItemIds,slides[{heading,lead,points,evidenceItemIds}],deckName,generatedBy}]}`。
+- 内置角度集 `marketing-standard`（`scripts/marketing/angles.mjs`）：客户痛点 / 产品能力 / 行业场景 / 差异化竞争 / ROI 价值 / 成功案例与落地路径，6 个角度 thesis 互不重复。
+- 大纲生成：`POST /api/marketing/outline` 202 + SSE `/api/marketing/outline/events`；CLI `scripts/marketing/generate-outline.mjs`。流程：多源素材汇总 → 分档摘要 → 逐角度 LLM（并发 1）→ 契约校验 → 落盘。无 LLM 时走确定性兜底，`done` 事件如实报告 `llmUsed/llmFailed/llmShortCircuited/llmReason/fallbackOnly`。
+- 防编造校验：`evidenceItemIds` 只能引用素材库真实条目，伪造引用被剔除并计数（`outline.material.droppedEvidenceCount`）。
+- 批量生成：`POST /api/marketing/batch` 202 + SSE `/api/marketing/batch/events`；CLI `scripts/marketing/batch-generate.mjs`。逐角度串行，单 deck 失败不阻断整批；全局同时只允许 1 个大纲与 1 个批次（重复 409）；`POST /api/marketing/batch/cancel` 取消。生成 `projects/mkt-<angleKey>-<slug>/`，`ai-ppt.json.sourceSelection.kind='outline'` 双向绑定，`userEdits` 保留，自动 lint + 封面截图。批次快照存 `marketing/batches/<mb-<base36>>.json`。
+
+### 产物策略与文档
+
+- 明确不入 git：生成物目录 `export/`、`cover.png`、`marketing/`、`vault/.meta/source-cache/`、`references/`、`sources.json`、`.ai-ppt-tasks.json`、`.ai-ppt-config.json`，以及所有视频文件 `*.mp4 / *.mov / *.m4v / *.webm / *.avi`。`projects/*` 整体由 `.gitignore` 排除。
+- 有意保留的例外：`demo/` 封面是 GitHub Pages 部署源；`web/icons/` 是 PWA 源资源。
+- 回归护栏：`tests/artifact-policy.test.mjs` 7 条断言覆盖视频、生成物目录、Pages/PWA 图标、node_modules 软链、已跟踪路径不被 ignore 规则命中等。
+- `AGENTS.md` 新增「多数据源素材库」「营销大纲与批量生成」「产物与素材入库策略」三条核心约定；`README.md` / `README.en.md` 新增工作流章节、刷新目录结构图、新增 `/ppt-sources` 与 `/ppt-marketing` skill；测试入口统一为 `node --test tests/*.test.mjs`（当前基线 335 pass / 0 fail / 101 suites）。
+
 ## v2.8.1 — Web UI i18n（2026-07）
 
 - **英文界面**：新增轻量 i18n（`web/js/modules/i18n.mjs`，中文原文即 key，`t(key, vars?)` 缺 key 回退中文 + 去重 console.warn；语言存 localStorage `ai-ppt-lang`，未设置按 navigator.language 探测；`setLang()` 后 reload 生效）；语言包 `web/js/i18n/zh.mjs`（恒等兜底）与 `web/js/i18n/en.mjs`（739 key 全量翻译）。

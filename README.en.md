@@ -1,16 +1,16 @@
 # ai-ppt
 
-[![version](https://img.shields.io/badge/version-2.7.0-blue)](https://github.com/DrDragonIsMe/ai-ppt)
+[![version](https://img.shields.io/badge/version-2.9.0-blue)](https://github.com/DrDragonIsMe/ai-ppt)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![tests](https://img.shields.io/badge/tests-193%20passed-brightgreen)](tests/core.test.mjs)
+[![tests](https://img.shields.io/badge/tests-335%20passed-brightgreen)](tests)
 [![Live demo](https://img.shields.io/badge/demo-live%20demo-teal)](https://drdragonisme.github.io/ai-ppt/)
 
 [中文](README.md) | **English** | **[Live demo](https://drdragonisme.github.io/ai-ppt/)** (requires GitHub Pages, see below)
 
 ![ai-ppt demo](docs/marketing/demo.gif)
 
-A personal knowledge hub: a closed loop of **quick-note fragments → AI organization & weighted knowledge graph → PPT / illustrations / video output → smart quizzes for iteration**. Built on a lightweight HTML/CSS/JS slide engine (keyboard navigation, fullscreen presentation, multi-page overview, PDF export) plus a built-in knowledge vault (bidirectional-linked notes, quick-note fragments, knowledge cards, quizzes, mistake collections). It can generate a complete deck from a URL, an article, notes, or a graph selection, and can also generate illustrations and videos with AI. Ships with skill extensions for Claude CLI / Kimi CLI: `/ppt-preview`, `/ppt-structure`, `/ppt-edit`, `/ppt-export`, `/ppt-list`, `/ppt-delete`, `/ppt-design` and more — 11 skills in total (see "Available skills" below).
+A personal knowledge hub: a closed loop of **quick-note fragments → AI organization & weighted knowledge graph → PPT / illustrations / video output → smart quizzes for iteration**. Built on a lightweight HTML/CSS/JS slide engine (keyboard navigation, fullscreen presentation, multi-page overview, PDF export) plus a built-in knowledge vault (bidirectional-linked notes, quick-note fragments, knowledge cards, quizzes, mistake collections). It can generate a complete deck from a URL, an article, notes, or a graph selection, and can also generate illustrations and videos with AI. Ships with skill extensions for Claude CLI / Kimi CLI: `/ppt-sources`, `/ppt-marketing`, `/ppt-preview`, `/ppt-structure`, `/ppt-edit`, `/ppt-export`, `/ppt-list`, `/ppt-delete`, `/ppt-design` and more — 13 skills in total (see "Available skills" below).
 
 ## Concept model
 
@@ -39,6 +39,11 @@ ai-ppt/
 │   ├── js/ppt.js                 # Navigation, fullscreen, overview, PDF export
 │   ├── theme-ref/                # Style references
 │   └── README.md                 # Deck-level docs
+├── templates/                    # Scenario templates (weekly-report / training-course / pitch / review-lesson)
+│   ├── weekly-report/
+│   ├── training-course/
+│   ├── pitch/
+│   └── review-lesson/
 ├── projects/                     # All business decks
 │   ├── hualong-xrs-strategy/
 │   ├── q3-sales-preview/
@@ -50,15 +55,18 @@ ai-ppt/
 │   ├── css/web.css
 │   └── js/modules/               # Build-free ES Modules, entry app.mjs
 ├── server.mjs                    # Web service entry
-├── skills/                       # CLI skills (11, see "Available skills")
-├── scripts/                      # Upgrade, generate, export, backup tools
+├── routes/                       # HTTP routes (sources / marketing / projects / vault / config / media / agent)
+├── skills/                       # CLI skills (13, see "Available skills")
+├── scripts/                      # Upgrade, generate, export, backup, search, sources, marketing tools
+│   ├── sources/                  # Multi-source material library (registry/collect/refresh/store/paths)
+│   ├── marketing/                # Marketing outlines & batch generation
 │   ├── upgrade-decks.mjs         # Overwrite all projects with base css/js
 │   ├── generate-deck.mjs         # Generate a deck from URL/article
 │   ├── export-pptx.mjs           # Export PPTX
 │   ├── export-pdf.mjs            # Export PDF (optional Puppeteer)
 │   ├── backup.mjs                # Project & skill backup
 │   └── config.mjs                # Project config read/write
-├── tests/                        # node --test core tests
+├── tests/                        # node --test (*.test.mjs)
 ├── install-skills.js             # Node installer
 ├── install-skills.sh             # Shell installer
 ├── package.json                  # npx support
@@ -187,7 +195,7 @@ Start the web console to manage projects, configure sources, and generate slides
 npm run web
 ```
 
-Opens `http://localhost:3456` by default.
+Opens `http://localhost:3456` by default. Change port / bind address via `AI_PPT_PORT` / `AI_PPT_HOST` environment variables (`--port` / `--host` CLI flags are not parsed).
 
 - Create/delete projects
 - Choose a content source: web URL or pasted article
@@ -243,6 +251,64 @@ npm run backup
 
 Backups are stored in `.backup/<timestamp>/`.
 
+## Marketing pipeline: source library → outline → batch PPTs
+
+The full workflow for turning multi-source information into a set of angle-specific marketing decks (also available in the Web UI **Sources** tab):
+
+1. **Configure sources**: register a local directory, single page, site entry, or vault notes path as a source.
+   ```bash
+   # In-repo directory source (text files only by default)
+   curl -X POST http://localhost:3456/api/sources \
+     -H 'Content-Type: application/json' \
+     -d '{"type":"dir","name":"Marketing materials","target":"docs/marketing"}'
+
+   # Single page / site entry
+   curl -X POST http://localhost:3456/api/sources \
+     -H 'Content-Type: application/json' \
+     -d '{"type":"url","name":"Intro page","target":"https://example.com/intro"}'
+
+   curl -X POST http://localhost:3456/api/sources \
+     -H 'Content-Type: application/json' \
+     -d '{"type":"site","name":"Website","target":"https://example.com","options":{"depth":1}}'
+   ```
+   - Source types: `dir | url | site | vault`. External directories require `AI_PPT_ALLOW_EXTERNAL_SOURCES=1` **and** `acknowledgeExternalPath:true` in the request.
+   - Tunable options: `maxPages` (default 30), `maxBytesPerItem` (default 512KB), `depth` (site only, default 1), `include`, `label`, `anyOfTags`.
+
+2. **Refresh sources**:
+   ```bash
+   curl -X POST http://localhost:3456/api/sources/<sourceId>/refresh
+   # progress: GET /api/sources/<sourceId>/refresh/events
+   ```
+   Refreshes are incremental using SHA-256 hashes; vanished upstream items are pruned after a successful run; transient failures are kept as `stale` and reported via SSE and `GET /api/sources`.
+
+3. **Generate a marketing outline**:
+   ```bash
+   node scripts/marketing/generate-outline.mjs \
+     --source src-a,src-b \
+     --product "Product Name" \
+     --audience "Enterprise decision makers" \
+     --tone "Professional, restrained, evidence-based" \
+     --angle-set marketing-standard \
+     --slides 5
+   ```
+   Output: `marketing/outlines/<mo-xxx>.json`. Built-in `marketing-standard` has six angles: pain / capability / scenario / differentiation / ROI / proof. Every `evidenceItemIds` citation must point to a real material item; fabricated references are dropped and counted.
+
+   > **Verify the LLM link is up**: if the outline `done` event shows `llmShortCircuited:true`, the first angle's LLM call failed and the rest were skipped. Open the top-bar **Settings** panel and check Base URL, Model, and API Key, then switch to an active model (e.g. under Volcano Ark `https://ark.cn-beijing.volces.com/api/v3`: `doubao-seed-2-1-pro-260915` or `deepseek-v4-flash-ga-260731`).
+
+4. **Batch-generate decks**:
+   ```bash
+   node scripts/marketing/batch-generate.mjs <outlineId> \
+     --angles pain,capability \
+     --slides 8 \
+     --theme web-ui \
+     --animation slide
+   ```
+   Output: `projects/mkt-<angleKey>-slug/` — one independent deck per angle, with `ai-ppt.json.sourceSelection.kind = 'outline'` binding the outline and angle. Only one outline generation and one batch run are allowed globally at a time (409 on duplicate), and batches can be cancelled via `POST /api/marketing/batch/cancel`.
+
+5. **Export / publish**: for each generated deck use `/ppt-export <deckName> pdf|pptx` or `/ppt-publish publish <deckName>`.
+
+> **Artifact policy**: `sources.json`, `vault/.meta/source-cache/`, `marketing/`, `projects/<name>/export/`, `cover.png`, `references/`, and all video files (`*.mp4/mov/webm`) are excluded from git; `demo/` and `web/icons/` are intentionally kept for GitHub Pages / PWA.
+
 ## Keyboard shortcuts
 
 ### Presentation page
@@ -285,6 +351,8 @@ Backups are stored in `.backup/<timestamp>/`.
 
 | Skill | Purpose |
 |-------|------|
+| `/ppt-sources` | Manage the multi-source material library (dir/url/site/vault) |
+| `/ppt-marketing` | Generate a marketing outline from sources and batch-produce decks |
 | `/ppt-preview [deck]` | Start a local server to preview a deck |
 | `/ppt-structure <name>` | Scaffold a new deck from `ai-ppt-base` |
 | `/ppt-edit [instruction]` | Edit slide text and layout |
@@ -331,6 +399,14 @@ npx ai-ppt-skills
 | `projects/xinrenxinshi-intro/` | Xinrenxinshi product introduction |
 
 ## Changelog
+
+### v2.9.0 — Source library → marketing outline → batch PPTs (2026-11)
+
+- **Multi-source material library**: `dir` / `url` / `site` / `vault` source types; `sources.json` registry + `vault/.meta/source-cache/` cache; incremental refresh via SHA-256 hash; observable `maxPages` truncation and stale preservation on partial failures.
+- **Marketing outlines**: built-in `marketing-standard` six-angle set; per-angle LLM output in a strict contract shape, deterministic fallback when no LLM; anti-fabrication validation drops references to non-existent item IDs.
+- **Batch generation**: serial per-angle deck generation, `ai-ppt.json.sourceSelection.kind='outline'` binding; global single-batch 409 deduplication, cancellation, auto design-lint and cover capture.
+- **Artifact policy**: `export/`, `cover.png`, `marketing/`, `vault/.meta/source-cache/`, `references/`, and video files are excluded from git; `demo/` and `web/icons/` are intentionally kept for GitHub Pages / PWA.
+- **Docs**: AGENTS.md adds source/marketing/artifact conventions; READMEs add the new workflow chapter; test entry unified to `node --test tests/*.test.mjs` (335 pass / 101 suites).
 
 ### v2.6.0 — Usability fixes & information-architecture consolidation (2026-07)
 

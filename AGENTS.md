@@ -11,12 +11,15 @@ ai-ppt/
 │                       # 完整 deck 骨架 index.html + ai-ppt.json，不含 css/js（创建时注入基座引擎）
 ├── projects/<name>/    # 业务 deck：index.html、ai-ppt.json、css/、js/、export/、assets/、cover.png
 ├── web/                # Web 管理界面，无构建 ES Modules
-│   └── js/modules/     # app.mjs 入口 + state/vault/projects/generate/modals 等
+│   └── js/modules/     # app.mjs 入口 + state/vault/projects/generate/modals/marketing/sources 等
 ├── server.mjs, routes/ # Web 服务入口与路由模块；vault 路由按域拆分（routes/vault.mjs 为聚合入口，
 │                       # routes/vault-notes/fragments/assets/learn/graph.mjs + 共享 routes/vault-commons.mjs，
 │                       # 合并顺序与拆分前严格一致，域内增删路由需同步调整聚合处 slice 下标）
-├── scripts/            # 生成/导出/备份/快照/搜索/vault 等工具脚本
-├── tests/core.test.mjs # npm test
+│                       # routes/sources.mjs = 素材库，routes/marketing.mjs = 营销大纲与批量生成
+├── scripts/            # 生成/导出/备份/快照/搜索/vault/素材库/营销等工具脚本
+│   ├── sources/        # 多数据源素材库：注册表/采集/刷新/缓存（registry/collect-*/refresh/store/paths）
+│   └── marketing/      # 营销大纲与批量生成（generate-outline/batch-generate/angles/material/store）
+├── tests/*.test.mjs    # npm test（node --test tests/*.test.mjs）
 └── skills/             # CLI skill 定义
 ```
 
@@ -31,6 +34,31 @@ ai-ppt/
    - P5 笔记改 → PPT：笔记保存（PUT `/api/vault/notes/:name`）时自动查找 `findProjectsBySource('note', name)`，对未在生成中的绑定 PPT 触发 `chat-modify.mjs` 同步更新；专题下笔记变更也会影响关联 PPT。
    - P6 PPT 改 → 笔记：PPT 没有来源笔记时，可通过 `POST /api/projects/:name/generate-note` 生成对应笔记（`scripts/generate-note-from-deck.mjs`）；已有来源的 PPT 则同步更新该笔记。生成后双向绑定回 `sourceSelection.noteName`。
    - P7 i18n/帮助面板：新增 UI 文案通过 `t()`，en.mjs 提供英文翻译；帮助面板 `#help-panel` 的「项目操作」section 更新 PPT-笔记同步快捷键。
+
+3b. **多数据源素材库**：把本地目录、单网页、站点入口、知识库笔记注册为源，刷新抓取后形成统一文本条目，供营销大纲与 PPT 生成取材。
+   - 注册表：仓库根 `sources.json`（已 gitignore），形状 `{version:1, sources:[Source]}`；`Source = {id,type,name,target,enabled,tags,lastFetchedAt,options}`。`id = src-<slug>`（`scripts/sources/registry.mjs`）。
+   - 四种源类型 `type ∈ dir | url | site | vault`（`SOURCE_TYPES`）。`dir` 与 `vault` 的 `target` 为路径，`url`/`site` 为 http(s) URL；`vault` target 为 `vault/` 下相对子路径，空 = 整个 vault。
+   - 抓取缓存：`vault/.meta/source-cache/<sourceId>/manifest.json` + `items/<itemId>.md`（已 gitignore）。条目 id 真实形状 `<sourceId>--<12位sha256hex>`（例 `src-docs-refs--b65227b57ba4`），由 `scripts/sources/store.mjs` 的 `makeItemId` 生成。
+   - 增量刷新：同一 origin（文件路径/URL/笔记名）的 itemId 在多次刷新间保持稳定；hash 未变的条目不重写；上游消失的条目在整批成功后清理（`scripts/sources/refresh.mjs`）。
+   - 可调 `options`：`include`（glob 数组）、`maxPages`（1–500，默认 30）、`maxBytesPerItem`（1KB–10MB，默认 512KB）、`depth`（0–5，默认 1，仅 site）、`label`、`anyOfTags`。`dir` 默认仅收文本类（`DEFAULT_DIR_INCLUDE`），`vault` 仅 `**/*.md`。
+   - HTTP 端点（`routes/sources.mjs`）：`GET/POST /api/sources`、`PUT/DELETE /api/sources/:id`、`POST /api/sources/:id/refresh`、`GET /api/sources/:id/refresh/events`、`GET /api/sources/:id/items`、`GET /api/sources/items`、`POST /api/sources/preview`。错误枚举 `{400,403,404,409,500}`，其中 403 为外部目录授权撤回；全局刷新并发上限 2 → 429。
+   - 安全红线：`dir`/`vault` target 必须解析为真实目录（系统按 `realpath` 重跑归属与敏感清单检查，不建议以符号链接作为 target）；词法路径与真实路径均不得穿越禁入目录段 `.git` / `.backup` / `.snapshots` / `node_modules`；敏感位置/文件名拒绝清单（`.ssh` / `.aws` / `.docker` / `.config` / `keychain`、`/etc`、`/var/root`、`.env*`、`*.pem` / `*.key`、SSH 私钥、`credentials*`、`.ai-ppt-config.json`、`.ai-ppt-tasks.json` 等）一律拒收；只收文本类条目，视频/大素材不会进入素材库。
+   - 越 ROOT 外部目录源双闸：`AI_PPT_ALLOW_EXTERNAL_SOURCES=1` 环境变量 + 请求体 `acknowledgeExternalPath:true`；刷新时还会重查授权，关掉 env 后存量外部源同步 403。确认标记只在目标确为越界外部目录时才持久化，内部源不“免费铸造”；PUT 改 `target`/`type` 时不继承旧标记。
+   - 可观测性：`maxPages` 截断、部分失败保命（`degraded`/`staleCount`）、上游确认消失清理（`pruned`/`prunedUnconfirmed`）、安全清单跳过（`policySkipped`）均通过 SSE 事件与 `GET /api/sources` 返回给前端，不静默。
+
+3c. **营销大纲与批量生成**：从多源素材库取材 → 生成营销大纲 → 按角度批量生成独立 deck。
+   - 大纲形状：`marketing/outlines/<mo-<base36>>.json`（已 gitignore），字段 `{id,title,createdAt,sourceIds,angleSet,product{name,audience,tone},angles[{key,title,thesis,audience,evidenceItemIds,slides[{heading,lead,points,evidenceItemIds}],deckName,generatedBy}]}`（`scripts/marketing/store.mjs`）。
+   - 内置角度集：`marketing-standard`（`scripts/marketing/angles.mjs`），含 6 个互不重复的角度：`pain` 客户痛点 / `capability` 产品能力 / `scenario` 行业场景 / `diff` 差异化竞争 / `roi` ROI 价值 / `proof` 成功案例与落地路径。扩展角度集 = 在该文件新增 id。
+   - 大纲生成：`POST /api/marketing/outline` → 202 + SSE `/api/marketing/outline/events`；CLI `node scripts/marketing/generate-outline.mjs --source src-a,src-b --product "名称" --audience ... --tone ... --angle-set marketing-standard --title ... --slides 5 --include-stale`。流程：跨源汇总 → 分档摘要（`material.mjs`）→ 逐角度调 LLM（并发 1）→ 校验（角度数、thesis 互不重复、slides 形状、evidenceItemIds 存在性）→ 落盘。无 LLM 时走确定性兜底，且 `done` 事件如实报告 `llmUsed / llmFailed / llmShortCircuited / llmReason / fallbackOnly`。
+   - 防编造引用校验：LLM 输出的 `evidenceItemIds` 只能引用素材库真实条目，指向不存在的 itemId 会在 `enforceEvidenceIntegrity` 中被剔除并计数，写入 `outline.material.droppedEvidenceCount` 与 `warnings`。
+   - 批量生成：`POST /api/marketing/batch` → 202 + SSE `/api/marketing/batch/events`；CLI `node scripts/marketing/batch-generate.mjs <outlineId> --angles pain,capability --batch-id mb-x --overwrite --slides 8 --theme web-ui --animation slide`。全局同一时刻只允许 1 个大纲生成与 1 个批量生成任务（重复触发 409）。
+   - 串行可取消：逐角度串行生成（LLM 并发 1），单 deck 失败不阻断整批；取消通过 `POST /api/marketing/batch/cancel` 落标记文件，当前 deck 完成后停止。已存在项目默认跳过，`overwrite:true` 才覆盖且覆盖前自动快照。
+   - 产物与绑定：每个角度生成 `projects/mkt-<angleKey>-<slug>/`，`ai-ppt.json.sourceSelection.kind = 'outline'` 并记录 `outlineId` / `angleKey` / `sourceIds`，实现 PPT ↔ 大纲的双向绑定；`userEdits` 原样保留；落盘后自动跑 `design-lint` 与 `captureCover`。批次进度快照存 `marketing/batches/<mb-<base36>>.json`。
+
+3d. **产物与素材入库策略**：生成物与视频**不入 git**。
+   - 明确不跟踪的路径：`projects/*`（业务 deck）、`published/`、`export/`、`cover.png`、`marketing/`、`vault/.meta/source-cache/`、`references/`、`sources.json`、`.ai-ppt-tasks.json`、`.ai-ppt-config.json`、`.backup/`、`.snapshots/`、`test-output/`，以及所有视频文件 `*.mp4 / *.mov / *.m4v / *.webm / *.avi`。
+   - 有意保留的例外：`demo/` 封面是 GitHub Pages 部署源；`web/icons/` 是 PWA 源资源——两者保持跟踪。
+   - 回归护栏：`tests/artifact-policy.test.mjs` 全量核查「已跟踪路径不得命中 ignore 规则」「Pages 封面与 PWA 图标保持跟踪」「无视频被跟踪」等 7 条断言。
 
 4. **系统级模型配置**：三组配置（`modelConfig`/`imageModelConfig`/`videoModelConfig`）存根目录 `.ai-ppt-config.json`（已 gitignore），由「设置」面板（顶栏齿轮，唯一设置入口）修改，对所有项目生效。优先级：环境变量 `OPENAI_*` > 配置文件 > 内置默认；apiKey 不落盘。`sk-kimi-` 开头的 key 自动路由到 Kimi Code 端点（`api.kimi.com/coding/v1` + `kimi-for-coding`）。
 5. **概念模型（以笔记为中心）**：启动默认落 vault tab；顶栏仅 logo/搜索/设置/帮助（移动端另有汉堡按钮开合侧边栏抽屉，见条目 30）。PPT 作品 = `projects/<name>`，生命周期 ① 选材 → ② 生成 → ③ 修改 → ④ 发布，在侧边栏 projects tab 管理。主区面板与侧边栏 tab 一一对应，`#project-panel` 仅在 projects tab 且有选中项目时显示。
@@ -73,6 +101,8 @@ ai-ppt/
 
 ## Skill 行为
 
+- `/ppt-sources`：管理多数据源素材库（添加 dir/url/site/vault 源、刷新抓取、列条目、搜索）。
+- `/ppt-marketing`：从素材库出营销大纲，再批量生成营销 PPT（含无 LLM 降级预期与导出/发布后续动作）。
 - `/ppt-structure <name>`：在 `projects/<name>/` 创建 deck（复制基座 css/js/README，生成初始 index.html 与 ai-ppt.json）。
 - `/ppt-preview [name]` / `/ppt-edit [instruction]`：优先定位 `projects/<name>/`，未指定时优先当前目录再搜索 `projects/*/`。
 - `/ppt-export [name] [pdf|pptx]`：导出 PDF 或 PPTX；`/ppt-list`：列出所有 deck；`/ppt-delete <name>`：删除 deck（需确认）。
@@ -85,4 +115,4 @@ ai-ppt/
 
 ## 测试
 
-- `npm test` → `node --test tests/core.test.mjs`；`npm run test:smoke` → `node scripts/test-smoke.mjs`。
+- `npm test` → `node --test tests/*.test.mjs`（当前基线 335 pass / 0 fail / 101 suites）；`npm run test:smoke` → `node scripts/test-smoke.mjs`。
