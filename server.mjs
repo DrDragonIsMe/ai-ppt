@@ -372,6 +372,9 @@ function presentGlobalConfigFn(cfg) {
       allowSettingsMutation: cfg.agentConfig?.allowSettingsMutation !== false,
       allowKnowledgeMutation: cfg.agentConfig?.allowKnowledgeMutation !== false,
     },
+    sourcesConfig: {
+      allowExternalPaths: cfg.sourcesConfig?.allowExternalPaths === true,
+    },
     modelConfig: strip(cfg.modelConfig, {}),
     imageModelConfig: strip(cfg.imageModelConfig, DEFAULT_MEDIA_MODEL_CONFIG),
     videoModelConfig: strip(cfg.videoModelConfig, DEFAULT_MEDIA_MODEL_CONFIG),

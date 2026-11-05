@@ -1308,6 +1308,12 @@
               <label class="checkbox-inline"><input type="checkbox" id="input-agent-allow-knowledge">
                 <span data-i18n="允许薪小灵通过自然语言管理知识库（仍会先确认）">允许薪小灵通过自然语言管理知识库（仍会先确认）</span></label>
             </section>
+            <section class="card">
+              <div class="card-title" data-i18n="素材库">素材库</div>
+              <label class="checkbox-inline"><input type="checkbox" id="input-allow-external-paths">
+                <span data-i18n="允许仓库外的目录源">允许仓库外的目录源</span></label>
+              <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-top: 8px;" data-i18n="开启后，素材源可添加仓库根目录之外的本地绝对路径；仍会对每次建源/改源要求显式确认。">开启后，素材源可添加仓库根目录之外的本地绝对路径；仍会对每次建源/改源要求显式确认。</p>
+            </section>
             <section class="card model-config-card">
               <div class="card-title"><span data-i18n="模型配置">模型配置</span> <span class="hint-inline" data-i18n="系统级别 · 对所有项目生效">系统级别 · 对所有项目生效</span></div>
               <div class="model-config-section" data-i18n="文本模型">文本模型</div>
@@ -1879,6 +1885,11 @@
           <label data-i18n="包含过滤（可选）">包含过滤（可选）</label>
           <input type="text" id="source-input-include" placeholder="例如：*.md 或 /blog/ 前缀" data-i18n-placeholder="例如：*.md 或 /blog/ 前缀">
         </div>
+      </div>
+      <div id="source-external-ack-row" class="source-external-ack hidden">
+        <label class="checkbox-inline"><input type="checkbox" id="source-input-external-ack">
+          <span data-i18n="我确认该目录位于仓库之外，且已获授权">我确认该目录位于仓库之外，且已获授权</span></label>
+        <p style="font-size: 12px; color: var(--ink); opacity: 0.6; margin-top: 6px; line-height: 1.6;" data-i18n="内部目录源无需勾选；仅在目标确实位于仓库根之外时才需要确认。">内部目录源无需勾选；仅在目标确实位于仓库根之外时才需要确认。</p>
       </div>
       <div class="modal-actions">
         <button id="btn-cancel-source" class="btn-secondary" data-i18n="取消">取消</button>
