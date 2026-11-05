@@ -9,7 +9,7 @@ import {
   readManifest, writeManifest, writeItem, makeItemId, sha256,
 } from './store.mjs';
 import { sourceItemsDir } from './paths.mjs';
-import { getSource, validateSource, markFetched } from './registry.mjs';
+import { getSource, validateSource, markFetched, requireFiniteOption } from './registry.mjs';
 import { capByBytes } from './text-extract.mjs';
 import { collectDir } from './collect-dir.mjs';
 import { collectUrl } from './collect-url.mjs';
@@ -45,9 +45,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
     throw err;
   }
   const sourceId = source.id;
-  const maxBytesPerItem = Number.isFinite(source.options?.maxBytesPerItem)
-    ? source.options.maxBytesPerItem
-    : 524288;
+  const maxBytesPerItem = requireFiniteOption(source, 'maxBytesPerItem');
 
   const collector = dispatch(source);
   const prev = readManifest(sourceId) || { items: [] };

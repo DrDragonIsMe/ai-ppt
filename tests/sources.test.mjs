@@ -11,12 +11,14 @@ import path from 'node:path';
 
 import {
   loadSources, saveSources, upsertSource, removeSource, getSource, validateSource,
-  makeId, slugify, SourceError,
+  makeId, slugify, SourceError, OPTION_RANGES,
 } from '../scripts/sources/registry.mjs';
 import {
   listItems, readItem, readManifest, makeItemId,
 } from '../scripts/sources/store.mjs';
 import { refreshSource, previewSource } from '../scripts/sources/refresh.mjs';
+import { collectDir } from '../scripts/sources/collect-dir.mjs';
+import { collectSite } from '../scripts/sources/collect-site.mjs';
 import { capByBytes, classifyExt } from '../scripts/sources/text-extract.mjs';
 import { isWithinRoot } from '../scripts/sources/paths.mjs';
 import { matchesAny } from '../scripts/sources/glob.mjs';
@@ -83,6 +85,15 @@ describe('validateSource', () => {
     const ok = validateSource({ type: 'site', name: 'n', target: 'https://x.com', options: { depth: 2, maxPages: 10, maxBytesPerItem: 4096 } });
     assert.deepEqual({ depth: ok.options.depth, maxPages: ok.options.maxPages, maxBytesPerItem: ok.options.maxBytesPerItem },
       { depth: 2, maxPages: 10, maxBytesPerItem: 4096 });
+  });
+  it('未显式提供的数值 option 一律物化为 OPTION_RANGES 声明的 default', () => {
+    for (const type of ['dir', 'url', 'site', 'vault']) {
+      const target = type === 'url' || type === 'site' ? 'https://example.com' : os.tmpdir();
+      const s = validateSource({ type, name: 'no-opts', target }); // 完全不带 options
+      assert.equal(s.options.maxPages, OPTION_RANGES.maxPages.default, `${type}.maxPages`);
+      assert.equal(s.options.maxBytesPerItem, OPTION_RANGES.maxBytesPerItem.default, `${type}.maxBytesPerItem`);
+      assert.equal(s.options.depth, OPTION_RANGES.depth.default, `${type}.depth`);
+    }
   });
 });
 
@@ -243,17 +254,47 @@ describe('maxPages truncation is explicitly reported', () => {
     assert.match(ev.message, /丢弃 2/);
   });
 
-  it('未截断时不带 truncated 标记（默认无上限目录不受影响）', async () => {
+  it('默认上限 30：3 个文件未达上限故无 truncated 标记', async () => {
     freshEnv('trunc-none');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-tn-'));
     for (let i = 0; i < 3; i++) fs.writeFileSync(path.join(dir, `n${i}.md`), `# N${i}`);
-    const source = upsertSource({ type: 'dir', name: 'NoCap', target: dir }).source; // 无 maxPages → 无上限
+    const source = upsertSource({ type: 'dir', name: 'NoCap', target: dir }).source; // 无 maxPages → 物化默认 30
     const r = await refreshSource(source.id);
+    assert.equal(source.options.maxPages, OPTION_RANGES.maxPages.default);
     assert.equal(r.itemCount, 3);
     assert.equal(r.truncated, false);
     assert.equal(r.droppedCount, 0);
     assert.ok(!('truncated' in readManifest(source.id)));
     assert.ok(!('droppedCount' in readManifest(source.id)));
+  });
+
+  it('dir 默认 maxPages 生效：31 文件不带 options → 截断到 30（与 site 同一默认，防止再塞第三个隐式默认）', async () => {
+    freshEnv('trunc-default');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-td-'));
+    for (let i = 0; i < 31; i++) fs.writeFileSync(path.join(dir, `f${i}.md`), `# F${i}\nbody`);
+    const source = upsertSource({ type: 'dir', name: 'Default30', target: dir }).source;
+    assert.equal(source.options.maxPages, OPTION_RANGES.maxPages.default); // 物化 = 30
+    const r = await refreshSource(source.id);
+    assert.equal(r.itemCount, OPTION_RANGES.maxPages.default);              // 入库 30
+    assert.equal(r.truncated, true);
+    assert.equal(r.droppedCount, 1);
+    assert.equal(r.totalCandidates, 31);
+    const m = readManifest(source.id);
+    assert.equal(m.truncated, true);
+    assert.equal(m.droppedCount, 1);
+    assert.equal(m.maxPages, OPTION_RANGES.maxPages.default);
+  });
+
+  it('采集器不再自带隐式默认：剥掉 maxPages 直接喂 collectDir → 抛错（而非悄悄用 Infinity）', async () => {
+    freshEnv('collector-no-default');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-nd-'));
+    fs.writeFileSync(path.join(dir, 'a.md'), '# A');
+    const source = upsertSource({ type: 'dir', name: 'Strip', target: dir }).source;
+    const bad = { ...source, options: { ...source.options, maxPages: undefined } };
+    await assert.rejects(
+      async () => { for await (const _ of collectDir(bad)) { void _; } },
+      /maxPages/,
+    );
   });
 
   it('GET /api/sources 透出 truncated/droppedCount 供前端徽标', async () => {
@@ -347,6 +388,28 @@ describe('url & site collectors (local http server)', () => {
     assert.ok(truncEv, 'site 截断应发 truncated 事件');
     assert.equal(truncEv.detail.dropped, 2);
     assert.equal(readManifest(source.id).droppedCount, 2);
+  });
+
+  it('site 不带 options → 物化 default（depth=1、maxPages=30），与 dir 同一默认', () => {
+    freshEnv('site-default');
+    const source = upsertSource({ type: 'site', name: 'SiteDefault', target: `http://127.0.0.1:${port}/` }).source;
+    assert.equal(source.options.depth, OPTION_RANGES.depth.default);           // 1
+    assert.equal(source.options.maxPages, OPTION_RANGES.maxPages.default);      // 30
+  });
+
+  it('采集器不再自带隐式默认：剥掉 maxPages/depth 直接喂 collectSite → 抛错', async () => {
+    freshEnv('site-no-default');
+    const source = upsertSource({ type: 'site', name: 'SiteStrip', target: `http://127.0.0.1:${port}/` }).source;
+    const noPages = { ...source, options: { ...source.options, maxPages: undefined } };
+    await assert.rejects(
+      async () => { for await (const _ of collectSite(noPages, { allowPrivateNetwork: true })) { void _; } },
+      /maxPages/,
+    );
+    const noDepth = { ...source, options: { ...source.options, depth: undefined } };
+    await assert.rejects(
+      async () => { for await (const _ of collectSite(noDepth, { allowPrivateNetwork: true })) { void _; } },
+      /depth/,
+    );
   });
 
   it('SSRF guard: url source WITHOUT allowPrivateNetwork refuses localhost', async () => {

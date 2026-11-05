@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isWithinRoot, isForbiddenPath } from './paths.mjs';
 import { matchesAny } from './glob.mjs';
+import { requireFiniteOption } from './registry.mjs';
 import { extOf, classifyExt, extractFileText } from './text-extract.mjs';
 
 function titleFromHead(absPath, relPath) {
@@ -46,7 +47,7 @@ export async function* collectDir(source, ctx = {}) {
   const include = Array.isArray(source.options?.include) && source.options.include.length
     ? source.options.include
     : null;
-  const cap = Number.isFinite(source.options?.maxPages) ? source.options.maxPages : Infinity;
+  const cap = requireFiniteOption(source, 'maxPages');
   const tags = source.tags || [];
 
   const stack = [root];

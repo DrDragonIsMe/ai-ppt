@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './paths.mjs';
 import { matchesAny } from './glob.mjs';
+import { requireFiniteOption } from './registry.mjs';
 import { parseFrontMatter } from '../front-matter.mjs';
 
 function vaultBase(ctx) {
@@ -54,7 +55,7 @@ export async function* collectVault(source, ctx = {}) {
   const anyOfTags = Array.isArray(source.options?.anyOfTags) ? source.options.anyOfTags : null;
   const globalTags = source.tags || [];
 
-  const cap = Number.isFinite(source.options?.maxPages) ? source.options.maxPages : Infinity;
+  const cap = requireFiniteOption(source, 'maxPages');
 
   const stack = [scopeRoot];
   const visited = new Set();

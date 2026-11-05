@@ -3,7 +3,11 @@
 // Source: {id,type,name,target,enabled,tags,lastFetchedAt,options}
 //   type ∈ dir|url|site|vault
 //   id   = src-<slug>（文件系统/URL 安全，供缓存目录名直接使用）
-//   options: {include?,maxPages?,maxBytesPerItem?,depth?,label?}
+//   options: {include,maxPages,maxBytesPerItem,depth,label?}
+// 默认值单一落地：validateSource 在写出时把 OPTION_RANGES.default **物化**进 options，
+//   故下游（采集器/refresh）永远读到真实数字，不再各自持隐式默认；缺值即视为 bug（采集器抛错）。
+//   语义选定：maxPages 对 dir/site/vault 统一默认 30、上限 500（有界 + 已被 truncated 上报可观测 + 用户可调），
+//   优于「无上限静默遍历」；url 单页不受该上限影响。depth 仅 site 用，默认 1。
 // 写盘统一走 fs-utils 的 writeJsonAtomic；非法 id/target → SourceError(statusCode=400)，
 // 更新/删除不存在的 id → statusCode=404。
 import fs from 'node:fs';
@@ -14,6 +18,7 @@ import { ROOT, sourcesFile, isWithinRoot } from './paths.mjs';
 
 export const SOURCE_TYPES = ['dir', 'url', 'site', 'vault'];
 
+// 数值型 option 的唯一权威定义：min/max 供校验、default 供物化写入 options。
 export const OPTION_RANGES = {
   maxPages: { min: 1, max: 500, default: 30 },
   maxBytesPerItem: { min: 1024, max: 10 * 1024 * 1024, default: 524288 },
@@ -79,6 +84,21 @@ function clampNumber(label, value, range) {
   return n;
 }
 
+/**
+ * 采集器/refresh 读取「必需」数值 option 的唯一入口。
+ * 默认值已由 validateSource 物化进 options；此处若读到缺失/非有限值即为上游 bug，
+ * 直接抛错（绝不在此再放第二个隐式默认），以便尽早暴露而非静默改变抓取规模。
+ */
+export function requireFiniteOption(source, key) {
+  const v = source?.options?.[key];
+  if (!Number.isFinite(v)) {
+    const e = new Error(`options.${key} 缺失或非有限值（应由 registry 物化默认值）：${String(v)}`);
+    e.statusCode = 500;
+    throw e;
+  }
+  return v;
+}
+
 function normalizeTags(tags) {
   if (tags === undefined || tags === null || tags === '') return [];
   if (!Array.isArray(tags)) throw new SourceError('tags 必须是数组');
@@ -103,9 +123,11 @@ function normalizeOptions(type, rawOptions) {
   } else if (type === 'vault') {
     out.include = ['**/*.md'];
   }
-  if (opts.maxPages !== undefined) out.maxPages = clampNumber('maxPages', opts.maxPages, OPTION_RANGES.maxPages);
-  if (opts.maxBytesPerItem !== undefined) out.maxBytesPerItem = clampNumber('maxBytesPerItem', opts.maxBytesPerItem, OPTION_RANGES.maxBytesPerItem);
-  if (opts.depth !== undefined) out.depth = clampNumber('depth', opts.depth, OPTION_RANGES.depth);
+  // 数值型 options 一律物化：未显式提供则写入 OPTION_RANGES 声明的 default，
+  // 让下游（采集器/refresh）永远拿到一个真实数字，采集器不再各自持有隐式默认值。
+  out.maxPages = opts.maxPages !== undefined ? clampNumber('maxPages', opts.maxPages, OPTION_RANGES.maxPages) : OPTION_RANGES.maxPages.default;
+  out.maxBytesPerItem = opts.maxBytesPerItem !== undefined ? clampNumber('maxBytesPerItem', opts.maxBytesPerItem, OPTION_RANGES.maxBytesPerItem) : OPTION_RANGES.maxBytesPerItem.default;
+  out.depth = opts.depth !== undefined ? clampNumber('depth', opts.depth, OPTION_RANGES.depth) : OPTION_RANGES.depth.default;
   if (typeof opts.label === 'string' && opts.label.trim()) out.label = opts.label.trim().slice(0, 200);
   if (opts.anyOfTags !== undefined) {
     if (!Array.isArray(opts.anyOfTags) || opts.anyOfTags.some((t) => typeof t !== 'string')) {

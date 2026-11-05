@@ -3,6 +3,7 @@
 // 去重、跳过下载/媒体后缀与跨域链接（net.isCrawlableLink 内做）；每抓一页发一条进度事件；
 // 单页失败产出 error 条目、不中断整批。默认走 net.fetchPage（含 SSRF 守卫），
 // 测试/离线经 ctx.fetchPage / ctx.allowPrivateNetwork 注入。
+import { requireFiniteOption } from './registry.mjs';
 import { fetchPage, extractFromHtml, extractLinks, guessTitle } from './net.mjs';
 
 /**
@@ -12,8 +13,8 @@ import { fetchPage, extractFromHtml, extractLinks, guessTitle } from './net.mjs'
 export async function* collectSite(source, ctx = {}) {
   const entry = source.target;
   const tags = source.tags || [];
-  const maxPages = Number.isFinite(source.options?.maxPages) ? source.options.maxPages : 30;
-  const maxDepth = Number.isFinite(source.options?.depth) ? source.options.depth : 1;
+  const maxPages = requireFiniteOption(source, 'maxPages');
+  const maxDepth = requireFiniteOption(source, 'depth');
   const fetchFn = ctx.fetchPage || fetchPage;
   const netOpts = { allowPrivateNetwork: ctx.allowPrivateNetwork, maxBytes: ctx.maxBytes };
 
