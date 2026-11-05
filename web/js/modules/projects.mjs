@@ -98,6 +98,10 @@ function sourceBadgeLabel(p) {
     if (sel && typeof sel === 'object') {
         if (sel.kind === 'topic' && sel.topicPath) return `${t('专题')}·${escapeHtml(sel.topicPath)}`;
         if (sel.kind === 'note' && sel.noteName) return `${t('笔记')}·${escapeHtml(sel.noteName.split('/').pop())}`;
+        if (sel.kind === 'outline') {
+            const name = sel.outlineTitle || sel.angleTitle || sel.angleKey || sel.outlineId;
+            return name ? `${t('大纲')}·${escapeHtml(String(name))}` : t('营销大纲');
+        }
         // 兼容旧的知识选材格式
         if (Object.values(sel).some((arr) => Array.isArray(arr) && arr.length)) return t('知识选材');
     }
