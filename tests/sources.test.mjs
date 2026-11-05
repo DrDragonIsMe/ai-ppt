@@ -20,7 +20,7 @@ import {
 } from '../scripts/sources/store.mjs';
 import { refreshSource, previewSource } from '../scripts/sources/refresh.mjs';
 import { collectDir } from '../scripts/sources/collect-dir.mjs';
-import { collectSite } from '../scripts/sources/collect-site.mjs';
+import { collectSite, isLowRelevancePage } from '../scripts/sources/collect-site.mjs';
 import { fetchPage } from '../scripts/sources/net.mjs';
 import { capByBytes, classifyExt } from '../scripts/sources/text-extract.mjs';
 import { isWithinRoot, isSensitivePath, hasSensitiveSegment } from '../scripts/sources/paths.mjs';
@@ -445,6 +445,129 @@ describe('url & site collectors (local http server)', () => {
     assert.match(p.title, /Page B/);
     assert.match(p.content, /beta page body/);
     assert.equal(listItems({}).length, 0); // 未落盘
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B080800 site crawler low-relevance page filter
+// ---------------------------------------------------------------------------
+describe('site source low-relevance page filter (B080800)', () => {
+  let server, port;
+  const HTML = (title, body, links = '') =>
+    `<!doctype html><html><head><title>${title}</title></head><body>${links}<article><h1>${title}</h1><p>${body}</p></article></body></html>`;
+
+  before(async () => {
+    server = http.createServer((req, res) => {
+      const u = req.url.split('?')[0];
+      if (u === '/') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('Home', 'welcome',
+          '<a href="/login">Login</a>' +
+          '<a href="/marketing">Marketing</a>' +
+          '<a href="/docs/guide">Guide</a>' +
+          '<a href="/about-docs">About Docs</a>'));
+      }
+      if (u === '/login') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('Sign in to GitHub · GitHub',
+          'Sign in to GitHub. Username Password Forgot password? Create an account.'));
+      }
+      if (u === '/marketing') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('GitHub · Change is constant',
+          'Change is constant. Build the future. Join us. Careers Press Contact.'));
+      }
+      if (u === '/docs/guide') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('Getting Started Guide · Acme Docs',
+          'This guide explains how to configure the widget and deploy it to production.'));
+      }
+      if (u === '/about-docs') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('About · Acme Docs',
+          'This article explains the design goals and architecture of the platform.'));
+      }
+      res.writeHead(404); res.end('nope');
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    port = server.address().port;
+  });
+  after(() => new Promise((r) => server.close(r)));
+
+  it('filters login wall and footer marketing pages, keeps knowledge-center pages', async () => {
+    freshEnv('site-lowrel');
+    const source = upsertSource({
+      type: 'site', name: 'LR', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 10 },
+    }).source;
+    const events = [];
+    const r = await refreshSource(source.id, { allowPrivateNetwork: true, onEvent: (e) => events.push(e) });
+
+    const titles = listItems({ sourceId: source.id }).map((i) => i.title).sort();
+    assert.deepEqual(titles, ['About · Acme Docs', 'Getting Started Guide · Acme Docs', 'Home']);
+    assert.equal(r.itemCount, 3, `应入库 3 条，实得 ${r.itemCount}`);
+    assert.equal(r.lowRelevanceSkipped, 2, `应跳过低相关页 2 条，实得 ${r.lowRelevanceSkipped}`);
+    assert.equal(r.droppedCount, 0);
+    assert.equal(r.totalCandidates, 5, `总候选应含 5 个已发现页面，实得 ${r.totalCandidates}`);
+
+    const m = readManifest(source.id);
+    assert.equal(m.lowRelevanceSkipped, 2);
+    assert.ok(Array.isArray(m.lowRelevanceSamples) && m.lowRelevanceSamples.length === 2);
+
+    const ev = events.find((e) => e.step === 'low-relevance-skipped');
+    assert.ok(ev, '应发出 low-relevance-skipped NDJSON 事件');
+    assert.equal(ev.detail.lowRelevanceSkipped, 2);
+  });
+
+  it('skipLowRelevanceCheck=true disables the filter', async () => {
+    freshEnv('site-lowrel-off');
+    const source = upsertSource({
+      type: 'site', name: 'LROff', target: `http://127.0.0.1:${port}/`,
+      options: { depth: 1, maxPages: 10, skipLowRelevanceCheck: true },
+    }).source;
+    const r = await refreshSource(source.id, { allowPrivateNetwork: true });
+    const titles = listItems({ sourceId: source.id }).map((i) => i.title).sort();
+    assert.equal(r.itemCount, 5, `关闭过滤后应入库 5 条，实得 ${r.itemCount}`);
+    assert.equal(r.lowRelevanceSkipped, 0);
+    assert.ok(titles.includes('Sign in to GitHub · GitHub'));
+    assert.ok(titles.includes('GitHub · Change is constant'));
+  });
+
+  it('registry normalizes and persists skipLowRelevanceCheck', () => {
+    freshEnv('site-opt');
+    const on = validateSource({
+      type: 'site', name: 'On', target: 'https://example.com', options: { skipLowRelevanceCheck: true },
+    });
+    assert.equal(on.options.skipLowRelevanceCheck, true);
+    const off = validateSource({ type: 'site', name: 'Off', target: 'https://example.com' });
+    assert.equal(off.options.skipLowRelevanceCheck, false);
+    assert.throws(
+      () => validateSource({
+        type: 'site', name: 'Bad', target: 'https://example.com', options: { skipLowRelevanceCheck: 'yes' },
+      }),
+      /skipLowRelevanceCheck/,
+    );
+  });
+
+  it('GET /api/sources surfaces lowRelevanceSkipped', async () => {
+    freshEnv('site-lowrel-api');
+    const ctx = makeRouteCtx();
+    const created = await call(ctx, 'POST', '/api/sources', {
+      body: { type: 'site', name: 'LRA', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 10 } },
+    });
+    const id = created.body.source.id;
+    await refreshSource(id, { allowPrivateNetwork: true });
+    const listed = await call(ctx, 'GET', '/api/sources');
+    const row = listed.body.sources.find((s) => s.id === id);
+    assert.equal(row.lowRelevanceSkipped, 2);
+    assert.ok(Array.isArray(row.lowRelevanceSamples));
+  });
+
+  it('isLowRelevancePage unit: login/marketing skipped, docs kept', () => {
+    assert.equal(isLowRelevancePage({ title: 'Sign in to GitHub · GitHub', body: 'Sign in', origin: 'http://x/login' }), true);
+    assert.equal(isLowRelevancePage({ title: 'GitHub · Change is constant', body: 'Change is constant', origin: 'http://x/marketing' }), true);
+    assert.equal(isLowRelevancePage({ title: 'Getting Started Guide · Acme Docs', body: 'deploy widget', origin: 'http://x/docs/guide' }), false);
+    assert.equal(isLowRelevancePage({ title: 'About · Acme Docs', body: 'architecture', origin: 'http://x/about-docs' }), false);
+    assert.equal(isLowRelevancePage({ title: 'Privacy Policy', body: 'privacy', origin: 'http://x/privacy' }), true);
   });
 });
 

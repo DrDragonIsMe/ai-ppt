@@ -8,7 +8,8 @@ import path from 'node:path';
 import {
   readManifest, writeManifest, writeItem, makeItemId, sha256,
 } from './store.mjs';
-import { sourceItemsDir } from './paths.mjs';
+import { sourceItemsDir, sourceManifestPath } from './paths.mjs';
+import { writeJsonAtomic } from '../fs-utils.mjs';
 import { getSource, validateSource, markFetched, requireFiniteOption, assertDirSourceAuthorized } from './registry.mjs';
 import { capByBytes } from './text-extract.mjs';
 import { collectDir } from './collect-dir.mjs';
@@ -86,6 +87,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
   let added = 0; let updated = 0; let unchanged = 0;
   let truncation = null; // { collected, dropped, total, cap }
   let policySkip = null; // P2-E：{ skipped, samples[] }——被禁入/敏感清单跳过的条目（可观测）
+  let lowRelevanceSkip = null; // B080800：{ skipped, samples[] }——被 collect-site 低相关过滤丢掉的页
 
   const ctx = {
     fetchPage: opts.fetchPage,
@@ -125,7 +127,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
       });
       continue;
     }
-    // 采集器在因 maxPages 截断时补发 summary：转为明确告警事件 + 记入 manifest，供前端徽标提示
+    // 采集器在因 maxPages 截断 / 低相关过滤时补发 summary：转为明确告警事件 + 记入 manifest，供前端徽标提示
     if (entry.kind === 'summary') {
       truncation = {
         collected: entry.collected | 0,
@@ -133,11 +135,24 @@ export async function refreshSource(sourceOrId, opts = {}) {
         total: entry.total | 0,
         cap: Number.isFinite(entry.cap) ? entry.cap : null,
       };
-      onEvent({
-        step: 'truncated',
-        message: `素材源「${source.name}」被 maxPages 截断：共 ${entry.total} 个候选，仅入库 ${entry.collected} 个，丢弃 ${entry.dropped} 个（上限 maxPages=${entry.cap}）`,
-        detail: truncation,
-      });
+      if (truncation.dropped > 0) {
+        onEvent({
+          step: 'truncated',
+          message: `素材源「${source.name}」被 maxPages 截断：共 ${entry.total} 个候选，仅入库 ${entry.collected} 个，丢弃 ${entry.dropped} 个（上限 maxPages=${entry.cap}）`,
+          detail: truncation,
+        });
+      }
+      if (Number.isFinite(entry.lowRelevanceSkipped) && entry.lowRelevanceSkipped > 0) {
+        lowRelevanceSkip = {
+          skipped: entry.lowRelevanceSkipped | 0,
+          samples: Array.isArray(entry.lowRelevanceSamples) ? entry.lowRelevanceSamples.slice(0, 10) : [],
+        };
+        onEvent({
+          step: 'low-relevance-skipped',
+          message: `素材源「${source.name}」跳过 ${entry.lowRelevanceSkipped} 个低相关页（登录墙/法务/404/营销页），未入库`,
+          detail: { lowRelevanceSkipped: lowRelevanceSkip.skipped, samples: lowRelevanceSkip.samples },
+        });
+      }
       continue;
     }
     const id = makeItemId(sourceId, entry.originKey);
@@ -302,11 +317,25 @@ export async function refreshSource(sourceOrId, opts = {}) {
     ...(policySkip && policySkip.skipped > 0
       ? { policySkipped: policySkip.skipped, policySamples: policySkip.samples }
       : {}),
+    // B080800：低相关页过滤丢弃数（加性字段，与 policySkipped 同口径）
+    ...(lowRelevanceSkip && lowRelevanceSkip.skipped > 0
+      ? { lowRelevanceSkipped: lowRelevanceSkip.skipped, lowRelevanceSamples: lowRelevanceSkip.samples }
+      : {}),
     ...(truncation && truncation.dropped > 0
       ? { truncated: true, droppedCount: truncation.dropped, totalCandidates: truncation.total, maxPages: truncation.cap }
       : {}),
     ...(errors.length ? { errors } : {}),
   });
+  // B080800：store.mjs 的 writeManifest 只持久化已知字段，低相关过滤的可观测字段需要显式补丁写入。
+  if (lowRelevanceSkip && lowRelevanceSkip.skipped > 0) {
+    const patched = readManifest(sourceId);
+    if (patched) {
+      patched.lowRelevanceSkipped = lowRelevanceSkip.skipped;
+      patched.lowRelevanceSamples = lowRelevanceSkip.samples;
+      writeJsonAtomic(sourceManifestPath(sourceId), patched);
+    }
+  }
+
   markFetched(sourceId, fetchedAt);
 
   const summary = {
@@ -331,6 +360,8 @@ export async function refreshSource(sourceOrId, opts = {}) {
     degraded,
     staleCount: stalePreserved,
     policySkipped: policySkip ? policySkip.skipped : 0,
+    // B080800：低相关页过滤丢弃数（加性字段）
+    lowRelevanceSkipped: lowRelevanceSkip ? lowRelevanceSkip.skipped : 0,
     droppedCount: truncation ? truncation.dropped : 0,
     totalCandidates: truncation ? truncation.total : outItems.length,
     lastFetchedAt: fetchedAt,
