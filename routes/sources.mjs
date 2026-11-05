@@ -41,7 +41,14 @@ export default function sourcesRoutes(deps) {
           const data = loadSources();
           const sources = data.sources.map((s) => {
             const m = readManifest(s.id);
-            return { ...s, itemCount: m ? m.items.length : 0 };
+            return {
+              ...s,
+              itemCount: m ? m.items.length : 0,
+              // maxPages 截断可观测：前端据此显示「素材被截断，另有 N 条未入库」徽标
+              truncated: !!(m && m.truncated),
+              droppedCount: m && Number.isFinite(m.droppedCount) ? m.droppedCount : 0,
+              ...(m && Number.isFinite(m.totalCandidates) ? { totalCandidates: m.totalCandidates } : {}),
+            };
           });
           send(res, 200, { version: data.version, sources });
         } catch (err) {

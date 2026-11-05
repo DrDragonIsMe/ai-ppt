@@ -57,6 +57,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
   const newIds = new Set();
   const errors = [];
   let added = 0; let updated = 0; let unchanged = 0;
+  let truncation = null; // { collected, dropped, total, cap }
 
   const ctx = {
     fetchPage: opts.fetchPage,
@@ -70,6 +71,21 @@ export async function refreshSource(sourceOrId, opts = {}) {
     if (entry.kind === 'error') {
       errors.push({ origin: entry.origin || null, error: entry.error || 'unknown error' });
       onEvent({ step: 'fetch-error', message: `抓取失败：${entry.origin || ''}`, detail: { origin: entry.origin, error: entry.error } });
+      continue;
+    }
+    // 采集器在因 maxPages 截断时补发 summary：转为明确告警事件 + 记入 manifest，供前端徽标提示
+    if (entry.kind === 'summary') {
+      truncation = {
+        collected: entry.collected | 0,
+        dropped: entry.dropped | 0,
+        total: entry.total | 0,
+        cap: Number.isFinite(entry.cap) ? entry.cap : null,
+      };
+      onEvent({
+        step: 'truncated',
+        message: `素材源「${source.name}」被 maxPages 截断：共 ${entry.total} 个候选，仅入库 ${entry.collected} 个，丢弃 ${entry.dropped} 个（上限 maxPages=${entry.cap}）`,
+        detail: truncation,
+      });
       continue;
     }
     const id = makeItemId(sourceId, entry.originKey);
@@ -144,6 +160,9 @@ export async function refreshSource(sourceOrId, opts = {}) {
     fetchedAt,
     fingerprint,
     items: newItems,
+    ...(truncation && truncation.dropped > 0
+      ? { truncated: true, droppedCount: truncation.dropped, totalCandidates: truncation.total, maxPages: truncation.cap }
+      : {}),
     ...(errors.length ? { errors } : {}),
   });
   markFetched(sourceId, fetchedAt);
@@ -160,6 +179,9 @@ export async function refreshSource(sourceOrId, opts = {}) {
     errorList: errors,
     fingerprint,
     itemCount: newItems.length,
+    truncated: !!(truncation && truncation.dropped > 0),
+    droppedCount: truncation ? truncation.dropped : 0,
+    totalCandidates: truncation ? truncation.total : newItems.length,
     lastFetchedAt: fetchedAt,
   };
   return summary;

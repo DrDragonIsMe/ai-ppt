@@ -29,6 +29,7 @@ export async function* collectSite(source, ctx = {}) {
   const queue = [{ url: origin, depth: 0 }];
   const seen = new Set([origin]);
   let fetched = 0;
+  let yielded = 0;
 
   while (queue.length && fetched < maxPages) {
     const { url, depth } = queue.shift();
@@ -46,6 +47,7 @@ export async function* collectSite(source, ctx = {}) {
 
     const html = page.html;
     const body = extractFromHtml(html);
+    yielded++;
     yield {
       kind: 'text',
       origin: url,
@@ -66,7 +68,8 @@ export async function* collectSite(source, ctx = {}) {
     }
   }
 
-  if (queue.length) {
-    ctx.onProgress?.(`达 maxPages=${maxPages}，停止（队列剩余 ${queue.length} 个待抓 URL）`);
+  // 因 maxPages 截断：队列里仍有已发现但未抓的同域链接 → 显式上报丢弃数
+  if (queue.length > 0) {
+    yield { kind: 'summary', collected: yielded, dropped: queue.length, total: yielded + queue.length, cap: maxPages };
   }
 }

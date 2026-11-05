@@ -46,11 +46,12 @@ export async function* collectDir(source, ctx = {}) {
   const include = Array.isArray(source.options?.include) && source.options.include.length
     ? source.options.include
     : null;
-  const maxItems = Number.isFinite(source.options?.maxPages) ? source.options.maxPages : Infinity;
+  const cap = Number.isFinite(source.options?.maxPages) ? source.options.maxPages : Infinity;
   const tags = source.tags || [];
 
   const stack = [root];
-  let count = 0;
+  let collected = 0;
+  let eligible = 0; // include 命中的文本/素材文件总数（含因超上限被丢弃的）
   const visited = new Set();
 
   while (stack.length) {
@@ -65,10 +66,6 @@ export async function* collectDir(source, ctx = {}) {
       continue;
     }
     for (const ent of entries) {
-      if (count >= maxItems) {
-        ctx.onProgress?.(`已达条目上限 maxPages=${maxItems}，停止遍历`);
-        return;
-      }
       const abs = path.join(dir, ent.name);
       const rel = path.relative(root, abs).split(path.sep).join('/');
 
@@ -98,10 +95,14 @@ export async function* collectDir(source, ctx = {}) {
       const ext = extOf(ent.name);
       const kind = classifyExt(ext);
       if (kind === 'unknown') continue;
-      if (!include && kind !== 'text') continue; // 默认只收文本；media 需显式 include 命中
-      if (include && !matchesAny(rel, include)) continue;
+      const pathOk = include ? matchesAny(rel, include) : kind === 'text'; // 默认只收文本；media 需显式 include 命中
+      if (!pathOk) continue;
 
-      count++;
+      eligible++;
+      // 超过 maxPages：仍继续遍历以如实统计丢弃数，但不再读取正文/入库
+      if (collected >= cap) continue;
+      collected++;
+
       if (kind === 'media') {
         yield {
           kind: 'media',
@@ -127,10 +128,15 @@ export async function* collectDir(source, ctx = {}) {
           body: text,
           tags: [...tags],
         };
-        ctx.onProgress?.(`采集 ${rel}`, { index: count });
+        ctx.onProgress?.(`采集 ${rel}`, { index: collected });
       } catch (err) {
         yield { kind: 'error', origin: abs, error: `抽取失败 ${rel}: ${err.message}` };
       }
     }
+  }
+
+  const dropped = eligible - collected;
+  if (dropped > 0) {
+    yield { kind: 'summary', collected, dropped, total: eligible, cap };
   }
 }

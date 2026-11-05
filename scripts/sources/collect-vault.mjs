@@ -54,11 +54,12 @@ export async function* collectVault(source, ctx = {}) {
   const anyOfTags = Array.isArray(source.options?.anyOfTags) ? source.options.anyOfTags : null;
   const globalTags = source.tags || [];
 
-  const maxItems = Number.isFinite(source.options?.maxPages) ? source.options.maxPages : Infinity;
+  const cap = Number.isFinite(source.options?.maxPages) ? source.options.maxPages : Infinity;
 
   const stack = [scopeRoot];
   const visited = new Set();
-  let count = 0;
+  let collected = 0;
+  let dropped = 0; // 因超过 maxPages 而未入库的合格笔记数
 
   while (stack.length) {
     const dir = stack.pop();
@@ -72,10 +73,6 @@ export async function* collectVault(source, ctx = {}) {
       continue;
     }
     for (const ent of entries) {
-      if (count >= maxItems) {
-        ctx.onProgress?.(`vault 达条目上限 maxPages=${maxItems}`);
-        return;
-      }
       const abs = path.join(dir, ent.name);
       const rel = path.relative(vaultRoot, abs).split(path.sep).join('/');
       if (ent.isDirectory()) {
@@ -101,7 +98,8 @@ export async function* collectVault(source, ctx = {}) {
           : (frontMatter.tags ? [String(frontMatter.tags)] : []);
         if (!anyOfTags.some((t) => noteTags.includes(t))) continue;
       }
-      count++;
+      if (collected >= cap) { dropped++; continue; } // 合格但超上限：如实计数，不入库
+      collected++;
       yield {
         kind: 'text',
         origin: rel,
@@ -110,7 +108,11 @@ export async function* collectVault(source, ctx = {}) {
         body: content.replace(/^\s*\n+/, '').trim(),
         tags: [...globalTags],
       };
-      ctx.onProgress?.(`采集笔记 ${rel}`, { index: count });
+      ctx.onProgress?.(`采集笔记 ${rel}`, { index: collected });
     }
+  }
+
+  if (dropped > 0) {
+    yield { kind: 'summary', collected, dropped, total: collected + dropped, cap };
   }
 }

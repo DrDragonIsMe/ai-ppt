@@ -57,6 +57,11 @@ export function writeManifest(sourceId, manifest) {
     fetchedAt: manifest.fetchedAt || new Date().toISOString(),
     fingerprint: manifest.fingerprint || '',
     items: Array.isArray(manifest.items) ? manifest.items : [],
+    // 因 maxPages 截断时的可观测标记（加性字段，供 GET /api/sources 与前端徽标使用）
+    ...(manifest.truncated ? { truncated: true } : {}),
+    ...(Number.isFinite(manifest.droppedCount) ? { droppedCount: manifest.droppedCount } : {}),
+    ...(Number.isFinite(manifest.totalCandidates) ? { totalCandidates: manifest.totalCandidates } : {}),
+    ...(Number.isFinite(manifest.maxPages) ? { maxPages: manifest.maxPages } : {}),
     ...(manifest.errors ? { errors: manifest.errors } : {}),
   };
   writeJsonAtomic(sourceManifestPath(sourceId), payload);

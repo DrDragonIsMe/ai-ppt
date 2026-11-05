@@ -217,6 +217,62 @@ describe('dir source: maxBytesPerItem truncation', () => {
 });
 
 // ---------------------------------------------------------------------------
+// maxPages 截断必须显式可观测（manifest + NDJSON + GET /api/sources）
+// ---------------------------------------------------------------------------
+describe('maxPages truncation is explicitly reported', () => {
+  it('dir: >maxPages files → droppedCount 如实上报（summary/manifest/NDJSON/listItems）', async () => {
+    freshEnv('trunc-report');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-tr-'));
+    for (let i = 0; i < 5; i++) fs.writeFileSync(path.join(dir, `d${i}.md`), `# Doc ${i}\nbody ${i}`);
+    const source = upsertSource({ type: 'dir', name: 'Trunc', target: dir, options: { maxPages: 3 } }).source;
+    const events = [];
+    const r = await refreshSource(source.id, { onEvent: (e) => events.push(e) });
+    assert.equal(r.itemCount, 3);
+    assert.equal(r.truncated, true);
+    assert.equal(r.droppedCount, 2);
+    assert.equal(r.totalCandidates, 5);
+    assert.equal(listItems({ sourceId: source.id }).length, 3);
+    const m = readManifest(source.id);
+    assert.equal(m.truncated, true);
+    assert.equal(m.droppedCount, 2);
+    assert.equal(m.totalCandidates, 5);
+    assert.equal(m.maxPages, 3);
+    const ev = events.find((e) => e.step === 'truncated');
+    assert.ok(ev, '应有 truncated NDJSON 事件');
+    assert.match(ev.message, /maxPages=3/);
+    assert.match(ev.message, /丢弃 2/);
+  });
+
+  it('未截断时不带 truncated 标记（默认无上限目录不受影响）', async () => {
+    freshEnv('trunc-none');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-tn-'));
+    for (let i = 0; i < 3; i++) fs.writeFileSync(path.join(dir, `n${i}.md`), `# N${i}`);
+    const source = upsertSource({ type: 'dir', name: 'NoCap', target: dir }).source; // 无 maxPages → 无上限
+    const r = await refreshSource(source.id);
+    assert.equal(r.itemCount, 3);
+    assert.equal(r.truncated, false);
+    assert.equal(r.droppedCount, 0);
+    assert.ok(!('truncated' in readManifest(source.id)));
+    assert.ok(!('droppedCount' in readManifest(source.id)));
+  });
+
+  it('GET /api/sources 透出 truncated/droppedCount 供前端徽标', async () => {
+    freshEnv('trunc-api');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-ta-'));
+    for (let i = 0; i < 4; i++) fs.writeFileSync(path.join(dir, `y${i}.md`), `# Y${i}`);
+    const created = await call(makeRouteCtx(), 'POST', '/api/sources', { body: { type: 'dir', name: 'T', target: dir, options: { maxPages: 2 } } });
+    const id = created.body.source.id;
+    await refreshSource(id);
+    const listed = await call(makeRouteCtx(), 'GET', '/api/sources');
+    const src = listed.body.sources.find((s) => s.id === id);
+    assert.equal(src.itemCount, 2);
+    assert.equal(src.truncated, true);
+    assert.equal(src.droppedCount, 2);
+    assert.equal(src.totalCandidates, 4);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // url + site via local http server (allowPrivateNetwork), and SSRF default-off
 // ---------------------------------------------------------------------------
 describe('url & site collectors (local http server)', () => {
@@ -276,6 +332,21 @@ describe('url & site collectors (local http server)', () => {
     await refreshSource(source.id, { allowPrivateNetwork: true });
     const titles = listItems({ sourceId: source.id }).map((i) => i.title);
     assert.deepEqual(titles, ['Home']);
+  });
+
+  it('site truncation: maxPages below discovered links reports dropped explicitly', async () => {
+    freshEnv('site-trunc');
+    const source = upsertSource({ type: 'site', name: 'ST', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 2 } }).source;
+    const events = [];
+    const r = await refreshSource(source.id, { allowPrivateNetwork: true, onEvent: (e) => events.push(e) });
+    assert.equal(r.itemCount, 2);        // home + a (BFS 前 2 页)
+    assert.equal(r.truncated, true);
+    assert.equal(r.droppedCount, 2);     // b + c 已发现但因上限未抓
+    assert.equal(r.totalCandidates, 4);
+    const truncEv = events.find((e) => e.step === 'truncated');
+    assert.ok(truncEv, 'site 截断应发 truncated 事件');
+    assert.equal(truncEv.detail.dropped, 2);
+    assert.equal(readManifest(source.id).droppedCount, 2);
   });
 
   it('SSRF guard: url source WITHOUT allowPrivateNetwork refuses localhost', async () => {
