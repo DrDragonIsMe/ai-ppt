@@ -7,10 +7,12 @@ import { requireFiniteOption } from './registry.mjs';
 import { fetchPage, extractFromHtml, extractLinks, guessTitle } from './net.mjs';
 
 // ---------------------------------------------------------------------------
-// 低相关页过滤（B080800）
+// 低相关页过滤（B080800 / B091200）
 // 目标：在入库前丢掉登录墙、法务页、404/访问受限、以及通用页脚营销页。
 // 原则：优先用标题匹配，正文仅在“整页基本只剩登录表单”这种极强信号时才用；
 // 用知识库/文档常见关键词做白名单，宁可漏杀也不误伤合法知识中心页面。
+// 优先级：登录墙/法务/404 强信号整标题命中先于白名单（见 STRONG_SIGNAL_TITLES），
+// 其余顺序不变——白名单短路 → 标题/URL 黑名单 → 品牌口号 → 登录墙正文。
 // ---------------------------------------------------------------------------
 
 const WHITELIST_ASC = [
@@ -39,6 +41,63 @@ const WHITELIST_CN = [
   // B091100：配合 isBrandSloganPage 放宽到「多段式 · 标题」，补全知识中心类高频词，避免误杀。
   '知识', '中心', '学院', '资料', '知识库',
 ];
+
+// ---------------------------------------------------------------------------
+// 强信号整标题优先判定（B091200）
+// 登录墙 / 法务 / 404-受限 三类强信号必须先于 hasWhitelist 短路：WHITELIST_CN 里的
+// 通用词（知识/中心/学院/资料/知识库）会把「标题主体本身就是登录墙或 404」的页面
+// 误救成 KEEP（实测例证：`登录中心`、`404 资料中心`）。这类页面入库正是低相关过滤
+// 要拦的东西，所以强信号判定优先级高于白名单，命中即 DROP，白名单无权保护。
+// 硬约束：只允许整标题命中（归一化后的主体 == 词干），不许子串命中。归一化 =
+// trim + 小写 + 剥掉尾部「· 站点名」后缀段（取第一个 · 之前的主体）+ 去标点。
+// 为何必须整标题命中：`Login API Reference`、`Sign in with SSO — Admin Guide` 等
+// 合法文档页标题里含 login/sign in 字样，但主体不是登录墙；一旦改成子串命中
+// （includes）就会把这类文档页误杀成 DROP。词干只收录「整个标题就是该强信号」的
+// 惯用形态（如 `登录中心`/`登录入口`/`404 资料中心`），语义歧义的词（如「认证中心」
+// 可指证书认证中心）一律不收。
+// ---------------------------------------------------------------------------
+const STRONG_LOGIN_TITLES = [
+  // 中文门户/电商登录页惯用整标题（与「登录」相关的独立页面）
+  '登录', '登陆', '登入', '登录中心', '登录入口', '登陆中心', '登陆入口', '登录页', '登录页面',
+  '账号登录', '用户登录', '会员登录', '注册',
+  // 英文登录页整标题
+  'login', 'log in', 'sign in', 'signin', 'sign up', 'signup', 'register', 'logon', 'log on', 'sign on',
+];
+
+const STRONG_LEGAL_TITLES = [
+  'terms of service', 'terms of use', 'privacy policy', 'privacy notice', 'privacy statement',
+  'cookie policy', 'cookie notice', 'cookie settings', 'cookie consent', 'legal notice', 'legal terms',
+  'gdpr', '服务条款', '隐私政策', '用户协议', '使用条款', 'cookie政策', '法律声明', '免责声明', '合规',
+];
+
+const STRONG_RESTRICTED_TITLES = [
+  // 404 词干含「404 + 站点栏目名」的实测形态：`404 资料中心` 是真实 404 页标题，
+  // 主体恰好由白名单词（资料/中心）组成，只有整标题词干才能拦下且不误伤
+  // `404 Error Handling Guide` 这类含 404 字样但带文档词的合法页。
+  '404', '404 资料中心', 'page not found', 'not found', 'access denied', 'access forbidden',
+  'forbidden', 'unauthorized', 'unauthorised', '403 forbidden', '503 service unavailable', 'error page',
+  '页面不存在', '找不到页面', '访问被拒绝', '无权访问', '未授权', '禁止访问', '无法访问',
+];
+
+const STRONG_SIGNAL_TITLES = new Set([
+  ...STRONG_LOGIN_TITLES,
+  ...STRONG_LEGAL_TITLES,
+  ...STRONG_RESTRICTED_TITLES,
+]);
+
+function normalizeStrongTitle(title) {
+  return String(title || '')
+    .trim()
+    .split('·')[0] // 剥掉尾部「· 站点名」后缀段（取第一个 · 之前的主体）
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_]/gu, '') // 去标点，保留字母/数字/下划线/空白（含 CJK）
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isStrongSignalTitle(title) {
+  return STRONG_SIGNAL_TITLES.has(normalizeStrongTitle(title));
+}
 
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -121,10 +180,6 @@ function isLoginOnlyBody(body) {
   return wordCount < 80 && hasSignIn && hasPassword;
 }
 
-/**
- * 判定一页是否属于低相关页（登录墙、法务、404/受限、通用营销页）。
- * 先过知识库/文档白名单；白名单保护下的页面不会被黑名单误杀。
- */
 function isBrandSloganPage(entry) {
   // 品牌口号型标题：真实页面普遍是 "页面 · 栏目 · 站点名" 的多段式（如 GitHub 首页）。
   // 只要标题里存在至少一个间隔号且首尾段非空即为弱信号，
@@ -136,8 +191,21 @@ function isBrandSloganPage(entry) {
   return isShallowMarketingPath(entry.origin) || effectiveBodyLength(entry.body) < 200;
 }
 
+/**
+ * 判定一页是否属于低相关页（登录墙、法务、404/受限、通用营销页）。
+ * 优先级设计（B091200）：
+ *   1. 登录墙 / 法务 / 404-受限 强信号**整标题**命中 → 直接 DROP（先于白名单，
+ *      白名单无权保护——`登录中心`/`404 资料中心` 正是被 WHITELIST_CN 误救的
+ *      登录墙与 404 页）。仅限整标题命中：`Login API Reference`、`Sign in with
+ *      SSO — Admin Guide` 只含登录字样作子串，必须仍 KEEP。
+ *   2. 知识库/文档白名单命中 → KEEP（白名单保护下的页面不会被黑名单误杀）。
+ *   3. 标题黑名单 / URL 路径黑名单 → DROP。
+ *   4. 品牌口号型标题（多段式 · 标题 + 浅层营销路径/薄正文）→ DROP。
+ *   5. 登录墙正文（整页基本只剩登录表单）→ DROP。
+ */
 export function isLowRelevancePage(entry) {
   const title = String(entry.title || '');
+  if (isStrongSignalTitle(title)) return true;
   if (hasWhitelist(title)) return false;
   if (isBlacklistedTitle(title) || isBlacklistedUrlPath(entry.origin)) return true;
   if (isBrandSloganPage(entry)) return true;

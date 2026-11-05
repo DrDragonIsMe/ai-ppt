@@ -626,6 +626,11 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(isLowRelevancePage(e('Log in to your account', 'https://app.example.com/sso', shortBody)), true);
     assert.equal(isLowRelevancePage(e('Terms of Service', 'https://example.com/legal/terms', shortBody)), true);
     assert.equal(isLowRelevancePage(e('404 Not Found', 'https://example.com/nope', shortBody)), true);
+    // B091200：强信号整标题命中先于白名单——标题主体本身就是登录墙/404 时，
+    // WHITELIST_CN（中心/资料）无权救援，即使正文厚实也必须 DROP。
+    assert.equal(isLowRelevancePage(e('登录中心', 'https://portal.example.com/login', longBody)), true);
+    assert.equal(isLowRelevancePage(e('登录入口', 'https://kb.example.com/login', longBody)), true);
+    assert.equal(isLowRelevancePage(e('404 资料中心', 'https://example.com/docs/resource', longBody)), true);
 
     // 必须保留（合法知识中心/内容页，误杀即 P1）
     assert.equal(isLowRelevancePage(e('知识中心', 'https://help.example.com/', longBody)), false);
@@ -648,6 +653,8 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(isLowRelevancePage(e('三人行 · 技术笔记', 'https://blog.example.com/', longBody)), false);
     // B091100：多段式中文知识中心标题，即使正文很薄也因 WHITELIST_CN 补词而 KEEP。
     assert.equal(isLowRelevancePage(e('知识中心 · Acme', 'https://acme.com/kb', shortBody)), false);
+    // B091200：同「· 站点名」后缀段结构的合法中心页，剥离后缀后主体不是强信号词干 → 仍 KEEP。
+    assert.equal(isLowRelevancePage(e('帮助中心 · 产品', 'https://help.example.com/product', longBody)), false);
     // B091100 设计边界：正文厚实的站点根首页不在本过滤器目标范围内，不得加 / 回浅层清单。
     assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/', longBody)), false);
   });
