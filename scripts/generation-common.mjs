@@ -430,7 +430,7 @@ ${slidesHtml}    </main>
       <div class="overview-grid"></div>
     </div>
 
-    <div id="help" class="help">
+    <div id="help" class="help hidden">
       <div class="help-header">
         <div class="help-title">快捷键</div>
         <div class="help-hint">按 <kbd>?</kbd> 隐藏/显示</div>

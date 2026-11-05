@@ -37,7 +37,8 @@
             <span class="task-center-icon">◎</span>
             <span id="task-center-badge" class="task-center-badge hidden">0</span>
           </button>
-        <button id="btn-settings-topbar" class="btn-secondary btn-icon" title="系统设置（侧边栏也有）" data-i18n-title="系统设置（侧边栏也有）">
+        <button id="btn-agent-topbar" class="btn-secondary topbar-agent-btn" data-i18n="薪小灵">薪小灵</button>
+        <button id="btn-settings-topbar" class="btn-secondary btn-icon" title="系统设置" data-i18n-title="系统设置">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -61,28 +62,18 @@
       <div id="sidebar-scrim" class="sidebar-scrim hidden"></div>
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-tabs">
-          <button class="sidebar-tab active" data-tab="fragments"><span data-i18n="速记">速记</span><span class="tab-badge hidden" id="badge-fragments"></span></button>
+          <button class="sidebar-tab active" data-tab="home"><span data-i18n="工作台">工作台</span><span class="tab-badge hidden" id="badge-home"></span></button>
           <button class="sidebar-tab" data-tab="vault"><span data-i18n="知识库">知识库</span><span class="tab-badge hidden" id="badge-vault"></span></button>
-          <button class="sidebar-tab" data-tab="agent"><span data-i18n="薪小灵">薪小灵</span></button>
-          <button class="sidebar-tab" data-tab="cards"><span data-i18n="知识卡片">知识卡片</span><span class="tab-badge hidden" id="badge-cards"></span></button>
-          <button class="sidebar-tab" data-tab="study"><span data-i18n="学习">学习</span><span class="tab-badge hidden" id="badge-study"></span></button>
-          <button class="sidebar-tab" data-tab="projects"><span data-i18n="PPT 作品">PPT 作品</span></button>
-        </div>
-
-        <div class="sidebar-tabs-spacer"></div>
-        <div class="sidebar-tabs-bottom">
-          <button id="btn-settings-tab" class="sidebar-tab btn-icon" data-tab="settings" title="系统设置" data-i18n-title="系统设置">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82v-.01a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-          </button>
+          <button class="sidebar-tab" data-tab="projects"><span data-i18n="作品">作品</span></button>
+          <button class="sidebar-tab" data-tab="review"><span data-i18n="复习">复习</span><span class="tab-badge hidden" id="badge-review"></span></button>
         </div>
 
         <div id="fragments-sidebar-content" class="sidebar-content">
-          <div class="sidebar-header">
-            <div class="sidebar-title" data-i18n="速记">速记</div>
+          <div class="sidebar-header sidebar-header-rich">
+            <div>
+              <div class="sidebar-title" data-i18n="工作台">工作台</div>
+              <div class="sidebar-subtitle" data-i18n="先收集碎片，再整理成笔记、作品和复习材料">先收集碎片，再整理成笔记、作品和复习材料</div>
+            </div>
           </div>
           <div class="fragment-input-area" id="fragment-input-area">
             <textarea id="fragment-input" rows="3" placeholder="记录一个知识点、一道题、一个想法… #标签，可直接粘贴/拖入图片、音视频、PDF" data-i18n-placeholder="记录一个知识点、一道题、一个想法… #标签，可直接粘贴/拖入图片、音视频、PDF"></textarea>
@@ -104,8 +95,8 @@
         </div>
 
         <div id="project-sidebar-content" class="sidebar-content hidden">
-          <div class="sidebar-header">
-            <div class="sidebar-title" data-i18n="PPT 作品">PPT 作品</div>
+          <div class="sidebar-header sidebar-header-rich">
+            <div class="sidebar-title" data-i18n="作品">作品</div>
             <div style="display:flex;gap:6px;">
               <button id="btn-create-project-side" class="btn-icon" title="新建项目 (Ctrl+N)" data-i18n-title="新建项目 (Ctrl+N)">+</button>
               <button id="btn-collapse-sidebar" class="btn-icon sidebar-collapse" title="折叠/展开" data-i18n-title="折叠/展开">
@@ -120,13 +111,54 @@
         </div>
 
         <div id="vault-sidebar-content" class="sidebar-content hidden">
-          <div class="sidebar-header">
-            <div class="sidebar-title" data-i18n="知识库笔记">知识库笔记</div>
-            <div style="display:flex;gap:6px;">
-              <button id="btn-vault-tasks" class="btn-icon" title="任务面板" data-i18n-title="任务面板">☑</button>
-              <button id="btn-vault-tags" class="btn-icon" title="标签浏览" data-i18n-title="标签浏览">#</button>
-              <button id="btn-vault-journal" class="btn-icon" title="今日笔记（每日笔记）" data-i18n-title="今日笔记（每日笔记）">📅</button>
-              <button id="btn-vault-graph" class="btn-icon" title="知识星图" data-i18n-title="知识星图">
+          <div class="sidebar-header vault-sidebar-header">
+            <div>
+              <div class="sidebar-title" data-i18n="知识库笔记">知识库笔记</div>
+              <div class="sidebar-subtitle" data-i18n="集中管理笔记、专题与资料资产">集中管理笔记、专题与资料资产</div>
+            </div>
+            <button id="btn-vault-refresh" class="btn-icon" title="刷新列表" data-i18n-title="刷新列表">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6"></path>
+                <path d="M2.5 22v-6h6"></path>
+                <path d="M22 12a10 10 0 0 0-20 0"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="vault-sidebar-shell">
+            <section class="vault-overview-card">
+              <div class="vault-overview-head">
+                <div>
+                  <div class="vault-overview-kicker" data-i18n="知识库总览">知识库总览</div>
+                  <div class="vault-overview-title" data-i18n="把笔记、专题和资料放在一个工作台里">把笔记、专题和资料放在一个工作台里</div>
+                </div>
+              </div>
+              <div class="vault-overview-stats">
+                <div class="vault-overview-stat">
+                  <strong id="vault-stat-note-count">0</strong>
+                  <span data-i18n="篇笔记">篇笔记</span>
+                </div>
+                <div class="vault-overview-stat">
+                  <strong id="vault-stat-topic-count">0</strong>
+                  <span data-i18n="个专题">个专题</span>
+                </div>
+                <div class="vault-overview-stat">
+                  <strong id="vault-stat-updated-today">0</strong>
+                  <span data-i18n="今日更新">今日更新</span>
+                </div>
+              </div>
+              <div class="vault-primary-actions">
+                <button id="btn-vault-new" class="btn-primary" data-i18n="+ 新建笔记">+ 新建笔记</button>
+                <button id="btn-vault-assets-primary" class="btn-secondary" data-i18n="资产库">资产库</button>
+              </div>
+            </section>
+            <div class="vault-management-grid">
+              <button id="btn-vault-inbox" class="vault-management-btn" data-i18n="收件箱">收件箱</button>
+              <button id="btn-vault-new-topic" class="vault-management-btn" data-i18n="新建专题">新建专题</button>
+              <button id="btn-vault-journal" class="vault-management-btn" data-i18n="今日笔记">今日笔记</button>
+              <button id="btn-vault-tasks" class="vault-management-btn" data-i18n="任务面板">任务面板</button>
+              <button id="btn-vault-tags" class="vault-management-btn" data-i18n="标签浏览">标签浏览</button>
+              <button id="btn-vault-graph" class="vault-management-btn vault-management-btn-icon" title="知识星图" data-i18n-title="知识星图">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="5" cy="11" r="3"></circle>
@@ -135,27 +167,15 @@
                   <path d="M8 13l6 3"></path>
                   <path d="M16 9l-5 2"></path>
                 </svg>
-              </button>
-              <button id="btn-vault-refresh" class="btn-icon" title="刷新列表" data-i18n-title="刷新列表">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21.5 2v6h-6"></path>
-                  <path d="M2.5 22v-6h6"></path>
-                  <path d="M22 12a10 10 0 0 0-20 0"></path>
-                </svg>
-              </button>
-              <button id="btn-vault-new-topic" class="btn-icon" title="新建专题文件夹" data-i18n-title="新建专题文件夹">📁</button>
-              <button id="btn-vault-new" class="btn-icon" title="新建笔记" data-i18n-title="新建笔记">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
+                <span data-i18n="知识星图">知识星图</span>
               </button>
             </div>
-          </div>
           <div class="vault-search">
             <input type="search" id="vault-search-input" placeholder="搜索笔记…" data-i18n-placeholder="搜索笔记…">
+          </div>
+          <div class="vault-list-header">
+            <span data-i18n="全部笔记">全部笔记</span>
+            <span id="vault-list-meta" data-i18n="按专题整理">按专题整理</span>
           </div>
           <div id="vault-note-select-bar" class="vault-note-select-bar hidden">
             <span id="vault-note-select-count">已选 0 篇</span>
@@ -165,6 +185,7 @@
             <button id="btn-note-select-clear" class="btn-secondary" style="padding:4px 10px;font-size:12px;" data-i18n="清空">清空</button>
           </div>
           <div id="vault-note-list" class="vault-note-list"></div>
+          </div>
         </div>
 
         <div id="agent-sidebar-content" class="sidebar-content hidden">
@@ -179,49 +200,38 @@
           <input type="file" id="agent-file-input" multiple accept="image/*,video/*,audio/*,.pdf,.docx" style="display:none;">
         </div>
 
-        <div id="cards-sidebar-content" class="sidebar-content hidden">
+        <div id="review-sidebar-content" class="sidebar-content hidden">
           <div class="sidebar-header">
-            <div class="sidebar-title" data-i18n="知识卡片">知识卡片</div>
-            <div style="display:flex;gap:6px;">
-              <button id="btn-cards-due" class="btn-icon" title="待复习" data-i18n-title="待复习">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2v4"></path>
-                  <path d="M18.2 6.8l2.8 2.8"></path>
-                  <path d="M22 12v4"></path>
-                  <path d="M17.2 17.2l2.8 2.8"></path>
-                  <path d="M12 22v-4"></path>
-                  <path d="M6.8 17.2l-2.8 2.8"></path>
-                  <path d="M2 16v-4"></path>
-                  <path d="M3.0 6.8l2.8-2.8"></path>
-                  <path d="M6 12a6 6 0 1 0 12 0 6 6 0 0 0-12 0"></path>
-                </svg>
-              </button>
-              <button id="btn-cards-refresh" class="btn-icon" title="刷新列表" data-i18n-title="刷新列表">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21.5 2v6h-6"></path>
-                  <path d="M2.5 22v-6h6"></path>
-                  <path d="M22 12a10 10 0 0 0-20 0"></path>
-                </svg>
-              </button>
-              <button id="btn-cards-new" class="btn-icon" title="新建卡片" data-i18n-title="新建卡片">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-              </button>
+            <div>
+              <div class="sidebar-title" data-i18n="复习">复习</div>
+              <div class="sidebar-subtitle" data-i18n="把卡片、错题、测验和训练放在同一条复习线里">把卡片、错题、测验和训练放在同一条复习线里</div>
             </div>
           </div>
-          <div id="cards-list" class="vault-note-list"></div>
+          <div class="review-sidebar-shell">
+            <section class="review-overview-card">
+              <div class="review-overview-kicker" data-i18n="复习路径">复习路径</div>
+              <div class="review-overview-title" data-i18n="先看知识卡片，再攻克错题，最后进入训练">先看知识卡片，再攻克错题，最后进入训练</div>
+            </section>
+            <div class="review-nav-grid">
+              <button class="review-nav-btn active" data-review-target="cards" data-i18n="知识卡片">知识卡片</button>
+              <button class="review-nav-btn" data-review-target="mistakes" data-i18n="错题集">错题集</button>
+              <button class="review-nav-btn" data-review-target="exams" data-i18n="测验">测验</button>
+              <button class="review-nav-btn" data-review-target="training" data-i18n="复习训练">复习训练</button>
+            </div>
+            <div class="review-sidebar-actions">
+              <button id="btn-cards-due" class="btn-secondary" data-i18n="待复习">待复习</button>
+              <button id="btn-cards-refresh" class="btn-secondary" data-i18n="刷新">刷新</button>
+              <button id="btn-cards-new" class="btn-primary" data-i18n="新建卡片">新建卡片</button>
+            </div>
+            <div class="review-sidebar-hint" data-i18n="选择上方任一入口，右侧会切换到对应的复习界面。">选择上方任一入口，右侧会切换到对应的复习界面。</div>
+          </div>
         </div>
       </aside>
 
       <main class="workspace">
         <div id="empty-state" class="empty-state hidden">
-          <h2 data-i18n="从速记开始，或打开一篇笔记">从速记开始，或打开一篇笔记</h2>
-          <p data-i18n="这里是你的知识中枢：随手记录速记，沉淀为笔记后可一键生成 PPT、视频或报告">这里是你的知识中枢：随手记录速记，沉淀为笔记后可一键生成 PPT、视频或报告</p>
+          <h2 data-i18n="从工作台开始，或打开一篇笔记">从工作台开始，或打开一篇笔记</h2>
+          <p data-i18n="这里是你的知识中枢：先收集碎片，再整理为笔记，并继续生成作品或安排复习">这里是你的知识中枢：先收集碎片，再整理为笔记，并继续生成作品或安排复习</p>
           <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
             <button id="btn-empty-new-note" class="btn-primary" data-i18n="+ 新建笔记">📝 + 新建笔记</button>
             <button id="btn-empty-fragment" class="btn-secondary" data-i18n="写速记">✏️ 写速记</button>
@@ -621,7 +631,7 @@
         <div id="vault-panel" class="vault-panel hidden">
           <div id="vault-no-note-selected" class="empty-state" style="padding:40px 20px;">
             <h3 style="font-size:16px;" data-i18n="选择一篇笔记">选择一篇笔记</h3>
-            <p style="opacity:0.65;" data-i18n="从左侧知识库列表选择一篇笔记，或点击「新建笔记」创建">从左侧知识库列表选择一篇笔记，或点击「新建笔记」创建</p>
+            <p style="opacity:0.65;" data-i18n="从左侧知识库列表选择一篇笔记，或从上方新建笔记、进入资产库开始整理">从左侧知识库列表选择一篇笔记，或从上方新建笔记、进入资产库开始整理</p>
           </div>
 
           <div id="vault-note-panel" class="hidden">
@@ -1318,7 +1328,7 @@
 
             <section class="card">
               <div class="card-title" data-i18n="数据与备份">数据与备份</div>
-              <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 12px;" data-i18n="所有数据保存在本地目录：projects/ 存放 PPT 作品，vault/ 存放知识库（速记、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。">所有数据保存在本地目录：projects/ 存放 PPT 作品，vault/ 存放知识库（速记、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。</p>
+              <p style="font-size: 13px; color: var(--ink); opacity: 0.65; line-height: 1.7; margin-bottom: 12px;" data-i18n="所有数据保存在本地目录：projects/ 存放作品，vault/ 存放知识库（碎片、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。">所有数据保存在本地目录：projects/ 存放作品，vault/ 存放知识库（碎片、笔记、卡片、错题）。备份会将数据完整复制到 .backup/ 目录。</p>
               <button id="btn-backup-now" class="btn-primary" style="padding: 8px 16px;" data-i18n="立即备份">立即备份</button>
             </section>
 
@@ -1782,7 +1792,7 @@
           <div class="help-scenarios">
             <div class="help-scenario">
               <div class="help-scenario-title" data-i18n="我想做 PPT">我想做 PPT</div>
-              <p data-i18n="在「知识库」打开一篇笔记 → 点「生成 PPT」；或到「PPT 作品」tab 新建项目，按 选材 → 生成 → 修改 → 发布 四步走完。">在「知识库」打开一篇笔记 → 点「生成 PPT」；或到「PPT 作品」tab 新建项目，按 选材 → 生成 → 修改 → 发布 四步走完。</p>
+              <p data-i18n="在「知识库」打开一篇笔记 → 点「生成 PPT」；或到「作品」里新建项目，按 选材 → 生成 → 修改 → 发布 四步走完。">在「知识库」打开一篇笔记 → 点「生成 PPT」；或到「作品」里新建项目，按 选材 → 生成 → 修改 → 发布 四步走完。</p>
             </div>
             <div class="help-scenario">
               <div class="help-scenario-title" data-i18n="我想整理笔记">我想整理笔记</div>

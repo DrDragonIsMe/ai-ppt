@@ -15,3 +15,21 @@ vault/assets/
 vault/.meta/
 published/
 test-output/
+
+# ---- 生成物与素材禁止入库（约定见 AGENTS.md「产物与素材入库策略」）----
+# 参考素材库（外部拿来的 deck / 视频，体积大且非本仓库产物）
+references/
+# 素材源抓取缓存与清单（随时可由源重新抓取）
+sources.json
+vault/.meta/source-cache/
+# 营销大纲与批量生成中间产物
+marketing/
+# 媒体文件一律不入库
+*.mp4
+*.mov
+*.m4v
+*.webm
+*.avi
+# 导出产物兜底（projects/* 已忽略，此处覆盖仓库根与任意层级）
+export/
+cover.png

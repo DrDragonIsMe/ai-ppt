@@ -1,0 +1,42 @@
+/* ===========================================
+   Theme: XRXS Teal (薪人薪事青)
+   - 基于薪人薪事品牌色 #00B4A5
+   - 专业、信赖、医疗行业友好
+   =========================================== */
+
+body.theme-xrxs-teal {
+  /* Brand / Accent */
+  --teal: #00B4A5;
+  --teal-light: #5FE0D4;
+  --accent: #00B4A5;
+  --accent-light: #E5F9F7;
+  --accent-dark: #00867C;
+
+  /* Ink + Neutrals */
+  --ink: #151A19;
+  --navy: #0B1413;
+  --slate: #5F7A74;
+  --muted: #5F7A74;
+  --cream: #FAFAF7;
+  --surface: #FFFFFF;
+  --surface-subtle: #EDF4F3;
+  --tile: #EDF4F3;
+  --tile-strong: #DFEDEB;
+  --border: #DFEDEB;
+  --border-strong: #C3D8D4;
+
+  /* Status */
+  --danger: #EF4444;
+  --success: #10B981;
+  --info: #3B82F6;
+
+  /* Gradients & Effects */
+  --gradient-primary: linear-gradient(135deg, #00B4A5 0%, #5FE0D4 100%);
+  --text-gradient: linear-gradient(135deg, #00867C 0%, #00B4A5 100%);
+  --gradient-hero: radial-gradient(ellipse 60% 50% at 10% 0%, rgba(0, 180, 165, 0.10), transparent 60%),
+                   radial-gradient(ellipse 50% 40% at 100% 100%, rgba(95, 224, 212, 0.08), transparent 60%);
+  --shadow-glow: 0 8px 32px -4px rgba(0, 180, 165, 0.3);
+  --shadow-glow-sm: 0 4px 16px -2px rgba(0, 180, 165, 0.25);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.85);
+}

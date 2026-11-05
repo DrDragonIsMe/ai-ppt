@@ -214,7 +214,7 @@ export async function selectProject(name) {
     const projectPanelEl = document.getElementById('project-panel');
     const chatMessagesEl = document.getElementById('chat-messages');
     if (chatMessagesEl) chatMessagesEl.innerHTML = '';
-    const knowledgeOnlyTabs = ['vault', 'cards', 'study', 'settings'];
+    const knowledgeOnlyTabs = ['home', 'vault', 'review', 'agent', 'settings'];
     if (knowledgeOnlyTabs.includes(S.currentSidebarTab)) _cb.switchSidebarTab('projects');
     else { _cb.hideAllMainPanels(); if (projectPanelEl) projectPanelEl.classList.remove('hidden'); }
     const cfg = await api('GET', `/api/projects/${encodeURIComponent(name)}/config`);
@@ -568,15 +568,15 @@ function buildGlobalSearchResults(query, datasets) {
     }
     for (const card of datasets.cards || []) {
         if (!(matchText(card.question, q) || matchText(card.answer, q) || matchText(card.explanation, q) || (card.tags || []).some((tag) => matchText(tag, q)))) continue;
-        results.push({ type: 'card', id: card.id, title: card.question || card.title || card.id, meta: `${t('知识卡片')} · ${(card.tags || []).slice(0, 2).join(' / ')}`, snippet: makeSnippet(`${card.answer || ''} ${card.explanation || ''}`, q), action: () => { _cb.switchSidebarTab('cards'); _cb.loadCards().then(() => _cb.selectCard(card.id)); } });
+        results.push({ type: 'card', id: card.id, title: card.question || card.title || card.id, meta: `${t('知识卡片')} · ${(card.tags || []).slice(0, 2).join(' / ')}`, snippet: makeSnippet(`${card.answer || ''} ${card.explanation || ''}`, q), action: () => { _cb.switchSidebarTab('review', 'cards'); _cb.loadCards().then(() => _cb.selectCard(card.id)); } });
     }
     for (const fragment of datasets.fragments || []) {
         if (!(matchText(fragment.content, q) || (fragment.tags || []).some((tag) => matchText(tag, q)))) continue;
-        results.push({ type: 'fragment', id: fragment.id, title: makeSnippet(fragment.content, q) || t('速记碎片'), meta: `${t('速记')} · ${(fragment.tags || []).slice(0, 2).join(' / ')}`, snippet: makeSnippet(fragment.content, q), action: () => { _cb.switchSidebarTab('fragments'); if (_cb.revealFragment) _cb.revealFragment(fragment.id); } });
+        results.push({ type: 'fragment', id: fragment.id, title: makeSnippet(fragment.content, q) || t('速记碎片'), meta: `${t('工作台')} · ${(fragment.tags || []).slice(0, 2).join(' / ')}`, snippet: makeSnippet(fragment.content, q), action: () => { _cb.switchSidebarTab('home'); if (_cb.revealFragment) _cb.revealFragment(fragment.id); } });
     }
     for (const mistake of datasets.mistakes || []) {
         if (!(matchText(mistake.question, q) || matchText(mistake.correctAnswer, q) || matchText(mistake.analysis, q) || (mistake.tags || []).some((tag) => matchText(tag, q)))) continue;
-        results.push({ type: 'mistake', id: mistake.id, title: mistake.question || mistake.id, meta: `${t('错题')} · ${mistake.subject || t('未分类')}`, snippet: makeSnippet(`${mistake.correctAnswer || ''} ${mistake.analysis || ''}`, q), action: () => { _cb.switchSidebarTab('study', 'mistakes'); _cb.loadMistakes().then(() => _cb.selectMistake(mistake.id)); } });
+        results.push({ type: 'mistake', id: mistake.id, title: mistake.question || mistake.id, meta: `${t('错题')} · ${mistake.subject || t('未分类')}`, snippet: makeSnippet(`${mistake.correctAnswer || ''} ${mistake.analysis || ''}`, q), action: () => { _cb.switchSidebarTab('review', 'mistakes'); _cb.loadMistakes().then(() => _cb.selectMistake(mistake.id)); } });
     }
     return results.slice(0, 12);
 }
@@ -1489,8 +1489,8 @@ function renderTagColumn(elId, items, type) {
 function openTagItem(type, id) {
     if (!id) return;
     if (type === 'note') { _cb.switchSidebarTab('vault'); _cb.selectNote(id); }
-    else if (type === 'card') { _cb.switchSidebarTab('cards'); _cb.loadCards().then(() => _cb.selectCard(id)); }
-    else if (type === 'fragment') { _cb.switchSidebarTab('fragments'); showToast(t('已切换到速记')); }
+    else if (type === 'card') { _cb.switchSidebarTab('review', 'cards'); _cb.loadCards().then(() => _cb.selectCard(id)); }
+    else if (type === 'fragment') { _cb.switchSidebarTab('home'); showToast(t('已切换到工作台')); }
 }
 
 // === Dashboard ===
@@ -1560,14 +1560,12 @@ export function updateTabBadges() {
     // Update sidebar tab badges with pending counts
     const inboxCount = S.inboxFragments ?? 0;
     const dueCards = S.dueCards ?? 0;
-    if (inboxCount > 0) setBadge('badge-fragments', inboxCount);
-    else hideBadge('badge-fragments');
+    if (inboxCount > 0) setBadge('badge-home', inboxCount);
+    else hideBadge('badge-home');
     if (dueCards > 0) {
-        setBadge('badge-cards', dueCards);
-        setBadge('badge-study', dueCards);
+        setBadge('badge-review', dueCards);
     } else {
-        hideBadge('badge-cards');
-        hideBadge('badge-study');
+        hideBadge('badge-review');
     }
 }
 

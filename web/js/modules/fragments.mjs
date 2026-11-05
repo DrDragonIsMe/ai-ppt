@@ -46,7 +46,7 @@ export async function revealFragment(id) {
     const safeId = String(id).replace(/"/g, '\\"');
     const item = document.querySelector(`.fragment-item[data-id="${safeId}"]`);
     if (!item) {
-        showToast(t('已切换到速记'));
+        showToast(t('已切换到工作台'));
         return;
     }
     item.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -303,7 +303,7 @@ async function reparseFragment(id) {
 }
 
 export function focusFragmentInput() {
-    if (S.currentSidebarTab !== 'fragments' && _cb.switchSidebarTab) _cb.switchSidebarTab('fragments');
+    if (S.currentSidebarTab !== 'home' && _cb.switchSidebarTab) _cb.switchSidebarTab('home');
     document.getElementById('sidebar')?.classList.remove('collapsed');
     if (_cb.openSidebarDrawer) _cb.openSidebarDrawer(); // 移动端：输入区在抽屉内，先展开（桌面为 no-op）
     document.getElementById('fragment-input')?.focus();

@@ -23,6 +23,10 @@ function getVaultEls() {
         vaultSearchInput: document.getElementById('vault-search-input'),
         btnVaultRefresh: document.getElementById('btn-vault-refresh'),
         btnVaultNew: document.getElementById('btn-vault-new'),
+        vaultListMeta: document.getElementById('vault-list-meta'),
+        vaultStatNoteCount: document.getElementById('vault-stat-note-count'),
+        vaultStatTopicCount: document.getElementById('vault-stat-topic-count'),
+        vaultStatUpdatedToday: document.getElementById('vault-stat-updated-today'),
         vaultEmptyState: document.getElementById('vault-no-note-selected'),
         vaultNotePanel: document.getElementById('vault-note-panel'),
         vaultNoteTitle: document.getElementById('vault-note-title'),
@@ -78,7 +82,11 @@ function buildTopicTree(notes) {
 function renderNoteList(filter) {
     const els = getVaultEls();
     const query = (filter !== undefined ? filter : (els.vaultSearchInput?.value || '')).trim();
-    if (query) { scheduleVaultSearch(query); return; }
+    if (query) {
+        updateVaultSidebarSummary(query);
+        scheduleVaultSearch(query);
+        return;
+    }
     S.vaultSearchQuery = '';
 
     // 收集已存在的专题路径，用于渲染树
@@ -120,7 +128,35 @@ function renderNoteList(filter) {
         }
     }
     els.vaultNoteList.innerHTML = html;
+    updateVaultSidebarSummary();
     updateNoteSelectBar();
+}
+
+function updateVaultSidebarSummary(query = '') {
+    const els = getVaultEls();
+    const notes = Array.isArray(S.notes) ? S.notes : [];
+    const topicSet = new Set();
+    const todayKey = new Date().toLocaleDateString();
+    let updatedToday = 0;
+
+    for (const note of notes) {
+        const topic = typeof note.topic === 'string' && note.topic
+            ? note.topic
+            : (typeof note.name === 'string' && note.name.includes('/') ? note.name.split('/').slice(0, -1).join('/') : '');
+        if (topic) topicSet.add(topic);
+        if (note.mtime && new Date(note.mtime).toLocaleDateString() === todayKey) updatedToday += 1;
+    }
+
+    if (els.vaultStatNoteCount) els.vaultStatNoteCount.textContent = String(notes.length);
+    if (els.vaultStatTopicCount) els.vaultStatTopicCount.textContent = String(topicSet.size);
+    if (els.vaultStatUpdatedToday) els.vaultStatUpdatedToday.textContent = String(updatedToday);
+    if (els.vaultListMeta) {
+        els.vaultListMeta.textContent = query
+            ? t('搜索结果')
+            : topicSet.size
+                ? t('按专题整理')
+                : t('按最近更新排序');
+    }
 }
 
 // 渲染单个笔记行（inTopic=true 时用于专题内缩进）
@@ -735,11 +771,11 @@ function openTagItem(type, id) {
     if (!id) return;
     if (type === 'note') { if (_cb.switchSidebarTab) _cb.switchSidebarTab('vault'); selectNote(id); }
     else if (type === 'card') {
-        if (_cb.switchSidebarTab) _cb.switchSidebarTab('cards');
+        if (_cb.switchSidebarTab) _cb.switchSidebarTab('review', 'cards');
         if (_cb.loadCards) _cb.loadCards().then(() => { if (_cb.selectCard) _cb.selectCard(id); });
     } else if (type === 'fragment') {
-        if (_cb.switchSidebarTab) _cb.switchSidebarTab('fragments');
-        showToast(t('已切换到速记'));
+        if (_cb.switchSidebarTab) _cb.switchSidebarTab('home');
+        showToast(t('已切换到工作台'));
     }
 }
 

@@ -16,19 +16,28 @@ let lastLlmError = null;
 export function getLastLlmError() { return lastLlmError; }
 
 export async function generateSlides(prompt, options = {}) {
+  const result = await completeChat([
+    { role: 'system', content: 'You are an expert presentation designer. Respond only with the requested HTML fragment.' },
+    { role: 'user', content: prompt },
+  ], options);
+  return result;
+}
+
+export async function completeChat(messages, options = {}) {
   const provider = options.provider || detectProvider(options);
   const fallbackChain = [];
   lastLlmError = null;
+  const normalizedMessages = normalizeMessages(messages);
 
   // 1. Try configured provider first
   try {
     let result = null;
     if (provider === PROVIDER_LMSTUDIO) {
-      result = await callLMStudio(prompt, options);
+      result = await callLMStudioMessages(normalizedMessages, options);
     } else if (provider === PROVIDER_BAILIAN) {
-      result = await callBailian(prompt, options.model || 'qwen-max');
+      result = await callBailian(messagesToPrompt(normalizedMessages), options.model || 'qwen-max');
     } else {
-      result = await callOpenAI(prompt, options);
+      result = await callOpenAIMessages(normalizedMessages, options);
     }
     if (result) {
       return { content: result, provider, model: options.model || '', fallbackChain };
@@ -36,7 +45,7 @@ export async function generateSlides(prompt, options = {}) {
     fallbackChain.push({ provider, status: 'empty' });
   } catch (err) {
     fallbackChain.push({ provider, status: 'error', error: err.message });
-    lastLlmError = `${provider}: ${err.message}`;
+    lastLlmError = lastLlmError || `${provider}: ${err.message}`;
     if (process.env.AI_PPT_DEBUG) console.error(`[llm] ${provider} failed:`, err.message);
   }
 
@@ -46,9 +55,11 @@ export async function generateSlides(prompt, options = {}) {
     try {
       let result = null;
       if (fb === PROVIDER_BAILIAN) {
-        result = await callBailian(prompt, options.model || 'qwen-max');
+        result = await callBailian(messagesToPrompt(normalizedMessages), options.model || 'qwen-max');
       } else {
-        result = await callOpenAI(prompt, options);
+        result = fb === PROVIDER_LMSTUDIO
+          ? await callLMStudioMessages(normalizedMessages, options)
+          : await callOpenAIMessages(normalizedMessages, options);
       }
       if (result) {
         fallbackChain.push({ provider: fb, status: 'ok' });
@@ -57,13 +68,29 @@ export async function generateSlides(prompt, options = {}) {
       fallbackChain.push({ provider: fb, status: 'empty' });
     } catch (err) {
       fallbackChain.push({ provider: fb, status: 'error', error: err.message });
-      lastLlmError = `${fb}: ${err.message}`;
+      lastLlmError = lastLlmError || `${fb}: ${err.message}`;
       if (process.env.AI_PPT_DEBUG) console.error(`[llm] fallback ${fb} failed:`, err.message);
     }
   }
 
   // 3. No LLM available
   return null;
+}
+
+function normalizeMessages(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  return list
+    .map((item) => ({
+      role: item?.role === 'system' || item?.role === 'assistant' ? item.role : 'user',
+      content: String(item?.content || '').trim(),
+    }))
+    .filter((item) => item.content);
+}
+
+function messagesToPrompt(messages) {
+  return normalizeMessages(messages)
+    .map((item) => `${item.role.toUpperCase()}:\n${item.content}`)
+    .join('\n\n');
 }
 
 function detectProvider(options) {
@@ -97,7 +124,7 @@ async function callBailian(prompt, model) {
   });
 }
 
-async function callLMStudio(prompt, options) {
+async function callLMStudioMessages(messages, options) {
   const baseUrl = (options.baseUrl || 'http://localhost:1234/v1').replace(/\/$/, '');
 
   // Get available models from LM Studio
@@ -127,10 +154,7 @@ async function callLMStudio(prompt, options) {
     },
     body: JSON.stringify({
       model,
-      messages: [
-        { role: 'system', content: 'You are an expert presentation designer. Respond only with the requested HTML fragment.' },
-        { role: 'user', content: prompt },
-      ],
+      messages: normalizeMessages(messages),
       temperature: 0.7,
       max_tokens: 8192,
     }),
@@ -146,7 +170,7 @@ async function callLMStudio(prompt, options) {
   return content ? cleanLlmOutput(content) : null;
 }
 
-async function callOpenAI(prompt, options) {
+async function callOpenAIMessages(messages, options) {
   const apiKey = options.apiKey || process.env.AI_PPT_API_KEY || process.env.OPENAI_API_KEY;
   const isKimiKey = apiKey?.startsWith('sk-kimi-');
   const defaultBaseUrl = isKimiKey ? 'https://api.kimi.com/coding/v1' : 'https://api.openai.com/v1';
@@ -173,10 +197,7 @@ async function callOpenAI(prompt, options) {
     headers,
     body: JSON.stringify({
       model,
-      messages: [
-        { role: 'system', content: 'You are an expert presentation designer. Respond only with the requested HTML fragment.' },
-        { role: 'user', content: prompt },
-      ],
+      messages: normalizeMessages(messages),
       temperature,
       max_tokens: 8192,
     }),

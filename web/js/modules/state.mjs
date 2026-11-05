@@ -13,7 +13,7 @@ export const S = {
     // 知识库
     currentNote: null,
     notes: [],
-    currentSidebarTab: 'vault',
+    currentSidebarTab: 'home',
     selectedNotes: new Set(),
     vaultAssets: null,
 
@@ -61,6 +61,7 @@ export const S = {
     cardEditMode: false,
     cardDueOnly: false,
     trainingSession: null,
+    reviewSubtab: 'cards',
 
     // 测验/错题
     exams: [],

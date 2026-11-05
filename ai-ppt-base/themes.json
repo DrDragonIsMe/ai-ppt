@@ -1,11 +1,79 @@
 [
-  { "id": "web-ui", "name": "Web UI", "desc": "专业克制的默认主题，适合大多数内部汇报与通用演示", "color": "#439288", "mode": "light" },
-  { "id": "business-blue", "name": "商务蓝", "desc": "稳重、专业、可信，适合金融、咨询与 B2B 汇报", "color": "#2563EB", "mode": "light" },
-  { "id": "elegant-purple", "name": "优雅紫", "desc": "高端、创意、有格调，适合设计、时尚与品牌发布", "color": "#7C3AED", "mode": "light" },
-  { "id": "warm-orange", "name": "温暖橙", "desc": "活力、亲切、有温度，适合消费、零售与团队分享", "color": "#EA580C", "mode": "light" },
-  { "id": "sunset-red", "name": "日落红", "desc": "热情、有冲击力，适合营销活动与动员宣讲", "color": "#E11D48", "mode": "light" },
-  { "id": "tech-green", "name": "科技绿", "desc": "环保、可持续的科技感，适合新能源与农业主题", "color": "#65A30D", "mode": "light" },
-  { "id": "minimal-gray", "name": "极简灰", "desc": "克制、高级的无印风，适合设计工作室与作品集", "color": "#171717", "mode": "light" },
-  { "id": "dark-mode", "name": "暗黑模式", "desc": "沉浸、护眼的未来感，适合科技产品发布与暗场放映", "color": "#22D3EE", "mode": "dark" },
-  { "id": "ai-glow", "name": "AI 辉光", "desc": "深邃梦幻的霓虹玻璃态，适合 AI 产品发布与未来主题演示", "color": "#A78BFA", "mode": "dark" }
+  {
+    "id": "web-ui",
+    "name": "Web UI",
+    "desc": "专业克制的默认主题，适合大多数内部汇报与通用演示",
+    "color": "#439288",
+    "mode": "light"
+  },
+  {
+    "id": "editorial-teal",
+    "name": "电压青编辑风",
+    "desc": "奶油白画布+深墨黑衬线+电压青唯一情绪色，专业克制的编辑杂志感",
+    "color": "#00B498",
+    "mode": "light"
+  },
+  {
+    "id": "xrxs-teal",
+    "name": "薪人薪事青",
+    "desc": "薪人薪事品牌青，专业信赖，适合口腔医疗等行业解决方案",
+    "color": "#00B4A5",
+    "mode": "light"
+  },
+  {
+    "id": "business-blue",
+    "name": "商务蓝",
+    "desc": "稳重、专业、可信，适合金融、咨询与 B2B 汇报",
+    "color": "#2563EB",
+    "mode": "light"
+  },
+  {
+    "id": "elegant-purple",
+    "name": "优雅紫",
+    "desc": "高端、创意、有格调，适合设计、时尚与品牌发布",
+    "color": "#7C3AED",
+    "mode": "light"
+  },
+  {
+    "id": "warm-orange",
+    "name": "温暖橙",
+    "desc": "活力、亲切、有温度，适合消费、零售与团队分享",
+    "color": "#EA580C",
+    "mode": "light"
+  },
+  {
+    "id": "sunset-red",
+    "name": "日落红",
+    "desc": "热情、有冲击力，适合营销活动与动员宣讲",
+    "color": "#E11D48",
+    "mode": "light"
+  },
+  {
+    "id": "tech-green",
+    "name": "科技绿",
+    "desc": "环保、可持续的科技感，适合新能源与农业主题",
+    "color": "#65A30D",
+    "mode": "light"
+  },
+  {
+    "id": "minimal-gray",
+    "name": "极简灰",
+    "desc": "克制、高级的无印风，适合设计工作室与作品集",
+    "color": "#171717",
+    "mode": "light"
+  },
+  {
+    "id": "dark-mode",
+    "name": "暗黑模式",
+    "desc": "沉浸、护眼的未来感，适合科技产品发布与暗场放映",
+    "color": "#22D3EE",
+    "mode": "dark"
+  },
+  {
+    "id": "ai-glow",
+    "name": "AI 辉光",
+    "desc": "深邃梦幻的霓虹玻璃态，适合 AI 产品发布与未来主题演示",
+    "color": "#A78BFA",
+    "mode": "dark"
+  }
 ]

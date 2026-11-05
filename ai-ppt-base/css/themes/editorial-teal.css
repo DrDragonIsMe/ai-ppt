@@ -1,0 +1,50 @@
+/* ===========================================
+   Theme: Editorial Teal (电压青编辑风)
+   - 规范：Cool editorial + teal accent
+   - 奶油白画布 / 深墨黑衬线正文 / 电压青唯一情绪色
+   - ink #151A19 · cream #FAFAF7 · tile #EDF1F0 · tile-strong #E3E9E7
+   - teal #00B498（比 web-ui 更亮更电压，比 xrxs-teal #00B4A5 更纯正）
+   - navy #0B1413 · 衬线排印 Songti SC + 等宽 kicker
+   =========================================== */
+
+body.theme-editorial-teal {
+  /* Brand / Accent — voltage teal */
+  --teal: #00B498;
+  --teal-light: #4ED3C0;
+  --accent: #00B498;
+  --accent-light: #E2F6F2;
+  --accent-dark: #00917A;
+
+  /* Ink + Neutrals — paper & ink */
+  --ink: #151A19;
+  --navy: #0B1413;
+  --slate: #64817B;
+  --muted: #64817B;
+  --cream: #FAFAF7;
+  --surface: #FFFFFF;
+  --surface-subtle: #EDF1F0;
+  --tile: #EDF1F0;
+  --tile-strong: #E3E9E7;
+  --border: #E3E9E7;
+  --border-strong: #CBD5D1;
+
+  /* Status */
+  --danger: #EF4444;
+  --success: #10B981;
+  --info: #3B82F6;
+
+  /* Typography — serif editorial */
+  --font-heading: "Songti SC", "STSong", "SimSun", Georgia, "Times New Roman", serif;
+  --font-body: "Songti SC", "STSong", "SimSun", Georgia, "Times New Roman", serif;
+  --font-mono: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+
+  /* Gradients & Effects — 克制：辉光只给 teal 元素 */
+  --gradient-primary: linear-gradient(135deg, #00917A 0%, #00B498 60%, #4ED3C0 100%);
+  --text-gradient: none; /* 规范禁用渐变文字 */
+  --gradient-hero: radial-gradient(ellipse 60% 50% at 8% 0%, rgba(0, 180, 152, 0.08), transparent 60%),
+                   radial-gradient(ellipse 50% 40% at 100% 100%, rgba(0, 180, 152, 0.05), transparent 60%);
+  --shadow-glow: 0 8px 32px -4px rgba(0, 180, 152, 0.28);
+  --shadow-glow-sm: 0 4px 16px -2px rgba(0, 180, 152, 0.22);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(227, 233, 231, 0.9);
+}

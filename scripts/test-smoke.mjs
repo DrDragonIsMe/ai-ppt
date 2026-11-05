@@ -101,7 +101,9 @@ async function run(name, fn) {
 
   await run('list snapshots', async () => {
     const r = await request('GET', `/api/projects/${testProject}/snapshots`);
-    if (r.status !== 200 || r.body.length !== 1) throw new Error('snapshot missing');
+    if (r.status !== 200 || r.body.length < 1) throw new Error('snapshot missing');
+    // 至少有一个我们刚创建的描述为 smoke 的快照（生成时的自动快照也会在列表里）
+    if (!r.body.some((s) => s.description === 'smoke')) throw new Error('manual snapshot not found');
   });
 
   await run('export single html', async () => {

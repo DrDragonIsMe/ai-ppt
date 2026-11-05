@@ -58,6 +58,17 @@ function pushHistory(entry) {
     renderAgentHistory();
 }
 
+function buildConversationPayload(limit = 8) {
+    return agentHistory
+        .filter((item) => item && (item.role === 'user' || item.role === 'assistant'))
+        .slice(-limit)
+        .map((item) => ({
+            role: item.role,
+            content: String(item.text || '').trim(),
+        }))
+        .filter((item) => item.content);
+}
+
 function renderDocuments() {
     const e = getAgentEls();
     if (!e.docsList) return;
@@ -156,12 +167,12 @@ async function handleKnowledgeOpen(kind, id) {
         return;
     }
     if (kind === 'fragment') {
-        _cb.switchSidebarTab?.('fragments');
+        _cb.switchSidebarTab?.('home');
         setTimeout(() => _cb.revealFragment?.(id), 40);
         return;
     }
     if (kind === 'card') {
-        _cb.switchSidebarTab?.('cards');
+        _cb.switchSidebarTab?.('review', 'cards');
         setTimeout(() => {
             _cb.loadCards?.();
             _cb.selectCard?.(id);
@@ -169,7 +180,7 @@ async function handleKnowledgeOpen(kind, id) {
         return;
     }
     if (kind === 'mistake') {
-        _cb.switchSidebarTab?.('study', 'mistakes');
+        _cb.switchSidebarTab?.('review', 'mistakes');
         setTimeout(() => {
             _cb.loadMistakes?.();
             _cb.selectMistake?.(id);
@@ -213,10 +224,11 @@ async function sendAgentMessage() {
     const message = String(e.input?.value || '').trim();
     if (!message) return;
     e.input.value = '';
+    const history = buildConversationPayload();
     pushHistory({ role: 'user', text: message });
     e.send.disabled = true;
     try {
-        const data = await api('POST', '/api/agent/chat', { message });
+        const data = await api('POST', '/api/agent/chat', { message, history });
         pushHistory({
             role: 'assistant',
             text: data.reply || t('我处理好了。'),

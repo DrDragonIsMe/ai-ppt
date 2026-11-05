@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { listKnowledgeDocuments, searchKnowledge } from '../scripts/knowledge-base.mjs';
+import { completeChat, getLastLlmError } from '../scripts/llm-adapter.mjs';
 
 const DEFAULT_AGENT_CONFIG = {
     assistantName: '薪小灵',
@@ -20,6 +21,27 @@ function splitTags(raw) {
         .map((item) => item.trim())
         .filter(Boolean)
         .slice(0, 20);
+}
+
+function stripCodeFence(text) {
+    const value = String(text || '').trim();
+    const fenced = value.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    return fenced ? fenced[1].trim() : value;
+}
+
+function parseJsonBlock(text) {
+    const clean = stripCodeFence(text);
+    try {
+        return JSON.parse(clean);
+    } catch {
+        const match = clean.match(/\{[\s\S]*\}$/);
+        if (!match) return null;
+        try {
+            return JSON.parse(match[0]);
+        } catch {
+            return null;
+        }
+    }
 }
 
 function buildKnowledgeReply(hits, style = 'concise') {
@@ -42,6 +64,12 @@ function exactDocumentByName(name) {
     const docs = listKnowledgeDocuments({ limit: 400 });
     return docs.find((doc) => String(doc.title || '').toLowerCase() === query)
         || docs.find((doc) => String(doc.title || '').toLowerCase().includes(query));
+}
+
+function exactNoteByName(name) {
+    const match = exactDocumentByName(name);
+    if (!match || match.kind !== 'note') return null;
+    return match.openTarget?.id || match.title || null;
 }
 
 function parseAgentAction(message) {
@@ -141,6 +169,177 @@ function parseAgentAction(message) {
     return null;
 }
 
+function normalizeHistory(history) {
+    const list = Array.isArray(history) ? history : [];
+    return list
+        .map((item) => ({
+            role: item?.role === 'assistant' || item?.role === 'system' ? item.role : 'user',
+            content: String(item?.content || item?.text || '').trim(),
+        }))
+        .filter((item) => item.content)
+        .slice(-8);
+}
+
+function summarizeAgentTools(agentConfig) {
+    const tools = [
+        'searchKnowledge(query)',
+        'listKnowledgeDocuments(query)',
+        'downloadKnowledgeDocument(title)',
+    ];
+    if (agentConfig.allowKnowledgeMutation !== false) {
+        tools.push('createTopic(topicPath)', 'tagNote(noteName, tags)', 'reindexKnowledge()');
+    }
+    if (agentConfig.allowSettingsMutation !== false) {
+        tools.push('setBrandName(brandName)', 'setAssistantName(assistantName)', 'setResponseStyle(concise|detailed)');
+    }
+    return tools.join('、');
+}
+
+function buildAgentSystemPrompt({ agentConfig, globalConfig, hits, documents }) {
+    const brandName = String(globalConfig.appConfig?.brandName || '小龙哥@薪灵AI').trim() || '小龙哥@薪灵AI';
+    const assistantName = agentConfig.assistantName || '薪小灵';
+    const hitLines = hits.length
+        ? hits.map((item) => `- ${item.id} | ${item.kind} | ${item.title} | ${item.snippet || item.summary || ''}`).join('\n')
+        : '- 无';
+    const docLines = documents.length
+        ? documents.slice(0, 12).map((item) => `- ${item.id} | ${item.kind} | ${item.title} | ${item.summary || ''}`).join('\n')
+        : '- 无';
+    return [
+        `你是本地知识工作台里的智能助手「${assistantName}」。当前品牌名：${brandName}。`,
+        `你的职责：1) 与用户对话并形成方案；2) 基于知识库回答；3) 当用户明确要求系统执行时，输出结构化 action 供系统确认执行。`,
+        `回答语言必须是中文，语气专业、直接、友好。回答风格偏${agentConfig.responseStyle === 'detailed' ? '详细' : '简洁'}。`,
+        `你可调用的系统能力只有这些：${summarizeAgentTools(agentConfig)}。`,
+        '如果用户只是讨论方案、让你分析、比较、梳理步骤，不要生成 action；直接给方案即可。',
+        '如果用户明确要求执行创建专题、给笔记打标签、改品牌名、改助手名、改回答风格、重建索引等动作，才生成 action。',
+        '如果信息不够，不要瞎填 action 参数，应先提问澄清。',
+        '如果引用知识库，请优先使用候选命中项的 id 作为 citationIds 返回。',
+        '严格只返回 JSON，不要输出 Markdown 代码块，不要解释 JSON。',
+        'JSON 格式：{"reply":"给用户的话","citationIds":["note:xxx"],"documents":["asset:yyy"],"action":null}',
+        'action 可选格式示例：',
+        '{"type":"create-topic","topicPath":"销售培训","summary":"创建知识库专题「销售培训」","requiresConfirm":true}',
+        '{"type":"tag-note","noteName":"员工手册/差旅制度","tags":["制度","报销"],"summary":"给笔记「员工手册/差旅制度」添加标签：制度、报销","requiresConfirm":true}',
+        '{"type":"set-brand-name","brandName":"薪小灵知识台","summary":"把项目品牌改成「薪小灵知识台」","requiresConfirm":true}',
+        `候选知识命中：\n${hitLines}`,
+        `候选文档：\n${docLines}`,
+    ].join('\n');
+}
+
+function camelToKebab(str) {
+    return String(str || '').replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+function normalizeAgentAction(rawAction) {
+    if (!rawAction || typeof rawAction !== 'object') return null;
+    let type = String(rawAction.type || '').trim();
+    if (!type) return null;
+    // 兼容 camelCase（LLM 按工具名生成）与 kebab-case（示例格式）
+    if (!type.includes('-') && /[A-Z]/.test(type)) type = camelToKebab(type);
+
+    if (type === 'set-brand-name') {
+        const brandName = String(rawAction.brandName || '').trim();
+        if (!brandName) return null;
+        return {
+            type,
+            brandName,
+            summary: rawAction.summary || `把项目品牌改成「${brandName}」`,
+            requiresConfirm: true,
+        };
+    }
+    if (type === 'set-assistant-name') {
+        const assistantName = String(rawAction.assistantName || '').trim();
+        if (!assistantName) return null;
+        return {
+            type,
+            assistantName,
+            summary: rawAction.summary || `把助手名称改成「${assistantName}」`,
+            requiresConfirm: true,
+        };
+    }
+    if (type === 'set-response-style') {
+        const responseStyle = rawAction.responseStyle === 'detailed' ? 'detailed' : 'concise';
+        return {
+            type,
+            responseStyle,
+            summary: rawAction.summary || `把薪小灵的回答风格切到${responseStyle === 'detailed' ? '详细' : '简洁'}模式`,
+            requiresConfirm: true,
+        };
+    }
+    if (type === 'create-topic') {
+        const topicPath = String(rawAction.topicPath || '').trim();
+        if (!topicPath) return null;
+        return {
+            type,
+            topicPath,
+            summary: rawAction.summary || `创建知识库专题「${topicPath}」`,
+            requiresConfirm: true,
+        };
+    }
+    if (type === 'tag-note') {
+        const noteName = String(rawAction.noteName || '').trim();
+        const tags = Array.isArray(rawAction.tags) ? rawAction.tags.map((item) => String(item).trim()).filter(Boolean).slice(0, 20) : [];
+        if (!noteName || !tags.length) return null;
+        return {
+            type,
+            noteName,
+            tags,
+            summary: rawAction.summary || `给笔记「${noteName}」添加标签：${tags.join('、')}`,
+            requiresConfirm: true,
+        };
+    }
+    if (type === 'reindex-knowledge') {
+        return {
+            type,
+            summary: rawAction.summary || '重建知识库索引',
+            requiresConfirm: true,
+        };
+    }
+    if (type === 'toggle-settings-mutation') {
+        const allow = rawAction.allow !== false;
+        return {
+            type,
+            allow,
+            summary: rawAction.summary || (allow ? '开启修改系统设置的权限' : '关闭修改系统设置的权限'),
+            requiresConfirm: true,
+        };
+    }
+    return null;
+}
+
+function pickKnowledgeArtifacts(ids, candidates) {
+    const wanted = new Set((Array.isArray(ids) ? ids : []).map((item) => String(item)));
+    return candidates.filter((item) => wanted.has(String(item.id)));
+}
+
+async function planWithLlm({ message, history, agentConfig, globalConfig }) {
+    const hits = searchKnowledge(message, { limit: 6 });
+    const documents = listKnowledgeDocuments({ query: message, limit: 10 });
+    const messages = [
+        { role: 'system', content: buildAgentSystemPrompt({ agentConfig, globalConfig, hits, documents }) },
+        ...normalizeHistory(history),
+        { role: 'user', content: message },
+    ];
+    const llmResult = await completeChat(messages, {
+        provider: globalConfig.modelConfig?.provider,
+        baseUrl: globalConfig.modelConfig?.baseUrl,
+        model: globalConfig.modelConfig?.model,
+        apiKey: globalConfig.modelConfig?.apiKey,
+    });
+    if (!llmResult?.content) return null;
+    const parsed = parseJsonBlock(llmResult.content);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const citationCandidates = pickKnowledgeArtifacts(parsed.citationIds, hits);
+    const documentCandidates = pickKnowledgeArtifacts(parsed.documents, documents);
+    return {
+        reply: String(parsed.reply || '').trim(),
+        citations: citationCandidates,
+        documents: documentCandidates,
+        pendingAction: normalizeAgentAction(parsed.action),
+        provider: llmResult.provider,
+        model: llmResult.model || globalConfig.modelConfig?.model || '',
+    };
+}
+
 function isDocumentListIntent(message) {
     return /(列出|看看|查看|浏览).*(资料|文档|文件|知识库)/.test(message);
 }
@@ -236,12 +435,53 @@ export default function agentRoutes(ctx) {
                 if (!message) return send(res, 400, { error: '请提供对话内容' });
                 const globalConfig = readGlobalConfig();
                 const agentConfig = normalizeAgentConfig(globalConfig);
+                const history = normalizeHistory(body.history);
 
                 if (/上传/.test(message)) {
                     return send(res, 200, {
                         assistantName: agentConfig.assistantName,
                         reply: '资料上传需要你把文件拖进面板，或者点「上传资料」。上传完成后，我就能继续帮你检索、整理和引用它们。',
                     });
+                }
+
+                try {
+                    const llmPlan = await planWithLlm({ message, history, agentConfig, globalConfig });
+                    if (llmPlan?.reply) {
+                        if (llmPlan.pendingAction?.type === 'tag-note') {
+                            const exactNoteName = exactNoteByName(llmPlan.pendingAction.noteName);
+                            if (exactNoteName) llmPlan.pendingAction.noteName = exactNoteName;
+                        }
+                        let documents = llmPlan.documents || [];
+                        let citations = llmPlan.citations || [];
+                        if (isDocumentListIntent(message) && !documents.length) {
+                            documents = listKnowledgeDocuments({ limit: 80 });
+                        }
+                        if (isDownloadIntent(message) && !documents.length) {
+                            const target = extractDownloadTarget(message);
+                            const doc = exactDocumentByName(target);
+                            if (doc) {
+                                documents = [doc];
+                                citations = citations.length ? citations : [{
+                                    kind: doc.kind,
+                                    title: doc.title,
+                                    snippet: doc.summary,
+                                    sourceLabel: doc.kind === 'asset' ? '资料附件' : '知识库笔记',
+                                    downloadUrl: doc.downloadUrl,
+                                    openTarget: doc.openTarget,
+                                }];
+                            }
+                        }
+                        return send(res, 200, {
+                            assistantName: agentConfig.assistantName,
+                            reply: llmPlan.reply,
+                            citations,
+                            documents,
+                            pendingAction: llmPlan.pendingAction || null,
+                            meta: llmPlan.provider ? { provider: llmPlan.provider, model: llmPlan.model } : undefined,
+                        });
+                    }
+                } catch (err) {
+                    console.error('[agent] llm planning failed:', err.message || err);
                 }
 
                 if (isDocumentListIntent(message)) {
@@ -277,6 +517,10 @@ export default function agentRoutes(ctx) {
 
                 const pendingAction = parseAgentAction(message);
                 if (pendingAction) {
+                    if (pendingAction.type === 'tag-note') {
+                        const exactNoteName = exactNoteByName(pendingAction.noteName);
+                        if (exactNoteName) pendingAction.noteName = exactNoteName;
+                    }
                     return send(res, 200, {
                         assistantName: agentConfig.assistantName,
                         reply: `我理解你的意思是：${pendingAction.summary}。确认后我就执行。`,
@@ -287,7 +531,9 @@ export default function agentRoutes(ctx) {
                 const hits = searchKnowledge(message, { limit: 6 });
                 send(res, 200, {
                     assistantName: agentConfig.assistantName,
-                    reply: buildKnowledgeReply(hits, agentConfig.responseStyle),
+                    reply: getLastLlmError()
+                        ? `${buildKnowledgeReply(hits, agentConfig.responseStyle)}\n\n补充说明：这次没有成功调用到 LLM，我先用本地检索结果给你回复。`
+                        : buildKnowledgeReply(hits, agentConfig.responseStyle),
                     citations: hits,
                 });
             }
@@ -360,7 +606,7 @@ export default function agentRoutes(ctx) {
                     });
                 }
                 if (action.type === 'tag-note') {
-                    const noteName = String(action.noteName || '').trim();
+                    const noteName = exactNoteByName(action.noteName) || String(action.noteName || '').trim();
                     const tags = Array.isArray(action.tags) ? action.tags.map((tag) => String(tag).trim()).filter(Boolean) : [];
                     if (!validNoteName(noteName, res, '非法笔记名称')) return;
                     if (!tags.length) return send(res, 400, { error: '请提供标签' });

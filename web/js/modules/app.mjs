@@ -92,6 +92,7 @@ function cacheEls() {
         btnPublishQuick: document.getElementById('btn-publish-quick'),
         toast: document.getElementById('toast'),
         btnHelp: document.getElementById('btn-help'),
+        btnAgentTopbar: document.getElementById('btn-agent-topbar'),
         btnSettingsTopbar: document.getElementById('btn-settings-topbar'),
         appLogo: document.getElementById('app-logo'),
         helpPanel: document.getElementById('help-panel'),
@@ -164,30 +165,55 @@ function cacheEls() {
     });
 }
 
+function normalizeSidebarTarget(tab, subTab) {
+    if (tab === 'fragments') return { tab: 'home', subTab: 'fragments' };
+    if (tab === 'cards') return { tab: 'review', subTab: 'cards' };
+    if (tab === 'study') return { tab: 'review', subTab: subTab || S.studySubtab || 'exams' };
+    if (tab === 'review') return { tab: 'review', subTab: subTab || S.reviewSubtab || 'cards' };
+    return { tab: tab || 'home', subTab };
+}
+
+function updateReviewSidebarNav(active) {
+    document.querySelectorAll('.review-nav-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.reviewTarget === active);
+    });
+}
+
+function showWorkbenchInbox() {
+    switchSidebarTab('home');
+    setTimeout(() => {
+        document.querySelector('.fragment-filter[data-filter="inbox"]')?.click();
+    }, 40);
+}
+
 // ============================================================
 // switchSidebarTab — 中央侧边栏编排
 // ============================================================
 function switchSidebarTab(tab, subTab) {
+    const normalized = normalizeSidebarTarget(tab, subTab);
+    tab = normalized.tab;
+    subTab = normalized.subTab;
     S.currentSidebarTab = tab;
-    // 移动端点 tab 后自动收起抽屉；速记 tab 例外（输入区在抽屉内，需保持展开）
-    if (tab !== 'fragments') closeSidebarDrawer();
+    if (tab === 'review') S.reviewSubtab = subTab || 'cards';
+    // 移动端点 tab 后自动收起抽屉；工作台 tab 例外（输入区在抽屉内，需保持展开）
+    if (tab !== 'home') closeSidebarDrawer();
     document.querySelectorAll('.sidebar-tab').forEach((tabEl) => {
         tabEl.classList.toggle('active', tabEl.dataset.tab === tab);
     });
-    // Settings tab icon highlighting (sidebar bottom button + topbar button)
-    const settingsTabBtn = document.getElementById('btn-settings-tab');
-    if (settingsTabBtn) settingsTabBtn.classList.toggle('active', tab === 'settings');
+    // Settings icon highlighting
     const settingsTopbarBtn = document.getElementById('btn-settings-topbar');
     if (settingsTopbarBtn) settingsTopbarBtn.classList.toggle('active', tab === 'settings');
+    const agentTopbarBtn = document.getElementById('btn-agent-topbar');
+    if (agentTopbarBtn) agentTopbarBtn.classList.toggle('active', tab === 'agent');
     hideAllMainPanels();
     stopPhysics();
     document.getElementById('fragments-sidebar-content').classList.add('hidden');
     document.getElementById('project-sidebar-content').classList.add('hidden');
     document.getElementById('vault-sidebar-content').classList.add('hidden');
     document.getElementById('agent-sidebar-content').classList.add('hidden');
-    document.getElementById('cards-sidebar-content').classList.add('hidden');
+    document.getElementById('review-sidebar-content').classList.add('hidden');
 
-    if (tab === 'fragments') {
+    if (tab === 'home') {
         document.getElementById('fragments-sidebar-content').classList.remove('hidden');
         document.getElementById('dashboard-panel').classList.remove('hidden');
         loadDashboard();
@@ -205,12 +231,14 @@ function switchSidebarTab(tab, subTab) {
         document.getElementById('agent-sidebar-content').classList.remove('hidden');
         document.getElementById('agent-panel').classList.remove('hidden');
         loadAgentWorkspace();
-    } else if (tab === 'cards') {
-        document.getElementById('cards-sidebar-content').classList.remove('hidden');
-        showCardsPanel();
-    } else if (tab === 'study') {
-        document.getElementById('study-panel').classList.remove('hidden');
-        switchStudySubtab(subTab || S.studySubtab || 'exams');
+    } else if (tab === 'review') {
+        document.getElementById('review-sidebar-content').classList.remove('hidden');
+        updateReviewSidebarNav(subTab || 'cards');
+        if ((subTab || 'cards') === 'cards') showCardsPanel();
+        else {
+            document.getElementById('study-panel').classList.remove('hidden');
+            switchStudySubtab(subTab || S.studySubtab || 'exams');
+        }
     } else if (tab === 'settings') {
         document.getElementById('settings-panel').classList.remove('hidden');
         renderModelConfigUI();
@@ -236,7 +264,7 @@ function switchStudySubtab(subTab) {
 // openSmartExamModal — 从 dashboard 调用
 // ============================================================
 function openSmartExamModal() {
-    if (S.currentSidebarTab !== 'study') switchSidebarTab('study', 'exams');
+    if (S.currentSidebarTab !== 'review') switchSidebarTab('review', 'exams');
     document.getElementById('smart-exam-count').value = '5';
     document.getElementById('smart-exam-subject').value = '';
     const btn = document.getElementById('btn-confirm-smart-exam');
@@ -272,6 +300,10 @@ function bindAiImageEvents() {
         resetAssetsModalTab();
         openAssetsModal();
     });
+    document.getElementById('btn-vault-assets-primary')?.addEventListener('click', () => {
+        resetAssetsModalTab();
+        openAssetsModal();
+    });
     // 初始化资源库标签页事件（双标签页切换）
     initAssetsModalTabs();
     document.getElementById('btn-close-assets')?.addEventListener('click', () => {
@@ -287,8 +319,15 @@ function bindAiImageEvents() {
 // ============================================================
 function bindStudyEvents() {
     document.querySelectorAll('.study-subtab').forEach((el) => {
-        el.addEventListener('click', () => switchStudySubtab(el.dataset.subtab));
+        el.addEventListener('click', () => switchSidebarTab('review', el.dataset.subtab));
     });
+}
+
+function bindReviewSidebarEvents() {
+    document.querySelectorAll('.review-nav-btn').forEach((btn) => {
+        btn.addEventListener('click', () => switchSidebarTab('review', btn.dataset.reviewTarget));
+    });
+    document.getElementById('btn-vault-inbox')?.addEventListener('click', showWorkbenchInbox);
 }
 
 // ============================================================
@@ -335,14 +374,14 @@ const ONBOARDING_KEY = 'ai-ppt-onboarded';
 const ONBOARDING_STEPS = [
     {
         title: t('① 记录'),
-        desc: t('这里是你的知识中枢。在「速记」tab 随手记录文字、用 🎙 语音听记自动转写、粘贴图片或 PDF 附件；碎片稍后可一键整理为笔记、知识卡片或错题。'),
+        desc: t('这里是你的知识中枢。在「工作台」里先记下文字、语音和附件，再逐步整理成笔记、作品和复习材料。'),
         cta: t('写第一条速记'),
         action: () => focusFragmentInput(),
     },
     {
         title: t('② 生成'),
-        desc: t('从笔记、知识星图或知识卡片一键生成 PPT / 视频 / 报告。生成的作品在「PPT 作品」tab 统一管理，按 选材 → 生成 → 修改 → 发布 四步走完。'),
-        cta: t('查看 PPT 作品'),
+        desc: t('从笔记、知识星图或知识卡片一键生成 PPT / 视频 / 报告。生成好的内容统一收进「作品」，按 选材 → 生成 → 修改 → 发布 四步走完。'),
+        cta: t('查看作品'),
         action: () => switchSidebarTab('projects'),
     },
     {
@@ -476,7 +515,8 @@ loadModels().then(loadGlobalConfig).then(() => {
     bindStudyEvents();
     bindSidebarDrawerEvents();
     bindOnboardingEvents();
-    switchSidebarTab('vault');
+    bindReviewSidebarEvents();
+    switchSidebarTab('home');
     // 首次使用：数据加载完成后弹出 3 步向导
     let onboarded = null;
     try { onboarded = localStorage.getItem(ONBOARDING_KEY); } catch { /* 隐私模式下忽略 */ }
@@ -529,5 +569,5 @@ if ('serviceWorker' in navigator) {
 }
 
 // Settings tab button (sidebar bottom icon + topbar both open settings panel)
-document.getElementById('btn-settings-tab')?.addEventListener('click', () => switchSidebarTab('settings'));
 document.getElementById('btn-settings-topbar')?.addEventListener('click', () => switchSidebarTab('settings'));
+document.getElementById('btn-agent-topbar')?.addEventListener('click', () => switchSidebarTab('agent'));

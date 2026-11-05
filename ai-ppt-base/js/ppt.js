@@ -5,7 +5,7 @@
     current: 0,
     slides: [],
     overview: false,
-    help: true,
+    help: false,
     transitioning: false,
     currentTheme: 'web-ui',
     sidebarOpen: true,
