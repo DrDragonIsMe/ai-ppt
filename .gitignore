@@ -1,7 +1,9 @@
 .DS_Store
 *.log
 /tmp/
-node_modules/
+# 不带尾斜杠：同时匹配目录与符号链接形式的 node_modules
+# （worktree 里常用 ln -s 指向共享安装，尾斜杠形式不匹配软链，会被 git add -A 误提交）
+node_modules
 .backup/
 .snapshots/
 projects/*
@@ -16,20 +18,39 @@ vault/.meta/
 published/
 test-output/
 
-# ---- 生成物与素材禁止入库（约定见 AGENTS.md「产物与素材入库策略」）----
-# 参考素材库（外部拿来的 deck / 视频，体积大且非本仓库产物）
-references/
-# 素材源抓取缓存与清单（随时可由源重新抓取）
-sources.json
+# ---- 生成物与素材禁止入库 ----
+# 依据：人类硬约束「不要把生成物加入git，视频不要加入git」；
+# 回归护栏 tests/artifact-policy.test.mjs（含类级检查：已跟踪路径不得命中任何 ignore 规则）
+# 参考素材库（外部拿来的 deck / 视频，体积大且非本仓库产物）——只存在于仓库根，锚定避免误伤同名子目录
+/references/
+# 素材源抓取清单（抓取缓存另在 vault/.meta/source-cache/）——只存在于仓库根，锚定
+/sources.json
 vault/.meta/source-cache/
-# 营销大纲与批量生成中间产物
-marketing/
+# 营销大纲与批量生成中间产物——只存在于仓库根；不锚定会误伤已跟踪的 docs/marketing/
+/marketing/
 # 媒体文件一律不入库
 *.mp4
 *.mov
 *.m4v
 *.webm
 *.avi
-# 导出产物兜底（projects/* 已忽略，此处覆盖仓库根与任意层级）
+# 导出产物：以下两条有意不加锚定——「任意层级的导出目录 / deck 封面截图都不入库」正是其设计语义
+# （人类硬约束的延伸）；若某天同名规则误伤已跟踪内容，由 tests/artifact-policy.test.mjs 类级断言兜底照出
 export/
 cover.png
+# 仓库根零引用杂物（均已 git rm --cached，磁盘文件保留）：
+# screenshot-main.png = 文档截图残留；
+# lark-auth-qr.png = 塔的 worktree 快照机制扫入的凭证类残留物（飞书授权二维码；main 历史本身没有它）。
+# 条目防今后被 git add -A 或 worktree 快照再次拍回。
+screenshot-main.png
+lark-auth-qr.png
+
+# ---- 跟踪例外（保留跟踪的产物级资源）----
+# demo/ 封面 = GitHub Pages 部署源（.github/workflows/pages.yml 直接上传 demo/，缺文件线上 404）；
+# web/icons/ = PWA 源资源。
+# 如实声明这组 negation 的能力边界：.gitignore 本就不影响已跟踪文件（上述文件已在索引中，
+# 未来加全局 *.png 之类规则也不会让线上掉链子）；这里只防「写在本块之上的排除规则」误伤这些
+# 路径下的新增文件。gitignore 顺序敏感、后写的规则赢——追加在本块之后的规则不受本块约束。
+# 「已跟踪内容是否被现有 ignore 规则命中」由 tests/artifact-policy.test.mjs 类级断言全量核查。
+!demo/cover-*.png
+!web/icons/**
