@@ -33,7 +33,13 @@ function dispatch(source) {
 // P2-G：判定一条采集错误是否属于「上游确认删除」——HTTP 404/410，或文件系统 ENOENT。
 // 这类 origin 应正常 prune（缓存要能减）；其余 5xx / 401 / 403 / 429 / 超时 / 网络错误 / 瞬时不可读(如 EACCES)
 // 都视为「未确认失败」，按 origin 保命标 stale——绝不能用「拿不到」冒充「不存在」把已上线内容误删。
+// P2-②（r5）：目录级 readdir 失败（isDirectoryLevel）一律不算「确认删除」——它只代表「这一次 readdir 的返回码」，
+// 而非「确认整棵子树上游已删」。移动盘/NAS 中途弹出、挂载点未就绪、TOCTOU 都会让子目录 readdir 返 ENOENT，
+// 但磁盘上该子树依然存在；把它当 confirmed-gone 会静默物理删除整棵子树（实测 prev=8 → removed=3）。
+// 故目录级错误归「未确认」→ 走 erroredPrefixes 让子树 stale 保命，下轮成功即以同 id 覆盖，代价只是缓存晚一轮收敛。
+// 文件级 ENOENT（origin 是具体文件、非目录）仍属确证删除，照常清理。
 function isConfirmedGone(entry) {
+  if (entry.isDirectoryLevel) return false;
   return entry.httpStatus === 404 || entry.httpStatus === 410 || entry.code === 'ENOENT';
 }
 
@@ -67,13 +73,16 @@ export async function refreshSource(sourceOrId, opts = {}) {
   const erroredOrigins = new Set(); // P1-A：本轮明确抓取/抽取失败的 origin 集合，用于部分失败时按 origin 保命
   const confirmedGoneOrigins = new Set(); // P2-G：本轮上游确认删除（404/410/ENOENT）的 origin → 正常 prune、绝不 stale
   let confirmedGoneCount = 0; // P2-G：确认删除的错误数——不计入降级阈值（它们恰恰证明上游真的没了）
-  // P2-F：dir/vault 的目录级错误，其 origin 是被卡住的**目录**本身，而条目 origin 是该目录下的**文件绝对路径**——
+  // P2-F：dir/vault 的目录级错误，其 origin 是被卡住的**目录**本身，而条目 origin 是该目录下的**文件路径**——
   // 单靠精确 origin 匹配必然对不上、把整棵子树当"上游确认删除"物理删光（评审活体复现 13→10、无任何保命信号）。
-  // 故除精确 origin 外，再记录"失败/已删目录前缀"，让该目录下的既有子树条目命中同一判定：瞬时不可读(EACCES…)→子树保命；
-  // 目录真被删(ENOENT=confirmed-gone)→子树正常清理。
+  // 故除精确 origin 外，再记录"失败目录前缀" erroredPrefixes，让该目录下的既有子树条目命中 stale 保命。
+  // P2-②（r5）：目录级错误无论 EACCES 还是 ENOENT 都归"未确认"（isConfirmedGone 已对 isDirectoryLevel 短路），
+  // 全部走 erroredPrefixes 子树保命；曾有"已删目录前缀 confirmedGonePrefixes → 子树正常清理"一条分支，因 ② 之后
+  // 目录级错误永不再被确证删除（只剩文件级 ENOENT，其 origin 是文件、前缀必不命中他条目）而成死码，已移除。
+  // 真正"目录被删"（父枚举里没有它 → 无 readdir 错误）由 prune 末尾"本轮没抓到也没报错 → 正常清理"兜底处理，
+  // 故缓存仍能减（见 P2-F 对照用例 removed=3），不依赖已删分支。
   const isDirVault = source.type === 'dir' || source.type === 'vault';
   const erroredPrefixes = new Set();
-  const confirmedGonePrefixes = new Set();
   let added = 0; let updated = 0; let unchanged = 0;
   let truncation = null; // { collected, dropped, total, cap }
   let policySkip = null; // P2-E：{ skipped, samples[] }——被禁入/敏感清单跳过的条目（可观测）
@@ -91,10 +100,9 @@ export async function refreshSource(sourceOrId, opts = {}) {
       errors.push({ origin: entry.origin || null, error: entry.error || 'unknown error' });
       if (isConfirmedGone(entry)) {
         // P2-G：上游确认删除 → 记入 confirmedGone（正常 prune），不进 erroredOrigins（否则会被永久 stale 保命）。
-        if (entry.origin) {
-          confirmedGoneOrigins.add(entry.origin);
-          if (isDirVault) confirmedGonePrefixes.add(entry.origin + path.sep); // P2-F：目录被删 → 该子树一并正常清理
-        }
+        // P2-②：目录级错误已被 isConfirmedGone 短路（isDirectoryLevel），此处只剩 url/site 的 404/410 与
+        // dir/vault 的文件级 ENOENT（origin 是具体文件），故只记精确 origin，不再建前缀。
+        if (entry.origin) confirmedGoneOrigins.add(entry.origin);
         confirmedGoneCount++;
       } else if (entry.origin) {
         // P1-A：未确认失败（5xx/401/403/429/超时/网络/瞬时不可读）→ 按 origin 保命。
@@ -213,7 +221,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
   const allConfirmedGone = pruneBlocked && errors.length > 0 && errors.length === confirmedGoneCount;
 
   let removed = 0;
-  let removedConfirmedGone = 0; // P1-①.3：因上游确认删除（404/410/ENOENT 或前缀命中）而清理的条数
+  let removedConfirmedGone = 0; // P1-①.3：因上游确认删除（url/site 404/410、dir/vault 文件级 ENOENT）而清理的条数
   let removedUnconfirmed = 0;   // P1-①.3：兜底分支清理（本轮没抓到也没报错，视为上游确认消失）的条数
   let stalePreserved = 0;
   const staleKeptItems = [];
@@ -229,26 +237,26 @@ export async function refreshSource(sourceOrId, opts = {}) {
     });
   } else {
     const itemsDir = sourceItemsDir(sourceId);
-    const erroredPre = isDirVault ? [...erroredPrefixes] : []; // P2-F：dir/vault 失败目录前缀
-    const gonePre = isDirVault ? [...confirmedGonePrefixes] : []; // P2-F：dir/vault 已删目录前缀
+    const erroredPre = isDirVault ? [...erroredPrefixes] : []; // P2-F/②：dir/vault 失败目录前缀 → 子树 stale 保命
     for (const old of prevItems) {
       if (newIds.has(old.id)) continue; // 本轮已重新收录，正常
       const o = old.origin;
       const oStr = String(o || '');
-      // P2-G：本轮上游确认删除（404/410/ENOENT，含其目录前缀 P2-F）→ 正常清理，即便整体降级也不 stale（缓存要能减）。
-      const gone = (o != null && confirmedGoneOrigins.has(o)) || gonePre.some((pre) => oStr.startsWith(pre));
+      // P2-G：本轮上游确认删除（url/site 的 404/410，dir/vault 的文件级 ENOENT，均精确 origin 命中）
+      // → 正常清理，即便整体降级也不 stale（缓存要能减）。P2-② 后目录级错误不再进入此集合。
+      const gone = o != null && confirmedGoneOrigins.has(o);
       if (gone) {
         try { fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true }); removed++; removedConfirmedGone++; } catch { /* 可能已不在 */ }
         continue;
       }
-      // P1-A/P2-F：本轮明确失败（origin 命中，或 dir/vault 子树落在失败目录前缀下）或整体降级 → 标 stale 保命，绝不 rm。
+      // P1-A/P2-F/②：本轮明确失败（origin 命中，或 dir/vault 子树落在失败/中途消失的目录前缀下）或整体降级 → 标 stale 保命，绝不 rm。
       const covered = (o != null && erroredOrigins.has(o)) || erroredPre.some((pre) => oStr.startsWith(pre));
       if (covered || overallDegraded) {
         staleKeptItems.push({ ...old, stale: true });
         stalePreserved++;
         continue;
       }
-      // 其余 = 上游确认消失（本轮没抓到、也没报错）→ 正常清理。
+      // 其余 = 本轮没抓到、也没报错（含"目录整体消失 → 父枚举不再列出它"）→ 正常清理。缓存能减由此分支保证。
       try {
         fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true });
         removed++;

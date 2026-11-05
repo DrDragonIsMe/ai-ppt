@@ -1432,13 +1432,54 @@ describe('P2-F dir directory-level failure: transient unreadable preserves subtr
     assert.equal(r1.itemCount, 13);
 
     fs.rmSync(sub, { recursive: true, force: true }); // 上游确认删除整个子目录（无 readdir 错误：目录直接不见）
-    const r2 = await refreshSource(source.id);
+    const events = [];
+    const r2 = await refreshSource(source.id, { onEvent: (e) => events.push(e) });
     assert.equal(r2.errors, 0, '整目录删除不产生抓取错误');
     assert.equal(r2.removed, 3, '子树 3 条按确认消失正常清理');
     assert.equal(r2.staleCount, 0, '真删除不得被 stale 保命');
     assert.equal(r2.itemCount, 10);
     const pre = sub + path.sep;
     assert.ok(!readManifest(source.id).items.some((i) => String(i.origin).startsWith(pre)), '已删子树不应留在 manifest');
+    // ①.3 + ④ 选项 B：清理可观测——removed>0 必须发 pruned；这 3 条来自"本轮没抓到也没报错"兜底分支，归 unconfirmed。
+    // 证明删掉 confirmedGonePrefixes 死分支后，"目录真消失"仍由此兜底分支清理、缓存能减不受影响。
+    const pruned = events.find((e) => e.step === 'pruned');
+    assert.ok(pruned, 'removed>0 必须发 pruned 事件');
+    assert.equal(pruned.detail.confirmedGone, 0, '目录整体消失无逐条错误 → 归 unconfirmed 而非 confirmedGone');
+    assert.equal(pruned.detail.unconfirmed, 3);
+  });
+
+  it('P2-②：遍历中途子目录 readdir 返回 ENOENT → 归"未确认"，子树 stale 保命不删（绝不用一次 readdir 码冒充已删）', async () => {
+    freshEnv('p2e-noent');
+    const { dir, sub } = buildDirSrc('p2e-noent');
+    const source = mkDirSource({ type: 'dir', name: 'E', target: dir }).source;
+    const r1 = await refreshSource(source.id);
+    assert.equal(r1.itemCount, 13, '首轮 10 顶层 + 3 子树全入库');
+
+    // 确定性构造"父已枚举、descend 时子目录 readdir 返 ENOENT"（卷中途弹出/TOCTOU），且子目录磁盘上依然存在。
+    const realReaddir = fs.readdirSync;
+    fs.readdirSync = function (p, ...rest) {
+      if (String(p) === sub) { const e = new Error(`ENOENT: no such file or directory, scandir '${sub}'`); e.code = 'ENOENT'; throw e; }
+      return realReaddir.call(fs, p, ...rest);
+    };
+    try {
+      const events = [];
+      const r2 = await refreshSource(source.id, { onEvent: (e) => events.push(e) });
+      assert.equal(r2.errors, 1, '子目录 readdir ENOENT 记 1 条目录级错误');
+      assert.equal(r2.removed, 0, 'P2-②：目录级 ENOENT 不算上游确认删除 → 一条不删（去掉 isDirectoryLevel 短路即被清零，回归点）');
+      assert.equal(r2.staleCount, 3, '该子树 3 条 stale 保命');
+      assert.equal(r2.itemCount, 13, '13 条一条不少');
+      assert.ok(events.some((e) => e.step === 'degraded'), '目录级失败必须发 degraded，不得只剩 fetch-error');
+      assert.ok(!events.some((e) => e.step === 'pruned'), 'removed=0 不应发 pruned');
+      const m = readManifest(source.id);
+      const pre = sub + path.sep;
+      const stale = m.items.filter((i) => i.stale === true);
+      assert.equal(stale.length, 3);
+      assert.ok(stale.every((i) => String(i.origin).startsWith(pre)), '被保命的必须恰是失败子树下的条目');
+      const itemsDir = path.join(process.env.AI_PPT_SOURCE_CACHE_ROOT, source.id, 'items');
+      assert.equal(fs.readdirSync.call(fs, itemsDir).filter((f) => f.endsWith('.md')).length, 13, '磁盘 .md 不得减少');
+    } finally {
+      fs.readdirSync = realReaddir;
+    }
   });
 });
 

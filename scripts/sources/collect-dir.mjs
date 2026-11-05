@@ -76,7 +76,8 @@ export async function* collectDir(source, ctx = {}) {
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (err) {
-      yield { kind: 'error', origin: dir, error: `读取目录失败 ${dir}: ${err.message}`, code: err.code };
+      // isDirectoryLevel：这是「读目录」失败，不代表目录下文件在下游已删除——P2-② 据此判为未确认失败、子树保命。
+      yield { kind: 'error', origin: dir, error: `读取目录失败 ${dir}: ${err.message}`, code: err.code, isDirectoryLevel: true };
       continue;
     }
     for (const ent of entries) {
