@@ -114,13 +114,21 @@ export function createNdjsonTaskContext({ root, taskRegistry }) {
           : { type: 'error', message: `进程退出码 ${code}` });
       }
       state.done = true;
-      const finalEvent = state.buffer[state.buffer.length - 1];
-      if (finalEvent && finalEvent.type === 'error') {
-        taskRegistry.fail(metaId, finalEvent.message || '任务失败');
-      } else {
-        taskRegistry.complete(metaId);
+      // 身份守卫：仅当本 state 仍是该 key 当前持有者时才写 registry 终态。
+      // 覆盖路径（上文 prev 分支）kill 掉的旧任务 close 晚于新任务 create，
+      // 不加守卫会把新任务占有的注册表条目提前判死，重启恢复判定随之失效。
+      if (store.get(name) === state) {
+        const finalEvent = state.buffer[state.buffer.length - 1];
+        if (finalEvent && finalEvent.type === 'error') {
+          taskRegistry.fail(metaId, finalEvent.message || '任务失败');
+        } else {
+          taskRegistry.complete(metaId);
+        }
       }
-      setTimeout(() => store.delete(name), 60000);
+      // 身份守卫：仅当本 state 仍是持有者时才删除（与 restoreInterruptedNdjsonTasks 一致）。
+      // 盲删会把 60s 内占据同 key 的新任务 state 误删（events 404 / running:false /
+      // 批次误标 interrupted，且 hasActiveTask 失效放开并发写盘）。unref 避免拖住退出。
+      setTimeout(() => { if (store.get(name) === state) store.delete(name); }, 60000).unref();
     });
 
     store.set(name, state);
