@@ -63,7 +63,7 @@ node scripts/marketing/batch-generate.mjs <outlineId> \
 - **产物**：`projects/<deckName>/`（`index.html` + `ai-ppt.json`；`sourceSelection.kind='outline'` 绑定大纲与角度；`userEdits` 原样保留）。落盘后自动跑设计检查（`lint` 事件）与封面截图。
 - **逐角度串行**（LLM 并发 1）；单 deck 失败不阻断整批，失败记入汇总（`failedCount`）。
 - **无 LLM 时同样产出可用 deck**：用大纲已定稿的页面结构直排兜底模板（`buildDeckFallback`）。
-- **取消**：`curl -X POST http://localhost:3456/api/marketing/batch/cancel`——落标记文件，当前 deck 完成后停止（正在跑的 LLM 调用不被强杀，其结果被忽略）。
+- **取消**：`curl -X POST http://localhost:3456/api/marketing/batch/cancel`——落标记文件，正在跑的 LLM 调用不被强杀，当前这份 deck 会正常完成并保留；仅后续未开始的 deck 被取消。
 - `done` 事件带 `batchId / total / doneCount / skippedCount / failedCount / cancelledCount / rows（每 deck 状态）/ deckNames / projectDirs / previewBase:'/projects/'`。
 
 ## Step 3 · 导出 / 发布

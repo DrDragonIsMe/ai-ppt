@@ -1,16 +1,16 @@
 # ai-ppt
 
-[![version](https://img.shields.io/badge/version-2.7.0-blue)](https://github.com/DrDragonIsMe/ai-ppt)
+[![version](https://img.shields.io/badge/version-2.9.0-blue)](https://github.com/DrDragonIsMe/ai-ppt)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![tests](https://img.shields.io/badge/tests-193%20passed-brightgreen)](tests/core.test.mjs)
+[![tests](https://img.shields.io/badge/tests-335%20passed-brightgreen)](tests)
 [![在线演示](https://img.shields.io/badge/demo-%E5%9C%A8%E7%BA%BF%E6%BC%94%E7%A4%BA-teal)](https://drdragonisme.github.io/ai-ppt/)
 
 **[English](README.en.md)** | 中文 | **[在线演示](https://drdragonisme.github.io/ai-ppt/)**（需开启 GitHub Pages，见下文）
 
 ![ai-ppt 演示](docs/marketing/demo.gif)
 
-个人知识中枢：**速记碎片 → AI 整理与加权星图 → PPT/配图/视频表现 → 智能测验迭代** 的闭环系统。基于 HTML/CSS/JS 的轻量级幻灯片引擎（键盘导航、全屏放映、多页预览、PDF 导出）+ 内置知识库 vault（双链笔记、速记碎片、知识卡片、测验、错题集），支持从 URL、文章、笔记或星图选区自动生成完整 deck，并可用 AI 生成配图与视频。附带 Claude CLI / Kimi CLI 的 skill 扩展：`/ppt-preview`、`/ppt-structure`、`/ppt-edit`、`/ppt-export`、`/ppt-list`、`/ppt-delete`、`/ppt-design` 等 11 个（见下文「可用 skill」）。
+个人知识中枢：**速记碎片 → AI 整理与加权星图 → PPT/配图/视频表现 → 智能测验迭代** 的闭环系统。基于 HTML/CSS/JS 的轻量级幻灯片引擎（键盘导航、全屏放映、多页预览、PDF 导出）+ 内置知识库 vault（双链笔记、速记碎片、知识卡片、测验、错题集），支持从 URL、文章、笔记或星图选区自动生成完整 deck，并可用 AI 生成配图与视频。附带 Claude CLI / Kimi CLI 的 skill 扩展：`/ppt-sources`、`/ppt-marketing`、`/ppt-preview`、`/ppt-structure`、`/ppt-edit`、`/ppt-export`、`/ppt-list`、`/ppt-delete`、`/ppt-design` 等 13 个（见下文「可用 skill」）。
 
 ## 概念模型
 
@@ -38,6 +38,11 @@ ai-ppt/
 │   ├── js/ppt.js                 # 导航、全屏、预览、PDF 导出
 │   ├── theme-ref/                # 风格参考
 │   └── README.md                 # deck 级说明
+├── templates/                    # 场景模板（周报/培训课件/路演/复习课件）
+│   ├── weekly-report/
+│   ├── training-course/
+│   ├── pitch/
+│   └── review-lesson/
 ├── projects/                     # 所有业务 deck
 │   ├── hualong-xrs-strategy/
 │   ├── q3-sales-preview/
@@ -49,15 +54,18 @@ ai-ppt/
 │   ├── css/web.css
 │   └── js/modules/               # 无构建 ES Modules，入口 app.mjs
 ├── server.mjs                    # Web 服务入口
-├── skills/                       # CLI skills（11 个，见下文「可用 skill」）
-├── scripts/                      # 升级、生成、导出、备份工具
+├── routes/                       # HTTP 路由（sources / marketing / projects / vault / config / media / agent）
+├── skills/                       # CLI skills（13 个，见下文「可用 skill」）
+├── scripts/                      # 升级、生成、导出、备份、搜索、素材库、营销等工具脚本
+│   ├── sources/                  # 多数据源素材库（注册表/采集/刷新/缓存）
+│   ├── marketing/                # 营销大纲与批量生成
 │   ├── upgrade-decks.mjs         # 用基座 css/js 覆盖所有项目
 │   ├── generate-deck.mjs         # 从 URL/文章生成 deck
 │   ├── export-pptx.mjs           # 导出 PPTX
 │   ├── export-pdf.mjs            # 导出 PDF（可选 Puppeteer）
 │   ├── backup.mjs                # 项目与技能备份
 │   └── config.mjs                # 项目配置读写
-├── tests/                        # node --test 核心测试
+├── tests/                        # node --test（*.test.mjs）
 ├── install-skills.js             # Node 安装脚本
 ├── install-skills.sh             # Shell 安装脚本
 ├── package.json                  # npx 支持
@@ -185,7 +193,7 @@ npm run upgrade-decks -- --dry-run
 npm run web
 ```
 
-默认打开 `http://localhost:3456`。
+默认打开 `http://localhost:3456`。改端口/监听地址请用环境变量 `AI_PPT_PORT` / `AI_PPT_HOST`（`--port` / `--host` 命令行参数不被解析）。
 
 - 创建/删除项目
 - 选择内容来源：网页 URL 或粘贴文章内容
@@ -241,6 +249,64 @@ npm run backup
 
 备份保存在 `.backup/<timestamp>/`。
 
+## 营销生产线：素材库 → 营销大纲 → 批量 PPT
+
+把多源信息变成一组不同角度的营销 deck 的完整工作流（也在 Web 控制台「素材库」tab 中可视化完成）：
+
+1. **配置素材源**：把本地目录、单网页、站点入口或 vault 笔记注册为素材源。
+   ```bash
+   # 仓库内目录源（默认只收文本类文件）
+   curl -X POST http://localhost:3456/api/sources \
+     -H 'Content-Type: application/json' \
+     -d '{"type":"dir","name":"市场素材","target":"docs/marketing"}'
+
+   # 单网页 / 站点入口
+   curl -X POST http://localhost:3456/api/sources \
+     -H 'Content-Type: application/json' \
+     -d '{"type":"url","name":"官网介绍","target":"https://example.com/intro"}'
+
+   curl -X POST http://localhost:3456/api/sources \
+     -H 'Content-Type: application/json' \
+     -d '{"type":"site","name":"官网","target":"https://example.com","options":{"depth":1}}'
+   ```
+   - 源类型：`dir | url | site | vault`；外部目录源需同时设置 `AI_PPT_ALLOW_EXTERNAL_SOURCES=1` 并在请求中带 `acknowledgeExternalPath:true`。
+   - 可调参数：`maxPages`（默认 30）、`maxBytesPerItem`（默认 512KB）、`depth`（仅 site，默认 1）、`include`、`label`、`anyOfTags`。
+
+2. **刷新抓取**：
+   ```bash
+   curl -X POST http://localhost:3456/api/sources/<sourceId>/refresh
+   # 进度：GET /api/sources/<sourceId>/refresh/events
+   ```
+   增量刷新基于 SHA-256 hash；上游消失的内容在整批成功后清理；部分失败会按 origin 保命中 `stale`，通过 SSE 事件与 `GET /api/sources` 可观测。
+
+3. **生成营销大纲**：
+   ```bash
+   node scripts/marketing/generate-outline.mjs \
+     --source src-a,src-b \
+     --product "产品名称" \
+     --audience "企业决策者" \
+     --tone "专业、克制、以事实说服" \
+     --angle-set marketing-standard \
+     --slides 5
+   ```
+   产物为 `marketing/outlines/<mo-xxx>.json`。内置 `marketing-standard` 六角度集：客户痛点 / 产品能力 / 行业场景 / 差异化竞争 / ROI 价值 / 成功案例与落地路径。每角度的 `evidenceItemIds` 必须指向素材库真实条目，伪造引用会被剔除并计数。
+
+   > **确认 LLM 链路已通**：如果生成大纲的 `done` 事件出现 `llmShortCircuited:true`，表示第一个角度 LLM 调用失败后其余角度已跳过；请到顶栏齿轮「设置」面板核对 Base URL、Model、API Key，并换用一个已开通的模型（例如火山方舟 `https://ark.cn-beijing.volces.com/api/v3` 下的 `doubao-seed-2-1-pro-260915` 或 `deepseek-v4-flash-ga-260731`）。
+
+4. **批量生成 deck**：
+   ```bash
+   node scripts/marketing/batch-generate.mjs <outlineId> \
+     --angles pain,capability \
+     --slides 8 \
+     --theme web-ui \
+     --animation slide
+   ```
+   产物为 `projects/mkt-<angleKey>-<slug>/`，每个角度一份独立 deck；`ai-ppt.json.sourceSelection.kind = 'outline'` 记录大纲与角度绑定。全局同时只能跑一个大纲生成与一个批量生成任务（重复触发 409），可随时 `POST /api/marketing/batch/cancel` 取消。
+
+5. **导出 / 发布**：对每个生成的 deck 使用 `/ppt-export <deckName> pdf|pptx` 或 `/ppt-publish publish <deckName>`。
+
+> **产物策略**：`sources.json`、`vault/.meta/source-cache/`、`marketing/`、`projects/<name>/export/`、`cover.png`、`references/` 与所有视频文件（`*.mp4/mov/webm`）均不入 git；`demo/` 与 `web/icons/` 为 GitHub Pages / PWA 有意保留。
+
 ## 键盘快捷键
 
 ### 放映页
@@ -283,6 +349,8 @@ npm run backup
 
 | Skill | 作用 |
 |-------|------|
+| `/ppt-sources` | 管理多数据源素材库（dir/url/site/vault） |
+| `/ppt-marketing` | 从素材库出营销大纲并批量生成营销 PPT |
 | `/ppt-preview [deck]` | 启动本地服务器预览 deck |
 | `/ppt-structure <name>` | 从 `ai-ppt-base` 新建 deck |
 | `/ppt-edit [instruction]` | 修改幻灯片文字、布局 |
@@ -329,6 +397,14 @@ npx ai-ppt-skills
 | `projects/xinrenxinshi-intro/` | 薪人薪事产品介绍 |
 
 ## 更新日志
+
+### v2.9.0 — 素材库 → 营销大纲 → 批量 PPT（2026-11）
+
+- **多数据源素材库**：`dir` / `url` / `site` / `vault` 四种源类型，`sources.json` + `vault/.meta/source-cache/` 缓存，增量刷新基于 SHA-256 hash，maxPages 截断与部分失败 stale 保命可观测。
+- **营销大纲**：内置 `marketing-standard` 六角度集；逐角度 LLM 产出契约形状大纲，无 LLM 走确定性兜底；`evidenceItemIds` 防编造校验剔除不存在素材库的引用。
+- **批量生成**：按大纲角度串行生成独立 deck，`ai-ppt.json.sourceSelection.kind='outline'` 双向绑定；全局单批次 409 去重、可取消、自动 lint + 封面截图。
+- **产物策略**：`export/`、`cover.png`、`marketing/`、`vault/.meta/source-cache/`、`references/`、视频文件不入 git；`demo/` 与 `web/icons/` 为 GitHub Pages/PWA 有意保留。
+- **文档**：AGENTS.md 新增素材库/营销/产物约定；README 中英新增工作流章节；测试入口统一为 `node --test tests/*.test.mjs`（335 pass / 101 suites）。
 
 ### v2.6.0 — 易用性修复与信息架构收拢（2026-07）
 
