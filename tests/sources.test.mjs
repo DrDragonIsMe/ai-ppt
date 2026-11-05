@@ -688,11 +688,15 @@ describe('site source low-relevance page filter (B080800)', () => {
     // 按「宁可漏杀也不误伤」放回 KEEP——这是准入方向的已知召回边界，不是回归。
     assert.equal(isLowRelevancePage(e('404 视频学院', 'https://kb.example.com/p/18', longBody)), false);
     assert.equal(isLowRelevancePage(e('404 文档说明', 'https://kb.example.com/p/19', longBody)), false);
+    // B091200 r2：独立数字词元负保护——前导数字串整体必须恰为表内码，`4040`/小数拼出的
+    // `404`（归一化删小数点）都不放行给强信号层。
+    assert.equal(isLowRelevancePage(e('4040 端口性能调优', 'https://kb.example.com/p/20', longBody)), false);
+    assert.equal(isLowRelevancePage(e('40.4 增长率测算', 'https://kb.example.com/p/21', longBody)), false);
     // B091200 r2（P2-观察 1 收口）：– 与 | 只是标点，归一化后拼成 `404 帮助中心` 走准入前缀规则
     // → DROP；但拼出的主体超长且含表外词（`404 帮助中心 中文站`）→ 准入表不放行 → KEEP。
-    assert.equal(isLowRelevancePage(e('404 – 帮助中心', 'https://kb.example.com/p/20', longBody)), true);
-    assert.equal(isLowRelevancePage(e('404 | 帮助中心', 'https://kb.example.com/p/21', longBody)), true);
-    assert.equal(isLowRelevancePage(e('404 帮助中心 — 中文站', 'https://kb.example.com/p/22', longBody)), false);
+    assert.equal(isLowRelevancePage(e('404 – 帮助中心', 'https://kb.example.com/p/22', longBody)), true);
+    assert.equal(isLowRelevancePage(e('404 | 帮助中心', 'https://kb.example.com/p/23', longBody)), true);
+    assert.equal(isLowRelevancePage(e('404 帮助中心 — 中文站', 'https://kb.example.com/p/24', longBody)), false);
     // B091100 设计边界：正文厚实的站点根首页不在本过滤器目标范围内，不得加 / 回浅层清单。
     assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/', longBody)), false);
   });
