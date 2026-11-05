@@ -33,26 +33,65 @@ export function sourceManifestPath(sourceId) {
   return path.join(sourceCacheDir(sourceId), 'manifest.json');
 }
 
-// 抓取递归时绝不进入的目录名（即使被包含在源 target 之内）
+// 抓取递归时绝不进入的目录名（mission 红线：即便被包在源 target 之内也不碰）
 export const FORBIDDEN_DIR_SEGMENTS = new Set([
   '.git', '.backup', '.snapshots', 'node_modules',
 ]);
 
+// 敏感位置拒绝清单（P1-1a）：这些目录段/绝对前缀既不能作为源 target，
+// 也不能作为其中任一待收条目出现。fail-closed——命中即拒。
+export const SENSITIVE_DIR_SEGMENTS = new Set([
+  '.ssh', '.aws', '.docker', '.config', '.gnupg', 'keychain', 'keychains',
+]);
+// 绝对路径前缀：这些目录整体禁止作为源（评审点名 /etc、/private/etc、/var/root）。
+export const SENSITIVE_PATH_PREFIXES = ['/etc', '/private/etc', '/var/root'];
+// 敏感文件名 basename 模式（作用于每个待收条目文件名；扩展名白名单挡不住的也要靠它，
+// 如 id_notes.md / credentials.json 这类"看着像正文"的敏感命名）。
+const SENSITIVE_BASENAME_RES = [
+  /^\.env(\..*)?$/i,   // .env, .env.local, .env.kimi
+  /\.pem$/i,
+  /\.key$/i,
+  /^id_.+/i,           // id_rsa, id_ed25519, id_notes.*
+  /^credentials(\..*)?$/i, // credentials, credentials.json
+  /\.p12$/i,
+  /\.pfx$/i,
+];
+
+function pathSegments(absResolved) {
+  return String(absResolved).split(path.sep).filter(Boolean);
+}
+
+/** 是否命中禁入目录段（.git/.backup/.snapshots/node_modules）——基于绝对路径本身，绝不从不可信 target 求相对。 */
+export function hasForbiddenSegment(absPath) {
+  return pathSegments(path.resolve(absPath)).some((seg) => FORBIDDEN_DIR_SEGMENTS.has(seg));
+}
+
+/** 是否命中敏感目录段/前缀（.ssh/.aws/... 或 /etc 等前缀）——基于绝对路径本身。 */
+export function hasSensitiveSegment(absPath) {
+  const resolved = path.resolve(absPath);
+  if (SENSITIVE_PATH_PREFIXES.some((p) => resolved === p || resolved.startsWith(p + '/'))) return true;
+  return pathSegments(resolved).some((seg) => SENSITIVE_DIR_SEGMENTS.has(seg));
+}
+
+/** 文件名是否命中敏感 basename 模式。 */
+export function hasSensitiveBasename(absPath) {
+  const base = path.basename(String(absPath));
+  return SENSITIVE_BASENAME_RES.some((re) => re.test(base));
+}
+
+/** 综合敏感判定：目录段/前缀 或 basename 命中。用于 target 与每一条待收条目。 */
+export function isSensitivePath(absPath) {
+  return hasSensitiveSegment(absPath) || hasSensitiveBasename(absPath);
+}
+
 /**
- * 判断某个绝对路径是否落在禁入目录内（任意路径段命中 FORBIDDEN_DIR_SEGMENTS）。
- * @param {string} absPath
- * @param {string} [rootForRelative] 相对基准；提供时只检查相对部分，避免把 root 自身路径段误判
+ * 判断某个绝对路径是否落在禁入目录内。
+ * 关键修正（P1-2）：只依据**绝对路径自身的路径段**判断，绝不接受"以不可信 target 为基准求相对"——
+ * 否则当 target 本身就是 .git/.backup/... 时，禁入段会被从基准里减掉而整体失效。
+ * 第二个参数保留以兼容旧调用，但被忽略。
  */
-export function isForbiddenPath(absPath, rootForRelative) {
-  let rel = String(absPath);
-  if (rootForRelative) {
-    const root = path.resolve(rootForRelative);
-    const target = path.resolve(absPath);
-    if (target === root) return false;
-    if (target.startsWith(root + path.sep)) rel = path.relative(root, target);
-  }
-  const segments = rel.split(path.sep);
-  return segments.some((seg) => FORBIDDEN_DIR_SEGMENTS.has(seg));
+export function isForbiddenPath(absPath, _rootForRelative) {
+  return hasForbiddenSegment(absPath);
 }
 
 /** 解析后的 target 是否仍限定在 root 之内（防 ../ 越界）。 */

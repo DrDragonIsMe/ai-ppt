@@ -34,26 +34,48 @@ async function isPublicHost(hostname) {
   return addrs.every((a) => !isPrivateAddress(a.address, a.family));
 }
 
-async function readCapped(res, maxBytes) {
+// 在字节边界安全截断 UTF-8（丢弃可能被切断的多字节序列尾部），避免替换字符。
+function trimUtf8(buf, maxBytes) {
+  if (buf.length <= maxBytes) return { text: buf.toString('utf8'), truncated: false };
+  let end = maxBytes;
+  // 回退到不落在多字节序列中间的位置：buf[end] 若是续字节(10xxxxxx)则继续前移
+  while (end > 0 && (buf[end] & 0xC0) === 0x80) end--;
+  return { text: buf.subarray(0, end).toString('utf8'), truncated: true };
+}
+
+/**
+ * 读取响应体，受字节上限与绝对截止时间双重约束（P2-1：body 读取也有 deadline，不再只保护 header）。
+ * 超限不再整页丢弃，而是**截断**并返回 truncated 标记（P2-3，供上层在 manifest/事件里显式可见）。
+ * @returns {Promise<{text:string,truncated:boolean}>}
+ */
+async function readCapped(res, maxBytes, { deadlineAt = Infinity, timeoutMs = null } = {}) {
+  const overDeadline = () => Number.isFinite(deadlineAt) && Date.now() > deadlineAt;
   const reader = res.body?.getReader?.();
   if (!reader) {
     const text = await res.text();
-    if (Buffer.byteLength(text) > maxBytes) throw new Error(`Response exceeds ${maxBytes} bytes`);
-    return text;
+    if (overDeadline()) throw new Error(`Fetch timed out after ${timeoutMs}ms during body read`);
+    const buf = Buffer.from(text, 'utf8');
+    return trimUtf8(buf, maxBytes);
   }
   let received = 0;
   const chunks = [];
   for (;;) {
-    const { done, value } = await reader.read();
+    if (overDeadline()) {
+      try { await reader.cancel(); } catch { /* ignore */ }
+      throw new Error(`Fetch timed out after ${timeoutMs}ms during body read`);
+    }
+    const { done, value } = await reader.read(); // res.body 绑定 fetch 的 AbortSignal：超时 abort 会在此 reject
     if (done) break;
     received += value.byteLength;
     if (received > maxBytes) {
+      // 保留已到的这一片（可能略超），随后统一截断到 maxBytes；停止继续下载。
+      chunks.push(value);
       try { await reader.cancel(); } catch { /* ignore */ }
-      throw new Error(`Response exceeds ${maxBytes} bytes`);
+      break;
     }
     chunks.push(value);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return trimUtf8(Buffer.concat(chunks), maxBytes);
 }
 
 /**
@@ -67,7 +89,13 @@ export async function fetchPage(url, opts = {}) {
     timeoutMs = DEFAULT_TIMEOUT_MS,
     fetchImpl = fetch,
     redirectsLeft = MAX_REDIRECTS,
+    deadlineAt = null,
   } = opts;
+
+  // 绝对截止时间：覆盖 header + body + 整条重定向链（P2-1，body 读取不再是无截止期的空白区）。
+  const deadline = deadlineAt ?? (Date.now() + timeoutMs);
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw new Error(`Fetch timed out after ${timeoutMs}ms: ${url}`);
 
   let parsed;
   try {
@@ -84,7 +112,7 @@ export async function fetchPage(url, opts = {}) {
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), remaining);
   let res;
   try {
     res = await fetchImpl(parsed.href, {
@@ -98,21 +126,28 @@ export async function fetchPage(url, opts = {}) {
   } catch (err) {
     if (err.name === 'AbortError') throw new Error(`Fetch timed out after ${timeoutMs}ms: ${url}`);
     throw new Error(`Fetch failed: ${err.message}`);
+  }
+
+  try {
+    if (res.status >= 300 && res.status < 400) {
+      if (redirectsLeft <= 0) throw new Error('Too many redirects');
+      const location = res.headers.get('location');
+      if (!location) throw new Error('Redirect without Location header');
+      const next = new URL(location, parsed.href).href;
+      return fetchPage(next, { allowPrivateNetwork, maxBytes, timeoutMs, fetchImpl, redirectsLeft: redirectsLeft - 1, deadlineAt: deadline });
+    }
+    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+
+    const { text: html, truncated } = await readCapped(res, maxBytes, { deadlineAt: deadline, timeoutMs });
+    return { html, truncated, finalUrl: parsed.href, status: res.status, contentType: res.headers.get('content-type') || '' };
+  } catch (err) {
+    if (err.name === 'AbortError' || controller.signal.aborted) {
+      throw new Error(`Fetch timed out after ${timeoutMs}ms: ${url}`);
+    }
+    throw err;
   } finally {
     clearTimeout(timer);
   }
-
-  if (res.status >= 300 && res.status < 400) {
-    if (redirectsLeft <= 0) throw new Error('Too many redirects');
-    const location = res.headers.get('location');
-    if (!location) throw new Error('Redirect without Location header');
-    const next = new URL(location, parsed.href).href;
-    return fetchPage(next, { allowPrivateNetwork, maxBytes, timeoutMs, fetchImpl, redirectsLeft: redirectsLeft - 1 });
-  }
-  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
-
-  const html = await readCapped(res, maxBytes);
-  return { html, finalUrl: parsed.href, status: res.status, contentType: res.headers.get('content-type') || '' };
 }
 
 /** 抓 HTML 并抽正文文本。 */

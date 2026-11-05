@@ -61,7 +61,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
     fetchPage: opts.fetchPage,
     allowPrivateNetwork: opts.allowPrivateNetwork,
     vaultRoot: opts.vaultRoot,
-    maxBytes: opts.maxBytes,
+    maxBytes: Number.isFinite(opts.maxBytes) ? opts.maxBytes : maxBytesPerItem, // P2-3：url/site 抓取上限随该源 maxBytesPerItem 抬高
     onProgress: (message, detail) => onEvent({ step: 'scan', message, detail: detail || null }),
   };
 
@@ -94,7 +94,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
     if (entry.kind === 'text') {
       const capped = capByBytes(entry.body || '', maxBytesPerItem);
       storedBody = capped.text;
-      truncated = capped.truncated;
+      truncated = capped.truncated || entry.bodyTruncated === true; // 正文二次截断 或 采集器响应体截断（P2-3）
     } else {
       storedBody = entry.note ? `> ${entry.note}\n` : '';
     }
@@ -139,25 +139,41 @@ export async function refreshSource(sourceOrId, opts = {}) {
     });
   }
 
-  // 上游消失的条目：仅在整批成功采集后清理物理文件（errors 只影响对应条目，不影响清理）
+  // P1-4 成功性闸门：本轮零入库且存在抓取/抽取错误 → 判定为「采集整体失败」（上游 503 / DNS 抖动 /
+  // 维护窗口等），跳过 prune、保留既有 items，避免一次失败静默销毁已入库语料；并把该事实显式上报。
+  const prevItemCount = (prev.items || []).length;
+  const pruneBlocked = newItems.length === 0 && prevItemCount > 0 && errors.length > 0;
+
   let removed = 0;
-  const itemsDir = sourceItemsDir(sourceId);
-  for (const old of prev.items || []) {
-    if (!newIds.has(old.id)) {
-      try {
-        fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true });
-        removed++;
-      } catch { /* 文件可能已不在 */ }
+  if (!pruneBlocked) {
+    // 上游消失的条目：正常批次下清理物理文件（errors 只影响对应条目，不阻断清理）
+    const itemsDir = sourceItemsDir(sourceId);
+    for (const old of prev.items || []) {
+      if (!newIds.has(old.id)) {
+        try {
+          fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true });
+          removed++;
+        } catch { /* 文件可能已不在 */ }
+      }
     }
+  } else {
+    onEvent({
+      step: 'preserve',
+      message: `素材源「${source.name}」本轮采集失败（0 入库 / ${errors.length} 错误），已跳过清理并保留既有 ${prevItemCount} 条素材`,
+      detail: { keptItems: prevItemCount, errors: errors.length },
+    });
   }
 
-  const fingerprint = sha256(newItems.map((i) => `${i.id}:${i.hash}`).sort().join('\n'));
+  const collectedFingerprint = sha256(newItems.map((i) => `${i.id}:${i.hash}`).sort().join('\n'));
+  const fingerprint = pruneBlocked ? (prev.fingerprint || '') : collectedFingerprint;
+  const outItems = pruneBlocked ? (prev.items || []) : newItems;
   const fetchedAt = new Date().toISOString();
   writeManifest(sourceId, {
     sourceId,
     fetchedAt,
     fingerprint,
-    items: newItems,
+    items: outItems,
+    ...(pruneBlocked ? { preserved: true, preserveReason: 'collection-failed' } : {}),
     ...(truncation && truncation.dropped > 0
       ? { truncated: true, droppedCount: truncation.dropped, totalCandidates: truncation.total, maxPages: truncation.cap }
       : {}),
@@ -168,7 +184,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
   const summary = {
     sourceId,
     name: source.name,
-    type: source.type,
+    sourceType: source.type, // 不占用 done 事件的 type 字段（emitDone 会把 type 固定为 'done'）
     added,
     updated,
     unchanged,
@@ -176,10 +192,11 @@ export async function refreshSource(sourceOrId, opts = {}) {
     errors: errors.length,
     errorList: errors,
     fingerprint,
-    itemCount: newItems.length,
+    itemCount: outItems.length,
     truncated: !!(truncation && truncation.dropped > 0),
+    preserved: pruneBlocked,
     droppedCount: truncation ? truncation.dropped : 0,
-    totalCandidates: truncation ? truncation.total : newItems.length,
+    totalCandidates: truncation ? truncation.total : outItems.length,
     lastFetchedAt: fetchedAt,
   };
   return summary;

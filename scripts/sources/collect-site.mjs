@@ -55,6 +55,7 @@ export async function* collectSite(source, ctx = {}) {
       originKey: url,
       title: guessTitle(html, url),
       body,
+      bodyTruncated: page.truncated === true, // P2-3：单页响应体截断向上传播
       tags: [...tags],
     };
 

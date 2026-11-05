@@ -4,7 +4,7 @@
 // 绝不写 vault 任何业务内容——写盘只发生在 source-cache（由编排器负责）。
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT } from './paths.mjs';
+import { ROOT, isForbiddenPath, isSensitivePath } from './paths.mjs';
 import { matchesAny } from './glob.mjs';
 import { requireFiniteOption } from './registry.mjs';
 import { parseFrontMatter } from '../front-matter.mjs';
@@ -75,6 +75,8 @@ export async function* collectVault(source, ctx = {}) {
     }
     for (const ent of entries) {
       const abs = path.join(dir, ent.name);
+      // P1-1a / P1-2 纵深：即便 target 已限在 vault 内，条目路径命中禁入/敏感清单也一律跳过。
+      if (isForbiddenPath(abs) || isSensitivePath(abs)) continue;
       const rel = path.relative(vaultRoot, abs).split(path.sep).join('/');
       if (ent.isDirectory()) {
         if (ent.name.startsWith('.')) continue; // 跳过 .meta 等隐藏目录

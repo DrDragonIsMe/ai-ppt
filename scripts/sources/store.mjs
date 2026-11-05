@@ -57,6 +57,8 @@ export function writeManifest(sourceId, manifest) {
     fetchedAt: manifest.fetchedAt || new Date().toISOString(),
     fingerprint: manifest.fingerprint || '',
     items: Array.isArray(manifest.items) ? manifest.items : [],
+    // P1-4：采集整体失败时保留既有语料的可观测标记（不静默）
+    ...(manifest.preserved ? { preserved: true, preserveReason: manifest.preserveReason || 'collection-failed' } : {}),
     // 因 maxPages 截断时的可观测标记（加性字段，供 GET /api/sources 与前端徽标使用）
     ...(manifest.truncated ? { truncated: true } : {}),
     ...(Number.isFinite(manifest.droppedCount) ? { droppedCount: manifest.droppedCount } : {}),

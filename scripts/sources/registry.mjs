@@ -10,11 +10,14 @@
 //   优于「无上限静默遍历」；url 单页不受该上限影响。depth 仅 site 用，默认 1。
 // 写盘统一走 fs-utils 的 writeJsonAtomic；非法 id/target → SourceError(statusCode=400)，
 // 更新/删除不存在的 id → statusCode=404。
+// 路径安全（P1-1/P1-2）：dir/vault target 归一后须通过禁入目录段 + 敏感位置拒绝清单（见 paths.mjs），
+//   且 dir 绝对路径默认只允许仓库 ROOT 内；越 ROOT 需环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES=1
+//   + 请求体 acknowledgeExternalPath:true 双重授权（本服务无鉴权，LAN 下"调用方≠用户"）。
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeJsonAtomic } from '../fs-utils.mjs';
 import { isSafeName } from '../config.mjs';
-import { ROOT, sourcesFile, isWithinRoot } from './paths.mjs';
+import { ROOT, sourcesFile, isWithinRoot, hasForbiddenSegment, hasSensitiveSegment } from './paths.mjs';
 
 export const SOURCE_TYPES = ['dir', 'url', 'site', 'vault'];
 
@@ -138,16 +141,55 @@ function normalizeOptions(type, rawOptions) {
   return out;
 }
 
-// 校验/归一 dir target：允许仓库内相对路径或用户显式配置的绝对路径；拒绝 ../ 越界与控制字符。
-function normalizeDirTarget(target) {
+// 是否越 ROOT 的外部目录源被环境变量授权（P1-1b：默认关闭，越界抓取需运维显式打开）。
+export function externalSourcesAllowed() {
+  const v = String(process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES || '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+// 校验/归一 dir target（P1-1 / P1-2 安全闸门，按顺序全部通过才落盘）：
+//  1. 非空、无控制字符；
+//  2. 归一后绝对/相对路径本身不得穿越禁入目录（.git/.backup/.snapshots/node_modules）；
+//  3. 归一后不得落在敏感位置（.ssh/.aws/.docker/.config/keychain、/etc、/var/root 等前缀）；
+//  4. 默认只允许仓库 ROOT 之内；越 ROOT 的外部绝对路径须
+//     (b) 环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES=1 授权，且
+//     (c) 请求体显式带 acknowledgeExternalPath:true（前端弹一次确认）。
+// 相对路径越 ROOT 一律拒绝（与绝对外部路径不同：相对路径不存在"用户显式配置的绝对路径"语义）。
+function normalizeDirTarget(target, { acknowledgeExternalPath } = {}) {
   const t = String(target).trim();
   if (!t) throw new SourceError('dir 源的 target 不能为空');
   if (hasControlOrNul(t)) throw new SourceError('dir 源的 target 含非法字符');
-  if (path.isAbsolute(t)) return path.normalize(t);
-  // 相对路径：必须仍落在 ROOT 内
-  const resolved = path.resolve(ROOT, t);
-  if (!isWithinRoot(ROOT, resolved)) {
-    throw new SourceError('dir 源相对路径越出仓库根，禁止');
+  const isAbs = path.isAbsolute(t);
+  const resolved = isAbs ? path.normalize(t) : path.resolve(ROOT, t);
+
+  if (hasForbiddenSegment(resolved)) {
+    throw new SourceError(`dir 源 target 落在禁入目录内（禁止 .git/.backup/.snapshots/node_modules）：${resolved}`);
+  }
+  if (hasSensitiveSegment(resolved)) {
+    throw new SourceError(`dir 源 target 落在敏感位置拒绝清单内（.ssh/.aws/.docker/.config/keychain、/etc、/var/root 等）：${resolved}`);
+  }
+
+  if (!isAbs) {
+    // 相对路径：必须仍落在仓库 ROOT 内，无外部授权通道。
+    if (!isWithinRoot(ROOT, resolved)) {
+      throw new SourceError('dir 源相对路径越出仓库根，禁止');
+    }
+    return resolved;
+  }
+
+  // 绝对路径：ROOT 之内直接放行（敏感/禁入已在上面拦过）。
+  if (isWithinRoot(ROOT, resolved)) return resolved;
+
+  // 越 ROOT 的绝对路径：默认拒绝，需环境变量授权 + 请求显式确认（两道都过才放行）。
+  if (!externalSourcesAllowed()) {
+    throw new SourceError(
+      '默认仅允许仓库根目录内的目录源；越出仓库根的绝对路径需设置环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES=1 后重试',
+    );
+  }
+  if (acknowledgeExternalPath !== true) {
+    throw new SourceError(
+      '越出仓库根的目录源需在请求中显式确认 acknowledgeExternalPath:true',
+    );
   }
   return resolved;
 }
@@ -177,6 +219,9 @@ function normalizeVaultTarget(target) {
   if (!isWithinRoot(vaultDir, resolved)) {
     throw new SourceError('vault 源 target 越出 vault 目录，禁止');
   }
+  if (hasForbiddenSegment(resolved) || hasSensitiveSegment(resolved)) {
+    throw new SourceError(`vault 源 target 命中禁入/敏感路径清单：${resolved}`);
+  }
   return path.relative(vaultDir, resolved).split(path.sep).join('/');
 }
 
@@ -198,8 +243,9 @@ export function validateSource(input, { id } = {}) {
 
   const targetRaw = input.target ?? '';
   if (typeof targetRaw !== 'string') throw new SourceError('target 必须是字符串');
+  const acknowledgeExternalPath = input.acknowledgeExternalPath === true;
   let target;
-  if (type === 'dir') target = normalizeDirTarget(targetRaw);
+  if (type === 'dir') target = normalizeDirTarget(targetRaw, { acknowledgeExternalPath });
   else if (type === 'url' || type === 'site') target = normalizeUrlTarget(type, targetRaw);
   else target = normalizeVaultTarget(targetRaw);
 
@@ -230,6 +276,8 @@ export function validateSource(input, { id } = {}) {
     tags,
     lastFetchedAt,
     options,
+    // 越 ROOT 的外部目录源的一次性确认标记（仅在确认时写入，随 PUT 合并保留；内部源不写）。
+    ...(acknowledgeExternalPath ? { acknowledgeExternalPath: true } : {}),
   };
 }
 

@@ -32,7 +32,7 @@ export async function* collectUrl(source, ctx = {}) {
   try {
     if (injected) {
       const fetchFn = ctx.fetchPage || fetchPage;
-      const { html, finalUrl } = await fetchFn(url, { allowPrivateNetwork: ctx.allowPrivateNetwork, maxBytes: ctx.maxBytes });
+      const { html, finalUrl, truncated } = await fetchFn(url, { allowPrivateNetwork: ctx.allowPrivateNetwork, maxBytes: ctx.maxBytes });
       const text = extractFromHtml(html);
       yield {
         kind: 'text',
@@ -40,6 +40,7 @@ export async function* collectUrl(source, ctx = {}) {
         originKey: url, // 以配置的原始 URL 为稳定 key，重定向不改变 id
         title: titleFromUrl(finalUrl || url, html),
         body: text,
+        bodyTruncated: truncated === true, // P2-3：响应体被 maxBytes 截断 → 向上传播，供 manifest/事件可见
         tags: [...tags],
       };
     } else {

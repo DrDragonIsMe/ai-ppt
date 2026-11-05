@@ -1,10 +1,11 @@
 // scripts/sources/collect-dir.mjs — dir 类型采集器：递归采集文本类文件为“原始条目”。
 // 受 options.include（glob 列表）与 options.maxPages（条目上限）控制；
-// 拒绝越出源根目录（含 symlink 目录不跟随）、绝不进入 .git/.backup/.snapshots/node_modules。
+// 拒绝越出源根目录（含 symlink 目录不跟随）；禁入段（.git/.backup/.snapshots/node_modules）基于绝对路径判定，
+// 敏感位置/basename 拒绝清单（见 paths.mjs，P1-1）在 target 与其下每一条候选上双重生效。
 // 每条文本条目在此就地抽正文（md/txt/html/csv/json/docx/pdf），抽正文失败降级为 error 条目、不中断整批。
 import fs from 'node:fs';
 import path from 'node:path';
-import { isWithinRoot, isForbiddenPath } from './paths.mjs';
+import { isWithinRoot, isForbiddenPath, isSensitivePath } from './paths.mjs';
 import { matchesAny } from './glob.mjs';
 import { requireFiniteOption } from './registry.mjs';
 import { extOf, classifyExt, extractFileText } from './text-extract.mjs';
@@ -75,7 +76,9 @@ export async function* collectDir(source, ctx = {}) {
         try { realAbs = fs.realpathSync(abs); } catch { continue; }
         if (!isWithinRoot(root, realAbs)) continue; // symlink 越界 → 拒绝
       }
-      if (isForbiddenPath(realAbs, root)) continue;
+      // 禁入目录段（基于绝对路径判定，P1-2）+ 敏感位置/basename 拒绝清单（P1-1a）：
+      // 命中即整条跳过——目录不进入、文件不入库。对 symlink 亦以解析后的真实路径判定。
+      if (isForbiddenPath(realAbs) || isSensitivePath(realAbs)) continue;
 
       let isDir = ent.isDirectory();
       let isFile = ent.isFile();

@@ -2,7 +2,8 @@
 // 端点：GET/POST /api/sources、PUT/DELETE /api/sources/:id、
 //        POST /api/sources/:id/refresh（202 + SSE）、GET /api/sources/:id/refresh/events、
 //        GET /api/sources/:id/items、GET /api/sources/items?q=&limit=、POST /api/sources/preview。
-// 错误映射：非法 id/target → 400；源不存在 → 404；刷新进行中重复触发 → 409；磁盘/网络真实失败 → 500。
+// 错误映射：非法 id/target → 400；源不存在 → 404；刷新进行中重复触发 → 409；
+//          全局刷新并发超限 → 429；磁盘/网络真实失败 → 500。
 // 刷新走 202 + NDJSON SSE：spawnNdjsonTask(store=sourceRefreshes, script='sources/refresh.mjs', args=[id])，
 // 同 id 重复刷新 409；服务重启后由 taskRegistry.load()/restoreInterruptedNdjsonTasks 标为 interrupted。
 import {
@@ -30,6 +31,15 @@ export default function sourcesRoutes(deps) {
   }
 
   const errStatus = (err) => (err instanceof SourceError ? err.statusCode : (err.statusCode || 500));
+
+  // P2-2 全局并发闸（跨 sourceId）：刷新会逐源拉起 node 子进程并落盘（最坏 500×maxBytesPerItem），
+  // 同仓已有先例（routes/projects.mjs 的 puppeteer 导出 MAX=2 + 429），此处对素材源刷新施加同类总量上限。
+  const MAX_CONCURRENT_SOURCE_REFRESHES = 2;
+  function activeRefreshCount() {
+    let n = 0;
+    for (const state of sourceRefreshes.values()) if (state && !state.done) n++;
+    return n;
+  }
 
   return [
     // 列出全部源（附缓存条目数，供前端展示）
@@ -184,6 +194,9 @@ export default function sourcesRoutes(deps) {
         const metaId = `ndjson:source-refresh:${id}`;
         if (isActiveStatus(taskRegistry.get(metaId)?.status)) {
           return send(res, 409, { error: '该源正在刷新中，请等待完成' });
+        }
+        if (activeRefreshCount() >= MAX_CONCURRENT_SOURCE_REFRESHES) {
+          return send(res, 429, { error: `同时进行的素材源刷新任务过多（上限 ${MAX_CONCURRENT_SOURCE_REFRESHES}），请稍后重试` });
         }
         spawnNdjsonTask(sourceRefreshes, id, 'sources/refresh.mjs', [id]);
         send(res, 202, { message: '刷新已启动', sourceId: id });

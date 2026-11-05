@@ -8,6 +8,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import {
   loadSources, saveSources, upsertSource, removeSource, getSource, validateSource,
@@ -19,6 +21,7 @@ import {
 import { refreshSource, previewSource } from '../scripts/sources/refresh.mjs';
 import { collectDir } from '../scripts/sources/collect-dir.mjs';
 import { collectSite } from '../scripts/sources/collect-site.mjs';
+import { fetchPage } from '../scripts/sources/net.mjs';
 import { capByBytes, classifyExt } from '../scripts/sources/text-extract.mjs';
 import { isWithinRoot } from '../scripts/sources/paths.mjs';
 import { matchesAny } from '../scripts/sources/glob.mjs';
@@ -26,12 +29,23 @@ import sourcesRoutes from '../routes/sources.mjs';
 import { isSafeName } from '../scripts/config.mjs';
 
 // 每个测试独享临时 sources.json + 缓存根，避免污染仓库，也彼此隔离。
+// 外部临时目录（os.tmpdir()）在 ROOT 之外，测试运行在"运维已授权外部源"的语境下：
+// 设 AI_PPT_ALLOW_EXTERNAL_SOURCES=1（P1-1b 的第一道闸），dir 源创建再显式带 acknowledgeExternalPath（第二道闸，见 mkDirSource）。
 function freshEnv(label) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `src-${label}-`));
   process.env.AI_PPT_SOURCES_FILE = path.join(tmp, 'sources.json');
   process.env.AI_PPT_SOURCE_CACHE_ROOT = path.join(tmp, 'cache');
+  process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = '1';
   return tmp;
 }
+
+// 外部临时目录作为 dir 源：模拟生产"运维开 env + 前端确认一次"两道闸门（P1-1b/c）。
+function mkDirSource(input) {
+  return upsertSource({ acknowledgeExternalPath: true, ...input });
+}
+
+// refresh CLI 绝对路径（供 P1-3 端到端 NDJSON 子进程测试）
+const REFRESH_CLI = fileURLToPath(new URL('../scripts/sources/refresh.mjs', import.meta.url));
 
 // ---------------------------------------------------------------------------
 // slugify / makeId
@@ -58,7 +72,7 @@ describe('registry slugify / makeId', () => {
 describe('validateSource', () => {
   it('accepts a valid dir source and applies defaults', () => {
     const tmp = freshEnv('validate');
-    const s = validateSource({ type: 'dir', name: 'Docs', target: tmp, tags: ['a'] });
+    const s = validateSource({ type: 'dir', name: 'Docs', target: tmp, tags: ['a'], acknowledgeExternalPath: true });
     assert.equal(s.type, 'dir');
     assert.equal(s.enabled, true);
     assert.deepEqual(s.tags, ['a']);
@@ -81,15 +95,17 @@ describe('validateSource', () => {
   it('clamps numeric option ranges', () => {
     assert.throws(() => validateSource({ type: 'site', name: 'n', target: 'https://x.com', options: { depth: 99 } }), SourceError);
     assert.throws(() => validateSource({ type: 'site', name: 'n', target: 'https://x.com', options: { maxPages: 0 } }), SourceError);
-    assert.throws(() => validateSource({ type: 'dir', name: 'n', target: os.tmpdir(), options: { maxBytesPerItem: 1 } }), SourceError);
+    assert.throws(() => validateSource({ type: 'site', name: 'n', target: 'https://x.com', options: { maxBytesPerItem: 1 } }), SourceError);
     const ok = validateSource({ type: 'site', name: 'n', target: 'https://x.com', options: { depth: 2, maxPages: 10, maxBytesPerItem: 4096 } });
     assert.deepEqual({ depth: ok.options.depth, maxPages: ok.options.maxPages, maxBytesPerItem: ok.options.maxBytesPerItem },
       { depth: 2, maxPages: 10, maxBytesPerItem: 4096 });
   });
   it('未显式提供的数值 option 一律物化为 OPTION_RANGES 声明的 default', () => {
+    freshEnv('materialize');
     for (const type of ['dir', 'url', 'site', 'vault']) {
-      const target = type === 'url' || type === 'site' ? 'https://example.com' : os.tmpdir();
-      const s = validateSource({ type, name: 'no-opts', target }); // 完全不带 options
+      // dir 用外部临时目录（freshEnv 已开 env，需 ack）；vault 用空 target（限定在 ROOT/vault 内）；url/site 用 https。
+      const target = type === 'url' || type === 'site' ? 'https://example.com' : (type === 'dir' ? os.tmpdir() : '');
+      const s = validateSource({ type, name: 'no-opts', target, acknowledgeExternalPath: true }); // 完全不带 options
       assert.equal(s.options.maxPages, OPTION_RANGES.maxPages.default, `${type}.maxPages`);
       assert.equal(s.options.maxBytesPerItem, OPTION_RANGES.maxBytesPerItem.default, `${type}.maxBytesPerItem`);
       assert.equal(s.options.depth, OPTION_RANGES.depth.default, `${type}.depth`);
@@ -104,7 +120,7 @@ describe('registry CRUD', () => {
   beforeEach(() => freshEnv('crud'));
   it('creates, lists, gets, updates, removes', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'src-target-'));
-    const { source, isNew } = upsertSource({ type: 'dir', name: 'A', target: tmp });
+    const { source, isNew } = mkDirSource({ type: 'dir', name: 'A', target: tmp });
     assert.equal(isNew, true);
     assert.match(source.id, /^src-a$/);
     assert.equal(getSource(source.id).name, 'A');
@@ -121,8 +137,8 @@ describe('registry CRUD', () => {
     assert.throws(() => upsertSource({ name: 'x' }, 'src-does-not-exist'), (e) => e instanceof SourceError && e.statusCode === 404);
   });
   it('rejects invalid explicit id', () => {
-    assert.throws(() => upsertSource({ type: 'dir', name: 'x', target: '/tmp', id: '../bad' }), SourceError);
-    assert.throws(() => upsertSource({ type: 'dir', name: 'x', target: '/tmp', id: 'not-prefixed' }), SourceError);
+    assert.throws(() => mkDirSource({ type: 'dir', name: 'x', target: '/tmp', id: '../bad' }), SourceError);
+    assert.throws(() => mkDirSource({ type: 'dir', name: 'x', target: '/tmp', id: 'not-prefixed' }), SourceError);
   });
   it('loadSources tolerates missing file', () => {
     const d = loadSources();
@@ -145,7 +161,7 @@ describe('dir source: collect + incremental + listItems', () => {
     fs.writeFileSync(path.join(dir, 'sub', 'beta.md'), '# Beta\nsecond doc');
     fs.writeFileSync(path.join(dir, 'plain.txt'), 'plain text body');
     fs.writeFileSync(path.join(dir, 'binary.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47])); // default include skips
-    source = upsertSource({ type: 'dir', name: 'Docs', target: dir, tags: ['demo'] }).source;
+    source = mkDirSource({ type: 'dir', name: 'Docs', target: dir, tags: ['demo'] }).source;
   });
 
   it('collects only text items with titles', async () => {
@@ -192,7 +208,7 @@ describe('dir source: collect + incremental + listItems', () => {
 
   it('listItems q filters + limit truncates; aggregates across sources', async () => {
     await refreshSource(source.id);
-    const s2 = upsertSource({ type: 'dir', name: 'Other', target: (() => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'src-dir2-')); fs.writeFileSync(path.join(d, 'gamma.md'), '# Gamma\ng content'); return d; })() }).source;
+    const s2 = mkDirSource({ type: 'dir', name: 'Other', target: (() => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'src-dir2-')); fs.writeFileSync(path.join(d, 'gamma.md'), '# Gamma\ng content'); return d; })() }).source;
     await refreshSource(s2.id);
     assert.deepEqual(listItems({ q: 'gamma' }).map((i) => i.title), ['Gamma']);
     assert.equal(listItems({ limit: 1 }).length, 1);
@@ -202,7 +218,7 @@ describe('dir source: collect + incremental + listItems', () => {
   });
 
   it('missing dir → refresh throws statusCode 500', async () => {
-    const bad = upsertSource({ type: 'dir', name: 'Bad', target: path.join(dir, 'nope-does-not-exist') }).source;
+    const bad = mkDirSource({ type: 'dir', name: 'Bad', target: path.join(dir, 'nope-does-not-exist') }).source;
     await assert.rejects(() => refreshSource(bad.id), (e) => e.statusCode === 500);
   });
 });
@@ -215,7 +231,7 @@ describe('dir source: maxBytesPerItem truncation', () => {
     freshEnv('trunc');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-trunc-'));
     fs.writeFileSync(path.join(dir, 'big.md'), '# Big\n' + 'x'.repeat(5000));
-    const source = upsertSource({ type: 'dir', name: 'Big', target: dir, options: { maxBytesPerItem: 1024 } }).source;
+    const source = mkDirSource({ type: 'dir', name: 'Big', target: dir, options: { maxBytesPerItem: 1024 } }).source;
     const r = await refreshSource(source.id);
     assert.equal(r.added, 1);
     const it = listItems({ sourceId: source.id })[0];
@@ -235,7 +251,7 @@ describe('maxPages truncation is explicitly reported', () => {
     freshEnv('trunc-report');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-tr-'));
     for (let i = 0; i < 5; i++) fs.writeFileSync(path.join(dir, `d${i}.md`), `# Doc ${i}\nbody ${i}`);
-    const source = upsertSource({ type: 'dir', name: 'Trunc', target: dir, options: { maxPages: 3 } }).source;
+    const source = mkDirSource({ type: 'dir', name: 'Trunc', target: dir, options: { maxPages: 3 } }).source;
     const events = [];
     const r = await refreshSource(source.id, { onEvent: (e) => events.push(e) });
     assert.equal(r.itemCount, 3);
@@ -258,7 +274,7 @@ describe('maxPages truncation is explicitly reported', () => {
     freshEnv('trunc-none');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-tn-'));
     for (let i = 0; i < 3; i++) fs.writeFileSync(path.join(dir, `n${i}.md`), `# N${i}`);
-    const source = upsertSource({ type: 'dir', name: 'NoCap', target: dir }).source; // 无 maxPages → 物化默认 30
+    const source = mkDirSource({ type: 'dir', name: 'NoCap', target: dir }).source; // 无 maxPages → 物化默认 30
     const r = await refreshSource(source.id);
     assert.equal(source.options.maxPages, OPTION_RANGES.maxPages.default);
     assert.equal(r.itemCount, 3);
@@ -272,7 +288,7 @@ describe('maxPages truncation is explicitly reported', () => {
     freshEnv('trunc-default');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-td-'));
     for (let i = 0; i < 31; i++) fs.writeFileSync(path.join(dir, `f${i}.md`), `# F${i}\nbody`);
-    const source = upsertSource({ type: 'dir', name: 'Default30', target: dir }).source;
+    const source = mkDirSource({ type: 'dir', name: 'Default30', target: dir }).source;
     assert.equal(source.options.maxPages, OPTION_RANGES.maxPages.default); // 物化 = 30
     const r = await refreshSource(source.id);
     assert.equal(r.itemCount, OPTION_RANGES.maxPages.default);              // 入库 30
@@ -289,7 +305,7 @@ describe('maxPages truncation is explicitly reported', () => {
     freshEnv('collector-no-default');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-nd-'));
     fs.writeFileSync(path.join(dir, 'a.md'), '# A');
-    const source = upsertSource({ type: 'dir', name: 'Strip', target: dir }).source;
+    const source = mkDirSource({ type: 'dir', name: 'Strip', target: dir }).source;
     const bad = { ...source, options: { ...source.options, maxPages: undefined } };
     await assert.rejects(
       async () => { for await (const _ of collectDir(bad)) { void _; } },
@@ -301,7 +317,7 @@ describe('maxPages truncation is explicitly reported', () => {
     freshEnv('trunc-api');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'src-ta-'));
     for (let i = 0; i < 4; i++) fs.writeFileSync(path.join(dir, `y${i}.md`), `# Y${i}`);
-    const created = await call(makeRouteCtx(), 'POST', '/api/sources', { body: { type: 'dir', name: 'T', target: dir, options: { maxPages: 2 } } });
+    const created = await call(makeRouteCtx(), 'POST', '/api/sources', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'T', target: dir, options: { maxPages: 2 } } });
     const id = created.body.source.id;
     await refreshSource(id);
     const listed = await call(makeRouteCtx(), 'GET', '/api/sources');
@@ -509,7 +525,7 @@ describe('routes/sources.mjs handlers', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'src-rt-'));
     fs.writeFileSync(path.join(tmp, 'm.md'), '# M\ncontent');
     // create
-    const created = await call(ctx, 'POST', '/api/sources', { body: { type: 'dir', name: 'R', target: tmp } });
+    const created = await call(ctx, 'POST', '/api/sources', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'R', target: tmp } });
     assert.equal(created.status, 201);
     const id = created.body.source.id;
     // list
@@ -536,7 +552,7 @@ describe('routes/sources.mjs handlers', () => {
 
   it('PUT updates, DELETE removes; missing → 404', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'src-rt2-'));
-    const id = (await call(ctx, 'POST', '/api/sources', { body: { type: 'dir', name: 'R', target: tmp } })).body.source.id;
+    const id = (await call(ctx, 'POST', '/api/sources', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'R', target: tmp } })).body.source.id;
     const upd = await call(ctx, 'PUT', `/api/sources/${id}`, { body: { name: 'R2' } });
     assert.equal(upd.status, 200);
     assert.equal(upd.body.source.name, 'R2');
@@ -562,26 +578,305 @@ describe('routes/sources.mjs handlers', () => {
   it('POST /api/sources/preview runs collectors in-process (dir + bad → 400/500)', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'src-pv-'));
     fs.writeFileSync(path.join(tmp, 'z.md'), '# Zulu\npreview body');
-    const pv = await call(ctx, 'POST', '/api/sources/preview', { body: { type: 'dir', name: 'P', target: tmp } });
+    const pv = await call(ctx, 'POST', '/api/sources/preview', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'P', target: tmp } });
     assert.equal(pv.status, 200);
     assert.equal(pv.body.ok, true);
     assert.match(pv.body.title, /Zulu/);
     // invalid target → validateSource 400
-    const bad = await call(ctx, 'POST', '/api/sources/preview', { body: { type: 'dir', name: 'P', target: '../../../etc' } });
+    const bad = await call(ctx, 'POST', '/api/sources/preview', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'P', target: '../../../etc' } });
     assert.equal(bad.status, 400);
     // dir missing → collector throws 500
-    const miss = await call(ctx, 'POST', '/api/sources/preview', { body: { type: 'dir', name: 'P', target: path.join(tmp, 'nope') } });
+    const miss = await call(ctx, 'POST', '/api/sources/preview', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'P', target: path.join(tmp, 'nope') } });
     assert.equal(miss.status, 500);
   });
 
   it('GET /api/sources/items aggregates (not shadowed by :id route)', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'src-agg-'));
     fs.writeFileSync(path.join(tmp, 'k.md'), '# K\nk body');
-    const id = (await call(ctx, 'POST', '/api/sources', { body: { type: 'dir', name: 'K', target: tmp } })).body.source.id;
+    const id = (await call(ctx, 'POST', '/api/sources', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'K', target: tmp } })).body.source.id;
     await refreshSource(id); // 真实抓取写缓存（不经 spawn 桩）
     const items = await call(ctx, 'GET', '/api/sources/items');
     assert.equal(items.status, 200);
     assert.ok(items.body.items.some((i) => i.title === 'K'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P1-1 路径安全：外部授权（env）+ 显式确认 + 敏感/禁入拒绝清单
+// ---------------------------------------------------------------------------
+describe('P1-1 path safety: external gate + sensitive denylist', () => {
+  it('仓库外绝对 target 在未设 env 时默认被拒', () => {
+    freshEnv('p11-deny');
+    const saved = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    delete process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    try {
+      assert.throws(
+        () => validateSource({ type: 'dir', name: 'X', target: os.tmpdir(), acknowledgeExternalPath: true }),
+        /AI_PPT_ALLOW_EXTERNAL_SOURCES/,
+      );
+    } finally {
+      process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = saved;
+    }
+  });
+
+  it('设了 env 仍需显式 acknowledgeExternalPath；确认后才放行', () => {
+    freshEnv('p11-ack'); // freshEnv 已设 env=1
+    assert.throws(
+      () => validateSource({ type: 'dir', name: 'X', target: os.tmpdir() }), // 无 ack
+      /acknowledgeExternalPath/,
+    );
+    const ok = validateSource({ type: 'dir', name: 'X', target: os.tmpdir(), acknowledgeExternalPath: true });
+    assert.equal(ok.type, 'dir');
+    assert.equal(ok.acknowledgeExternalPath, true); // 确认标记随源持久化，PUT 改名时无需再确认
+  });
+
+  it('敏感位置 target 即使 env+ack 也拒绝（.ssh/.aws 段、/etc、/var/root 前缀）', () => {
+    freshEnv('p11-sens');
+    const home = os.homedir();
+    for (const bad of [
+      path.join(home, '.ssh'),
+      path.join(home, '.aws', 'credentials'),
+      '/etc/passwd',
+      '/private/etc/hosts',
+      '/var/root/secret.md',
+      path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sec-')), '.ssh', 'id_ed25519'), // 任意位置的 .ssh 段
+    ]) {
+      assert.throws(
+        () => validateSource({ type: 'dir', name: 'X', target: bad, acknowledgeExternalPath: true }),
+        /敏感位置|禁入目录/,
+        `target 应被拒：${bad}`,
+      );
+    }
+  });
+
+  it('条目级 basename/段命中被排除：即使扩展名是 .md/.json 也不入库', async () => {
+    freshEnv('p11-entry');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'entry-'));
+    fs.writeFileSync(path.join(dir, 'keep.md'), '# Keep\nlegit note');
+    fs.writeFileSync(path.join(dir, 'id_notes.md'), '# IDN\nlooks like a doc but id_ prefix');
+    fs.writeFileSync(path.join(dir, 'credentials.json'), '{"a":1}');
+    fs.mkdirSync(path.join(dir, 'sub', '.ssh'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'sub', '.ssh', 'token.md'), '# Token');
+    const source = mkDirSource({ type: 'dir', name: 'Entry', target: dir }).source;
+    await refreshSource(source.id);
+    const titles = listItems({ sourceId: source.id }).map((i) => i.title).sort();
+    assert.deepEqual(titles, ['Keep']); // 只有 keep.md 入库
+    // 敏感文件确实在磁盘上（证明是清单挡的，不是没造出来）
+    assert.ok(fs.existsSync(path.join(dir, 'credentials.json')));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P1-2 禁入清单在 target 即禁入目录 / normalize 穿越时仍生效
+// ---------------------------------------------------------------------------
+describe('P1-2 forbidden-dir enforcement is absolute-based', () => {
+  it('target 本身就是 .git/.backup/.snapshots/node_modules → 创建即拒（env+ack 也救不了）', () => {
+    freshEnv('p12-target');
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'repo-'));
+    for (const seg of ['.git', '.backup', '.snapshots', 'node_modules']) {
+      fs.mkdirSync(path.join(repo, seg), { recursive: true });
+      assert.throws(
+        () => validateSource({ type: 'dir', name: 'X', target: path.join(repo, seg), acknowledgeExternalPath: true }),
+        /禁入目录/,
+        `target=${seg} 应被拒`,
+      );
+    }
+  });
+
+  it('normalize 穿越变体（repo/.git/./refs/../../.git）归一后命中禁入 → 拒', () => {
+    freshEnv('p12-trav');
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'repo2-'));
+    const tricky = path.join(repo, '.git', '.', 'refs', '..', '..', '.git');
+    assert.throws(
+      () => validateSource({ type: 'dir', name: 'X', target: tricky, acknowledgeExternalPath: true }),
+      /禁入目录/,
+    );
+  });
+
+  it('collect-time：合法 target 之下的禁入子目录/条目仍被排除', async () => {
+    freshEnv('p12-collect');
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'repo3-'));
+    fs.writeFileSync(path.join(repo, 'ok.md'), '# Ok\ngood doc');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.git', 'secret.md'), '# GitSecret');
+    fs.mkdirSync(path.join(repo, 'node_modules', 'pkg'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'node_modules', 'pkg', 'README.md'), '# Nm');
+    fs.mkdirSync(path.join(repo, '.backup'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.backup', 'snap.md'), '# Backup');
+    const source = mkDirSource({ type: 'dir', name: 'Repo', target: repo }).source;
+    const r = await refreshSource(source.id);
+    const titles = listItems({ sourceId: source.id }).map((i) => i.title).sort();
+    assert.deepEqual(titles, ['Ok']);
+    assert.equal(r.added, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P1-3 终态 NDJSON 事件 type 不被载荷 type 覆盖（端到端子进程）
+// ---------------------------------------------------------------------------
+describe('P1-3 done-event type integrity (spawn CLI)', () => {
+  it('子进程刷新终态行 type==="done" 且载荷字段齐全，且没有任何行借用 dir/url/site/vault 作为 type', async () => {
+    freshEnv('p13');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-'));
+    fs.writeFileSync(path.join(dir, 'a.md'), '# A\nbody a');
+    const source = mkDirSource({ type: 'dir', name: 'Cli', target: dir }).source;
+
+    const events = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [REFRESH_CLI, source.id], { env: { ...process.env } });
+      let out = '';
+      const done = [];
+      child.stdout.on('data', (d) => { out += d.toString(); });
+      child.stderr.on('data', (d) => { out += `\n[stderr] ${d}`; });
+      const killer = setTimeout(() => { try { child.kill(); } catch {} reject(new Error('CLI timeout')); }, 15000);
+      child.on('close', () => {
+        clearTimeout(killer);
+        for (const line of out.split('\n')) {
+          if (!line.trim()) continue;
+          try { done.push(JSON.parse(line)); } catch { /* non-json */ }
+        }
+        resolve(done);
+      });
+      child.on('error', reject);
+    });
+
+    const finalLine = events[events.length - 1];
+    assert.equal(finalLine.type, 'done', '终态行必须是 type:"done"');
+    assert.equal(typeof finalLine.itemCount, 'number');
+    assert.equal(typeof finalLine.truncated, 'boolean');
+    assert.equal(finalLine.sourceType, 'dir'); // 源类型改名为 sourceType，不再占用 type
+    assert.ok(!events.some((e) => ['dir', 'url', 'site', 'vault'].includes(e.type)),
+      '不得出现以源类型充当事件 type 的行');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P1-4 采集全失败不得清空既有语料
+// ---------------------------------------------------------------------------
+describe('P1-4 total-failure refresh preserves existing corpus', () => {
+  it('url 源一次抓取全失败 → 保留既有 item 与 manifest，removed=0 且事件可观测', async () => {
+    freshEnv('p14');
+    const source = upsertSource({ type: 'url', name: 'U', target: 'https://kb.example/page.html' }).source;
+    // 第一次成功
+    const okFetch = async () => ({ html: '<title>P</title><article>content one</article>', finalUrl: 'https://kb.example/page.html' });
+    const r1 = await refreshSource(source.id, { fetchPage: okFetch });
+    assert.equal(r1.added, 1);
+    const cached = listItems({ sourceId: source.id });
+    assert.equal(cached.length, 1);
+    const itemId = cached[0].id;
+
+    // 第二次：抓取抛错（上游 503 / DNS 抖动），本轮 0 入库 + errors>0
+    const badFetch = async () => { throw new Error('503 Service Unavailable'); };
+    const events = [];
+    const r2 = await refreshSource(source.id, { fetchPage: badFetch, onEvent: (e) => events.push(e) });
+
+    assert.equal(r2.preserved, true);
+    assert.equal(r2.removed, 0);
+    assert.equal(r2.itemCount, 1, '保留的既有语料数不变');
+    assert.equal(r2.errors, 1);
+    assert.ok(listItems({ sourceId: source.id }).length === 1, 'item 未被删');
+    assert.ok(readItem(itemId), '磁盘 item 文件仍在');
+    assert.equal(readManifest(source.id).preserved, true);
+    assert.ok(events.some((e) => e.step === 'preserve'), '应有 preserve 事件上报');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-1 body 读取绝对截止期
+// ---------------------------------------------------------------------------
+describe('P2-1 net body-read deadline', () => {
+  it('慢速流式响应被绝对 deadline 中断（不再只保护 header）', async () => {
+    const sockets = new Set();
+    const server = http.createServer((req, res) => {
+      sockets.add(res.socket);
+      res.socket.on('close', () => sockets.delete(res.socket));
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.write('<html><body>');
+      const iv = setInterval(() => { try { res.write('x'); } catch { clearInterval(iv); } }, 20);
+      res.socket.on('close', () => clearInterval(iv));
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const port = server.address().port;
+    const t0 = Date.now();
+    let threw = null;
+    try {
+      await fetchPage(`http://127.0.0.1:${port}/slow`, { allowPrivateNetwork: true, timeoutMs: 200 });
+    } catch (err) { threw = err; }
+    const elapsed = Date.now() - t0;
+    for (const s of sockets) { try { s.destroy(); } catch { /* ignore */ } }
+    await new Promise((r) => server.close(r));
+
+    assert.ok(threw, '应因超时抛错');
+    assert.match(threw.message, /timed out/i);
+    assert.ok(elapsed < 3000, `应在 deadline 附近结束，实测 ${elapsed}ms`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-2 跨 sourceId 全局刷新并发闸 → 429
+// ---------------------------------------------------------------------------
+describe('P2-2 global refresh concurrency gate', () => {
+  it('并发刷新超过上限（2）→ 第 3 个 429', async () => {
+    freshEnv('p22');
+    const ctx = makeRouteCtx();
+    const ids = [];
+    for (let i = 0; i < 3; i++) {
+      const d = fs.mkdtempSync(path.join(os.tmpdir(), `conc-${i}-`));
+      fs.writeFileSync(path.join(d, 'x.md'), '# X');
+      const r = await call(ctx, 'POST', '/api/sources', { body: { acknowledgeExternalPath: true, type: 'dir', name: `C${i}`, target: d } });
+      ids.push(r.body.source.id);
+    }
+    const a = await call(ctx, 'POST', `/api/sources/${ids[0]}/refresh`);
+    const b = await call(ctx, 'POST', `/api/sources/${ids[1]}/refresh`);
+    const c = await call(ctx, 'POST', `/api/sources/${ids[2]}/refresh`);
+    assert.equal(a.status, 202);
+    assert.equal(b.status, 202);
+    assert.equal(c.status, 429, '第 3 个并发刷新应被全局闸拒绝');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-3 url/site 抓取上限随 maxBytesPerItem 抬高 + 超限截断可见
+// ---------------------------------------------------------------------------
+describe('P2-3 network cap follows maxBytesPerItem, oversize truncates (visible)', () => {
+  it('refresh 把该源 maxBytesPerItem 透传给采集器的 maxBytes', async () => {
+    freshEnv('p23-wire');
+    let seenMaxBytes = null;
+    const spy = async (_url, opts) => {
+      seenMaxBytes = opts.maxBytes;
+      return { html: '<title>T</title><article>hi</article>', finalUrl: _url };
+    };
+    const source = upsertSource({ type: 'url', name: 'U', target: 'https://x.example/p', options: { maxBytesPerItem: 123456 } }).source;
+    await refreshSource(source.id, { fetchPage: spy });
+    assert.equal(seenMaxBytes, 123456, 'net maxBytes 应等于源 maxBytesPerItem');
+  });
+
+  it('默认 512KB 上限下大页面被截断（item.truncated=true，非整页失败）；抬高上限后完整抓取', async () => {
+    const PAGE = '<!doctype html><html><head><title>Big</title></head><body><article>'
+      + ('<p>filler paragraph text for padding.</p>').repeat(40000) + '</article></body></html>';
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end(PAGE);
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const port = server.address().port;
+    const url = `http://127.0.0.1:${port}/big`;
+    assert.ok(Buffer.byteLength(PAGE) > 524288, '构造的页面应大于默认上限');
+    try {
+      // 默认 maxBytesPerItem=512KB → 截断
+      const s1 = upsertSource({ type: 'url', name: 'Big1', target: url }).source;
+      const r1 = await refreshSource(s1.id, { allowPrivateNetwork: true });
+      assert.equal(r1.errors, 0, '超限不得整页失败');
+      const it1 = listItems({ sourceId: s1.id })[0];
+      assert.equal(it1.truncated, true, '应在 manifest/条目上标记 truncated');
+
+      // 抬高到 2MB → 完整，无截断
+      const s2 = upsertSource({ type: 'url', name: 'Big2', target: url, options: { maxBytesPerItem: 2 * 1024 * 1024 } }).source;
+      await refreshSource(s2.id, { allowPrivateNetwork: true });
+      const it2 = listItems({ sourceId: s2.id })[0];
+      assert.equal(it2.truncated, undefined, '未超限不应标记 truncated');
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
   });
 });
 
