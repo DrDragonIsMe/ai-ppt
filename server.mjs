@@ -44,6 +44,7 @@ import mediaRoutes from './routes/media.mjs';
 import vaultRoutes from './routes/vault.mjs';
 import projectRoutes from './routes/projects.mjs';
 import agentRoutes from './routes/agent.mjs';
+import sourcesRoutes from './routes/sources.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,6 +64,8 @@ const chats = new Map();
 const noteChats = new Map();
 // 导出任务状态（键 `${name}:${type}`），路由实现见 routes/projects.mjs
 const exportTasks = new Map();
+// 素材源刷新任务状态（键 sourceId），NDJSON 子进程，路由实现见 routes/sources.mjs
+const sourceRefreshes = new Map();
 // 统一任务注册表：媒体/解析任务状态 + NDJSON 任务元信息，内存 Map + 落盘持久化。
 // 服务重启后所有活跃任务被标记 interrupted，轮询/SSE 端点据此返回明确错误。
 const taskRegistry = createTaskRegistry({ filePath: path.join(ROOT, '.ai-ppt-tasks.json') });
@@ -185,6 +188,7 @@ const NDJSON_STORE_KINDS = new Map([
   [chats, 'chat'],
   [noteChats, 'note-chat'],
   [exportTasks, 'export'],
+  [sourceRefreshes, 'source-refresh'],
 ]);
 
 // 通用 NDJSON 子进程任务：逐行解析 stdout 事件存入 buffer 并推送给 SSE 监听者。
@@ -600,6 +604,18 @@ assertDeps('agent', agentDeps, [
   'readGlobalConfig', 'writeGlobalConfig', 'buildSearchIndex',
 ]);
 
+// sources（素材源注册表 + 抓取刷新）
+const sourcesDeps = {
+  send, readBody, validName, ROOT,
+  spawnNdjsonTask, serveSse, hasActiveTask,
+  sourceRefreshes, taskRegistry,
+};
+assertDeps('sources', sourcesDeps, [
+  'send', 'readBody', 'validName', 'ROOT',
+  'spawnNdjsonTask', 'serveSse', 'hasActiveTask',
+  'sourceRefreshes', 'taskRegistry',
+]);
+
 // 路由表：系统路由（主题/Dashboard/备份）+ 4 个路由模块
 // 约定：按数组顺序首条匹配即返回，字面量路由必须排在通配符路由之前。
 const routes = [
@@ -659,6 +675,7 @@ const routes = [
   ...mediaRoutes(mediaDeps),
   ...agentRoutes(agentDeps),
   ...projectRoutes(projectDeps),
+  ...sourcesRoutes(sourcesDeps),
 ];
 
 
