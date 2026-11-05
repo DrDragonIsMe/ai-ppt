@@ -482,7 +482,7 @@ describe('generateOutline', () => {
     );
   });
 
-  it('persists to marketing/outlines when using the real store', async () => {
+  it('persists to marketing/outlines when using the real store (round-trip, not just in-memory)', async () => {
     useTmpMarketing();
     const fake = makeFakeStore({ sources: CORPUS });
     const { outline } = await generateOutline({
@@ -495,7 +495,23 @@ describe('generateOutline', () => {
     });
     const file = path.join(process.env.AI_PPT_MARKETING_ROOT, 'outlines', `${outline.id}.json`);
     assert.ok(fs.existsSync(file), '大纲未落盘到 marketing/outlines/');
-    assert.equal(getOutline(outline.id).id, outline.id);
+    // 关键：断言的是**重新读回来的文件**，不是内存对象——
+    // saveOutline 会再过一遍 normalizeOutline，非契约字段会在那一步被抹掉（实测踩过）。
+    const reloaded = getOutline(outline.id);
+    assert.equal(reloaded.id, outline.id);
+    assert.deepEqual(validateOutline(reloaded), []);
+    assert.equal(reloaded.angles.length, outline.angles.length);
+    for (const [i, a] of reloaded.angles.entries()) {
+      assert.equal(a.thesis, outline.angles[i].thesis, `角度 ${a.key} 的 thesis 未 round-trip`);
+      assert.equal(a.deckName, outline.angles[i].deckName);
+      assert.deepEqual(a.evidenceItemIds, outline.angles[i].evidenceItemIds, `角度 ${a.key} 的证据未 round-trip`);
+      assert.deepEqual(a.slides, outline.angles[i].slides, `角度 ${a.key} 的 slides 未 round-trip`);
+      assert.equal(a.generatedBy, outline.angles[i].generatedBy,
+        `角度 ${a.key} 的 generatedBy 落盘后丢失（兜底/LLM 来源不可审计）`);
+    }
+    assert.equal(reloaded.material.itemCount, outline.material.itemCount, '取材统计未 round-trip');
+    assert.equal(reloaded.material.corpusChars, outline.material.corpusChars);
+    assert.deepEqual(reloaded.warnings, outline.warnings);
   });
 });
 

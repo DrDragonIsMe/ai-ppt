@@ -92,6 +92,9 @@ export function normalizeOutline(input, { id, sourceIds } = {}) {
       evidenceItemIds: strList(raw?.evidenceItemIds),
       slides,
       deckName: str(raw?.deckName) || makeDeckName(key, product.name, outlineId),
+      // 该角度的页面来自 LLM 还是确定性兜底——必须参与 round-trip，
+      // 否则落盘后前端/审计就看不出哪些角度是兜底产物（曾因 normalizeOutline 未保留而丢字段）
+      generatedBy: str(raw?.generatedBy) || 'unknown',
     };
   });
 
