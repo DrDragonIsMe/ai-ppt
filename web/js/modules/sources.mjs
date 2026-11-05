@@ -171,8 +171,14 @@ function renderSourceList() {
 function sourceCardHtml(src) {
     const known = SOURCE_TYPES.includes(src.type);
     const cached = S.sources.itemsCache[src.id];
+    // 可选跟进：maxPages 截断可观测 —— 优先消费 droppedCount（其次由 totalCandidates 推出），
+    // 有确切数字就把「120+」升级为「120 · 另有 N 条未入库」，没数字时保留 + 号兜底
+    const dropped = src.truncated
+        ? (Number.isFinite(src.droppedCount) && src.droppedCount > 0 ? src.droppedCount
+            : (Number.isFinite(src.totalCandidates) && src.itemCount != null ? Math.max(0, src.totalCandidates - src.itemCount) : 0))
+        : 0;
     let count;
-    if (src.itemCount != null) count = `${src.itemCount}${src.truncated ? '+' : ''}`;
+    if (src.itemCount != null) count = `${src.itemCount}${src.truncated && !dropped ? '+' : ''}`;
     else if (cached) count = String(cached.length);
     else count = S.sources.loading ? '…' : '—';
     const state = S.sources.refresh[src.id];
@@ -191,6 +197,7 @@ function sourceCardHtml(src) {
       <div class="source-target" title="${escapeHtmlAttr(src.target || '')}">${escapeHtml(src.target || '')}</div>
       <div class="source-meta">
         <span>${t('条目')} ${count}</span><span>·</span>
+        ${dropped > 0 ? `<span class="source-trunc-badge">${escapeHtml(t('另有 {n} 条未入库', { n: dropped }))}</span>` : ''}
         <span>${t('最后抓取')} ${escapeHtml(time)}</span>
       </div>
       ${tags ? `<div class="source-tags">${tags}</div>` : ''}
@@ -215,11 +222,14 @@ export function openSourceModal(id) {
     const titleEl = document.getElementById('source-modal-title');
     if (titleEl) titleEl.textContent = src ? t('编辑素材源') : t('新建素材源');
     const opt = src?.options || {};
-    document.getElementById('source-input-name').value = src?.name || '';
+    const nameEl = document.getElementById('source-input-name');
+    if (nameEl) nameEl.value = src?.name || '';
     const typeSel = document.getElementById('source-input-type');
     typeSel.value = src && SOURCE_TYPES.includes(src.type) ? src.type : 'dir';
-    document.getElementById('source-input-target').value = src?.target || '';
-    document.getElementById('source-input-tags').value = Array.isArray(src?.tags) ? src.tags.join(',') : '';
+    const targetEl = document.getElementById('source-input-target');
+    if (targetEl) targetEl.value = src?.target || '';
+    const tagsEl = document.getElementById('source-input-tags');
+    if (tagsEl) tagsEl.value = Array.isArray(src?.tags) ? src.tags.join(',') : '';
     document.getElementById('source-input-enabled').checked = src ? src.enabled !== false : true;
     document.getElementById('source-input-max-pages').value = opt.maxPages ?? '';
     document.getElementById('source-input-depth').value = opt.depth ?? '';
@@ -286,6 +296,7 @@ async function deleteSource(id) {
         await api('DELETE', `/api/sources/${encodeURIComponent(id)}`);
         delete S.sources.itemsCache[id];
         delete S.sources.refresh[id];
+        clearRefreshStream(id); // O2：回收在途刷新流（close + 清 Map），删源后不再往已删 id 写状态
         showToast(t('已删除'));
         await loadSources();
     } catch (err) {
@@ -315,6 +326,17 @@ export function reapFinishedRefreshStreams() {
             refreshEventSources.delete(id);
         }
     }
+}
+
+// O2：删除源时整体回收在途刷新流 —— close 事件源 + 清三个 Map + 撤销延迟清理。
+// 否则删掉的源仍在刷新时，流会继续往已删 id 写状态，Map 键上界随「会话内刷新过的源数」膨胀。
+function clearRefreshStream(id) {
+    refreshIdleCancels.get(id)?.();       // 撤销 idle 看门狗定时器（gen 失配后其回调已静默，但定时器仍挂着）
+    refreshEventSources.get(id)?.close(); // close 后已入队事件不再派发（EventSource 语义）
+    refreshEventSources.delete(id);
+    refreshIdleCancels.delete(id);
+    refreshGens.delete(id);
+    clearRefreshTimer(id);
 }
 
 async function refreshSource(id) {
