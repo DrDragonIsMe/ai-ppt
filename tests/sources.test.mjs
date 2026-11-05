@@ -1546,3 +1546,135 @@ describe('P2-H refresh authorization revocation returns 403 synchronously', () =
     }
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// P2-A 保命/清理信号贯通到 GET /api/sources（与 truncated 同口径），且透出布尔化 preserved
+// ---------------------------------------------------------------------------
+describe('P2-A preserved/pruned surfaced on GET /api/sources', () => {
+  it('all-confirmed-gone 保命 → API 透出 preserved:true + preserveReason（不泄露字符串值、不让 M11 复刻 ===true 陷阱）', async () => {
+    freshEnv('p2a-pres');
+    const ENTRY = 'http://site.test/';
+    const httpErr = (m, s) => { const e = new Error(m); e.httpStatus = s; return e; };
+    const links = Array.from({ length: 3 }, (_, i) => `<a href="/p${i + 1}.html">P</a>`).join('');
+    let round = 1;
+    const fetchStub = async (url) => {
+      if (url === ENTRY) {
+        if (round === 2) throw httpErr('404', 404); // 仅入口 404 → 整源归零 + 全 confirmed-gone → all-confirmed-gone
+        return { html: `<title>H</title>${links}`, finalUrl: ENTRY };
+      }
+      return { html: `<title>${url}</title><article>b</article>`, finalUrl: url };
+    };
+    const source = upsertSource({ type: 'site', name: 'A', target: ENTRY, options: { depth: 1, maxPages: 10 } }).source;
+    await refreshSource(source.id, { fetchPage: fetchStub });
+    round = 2;
+    await refreshSource(source.id, { fetchPage: fetchStub });
+    // manifest 侧值语义不变：'all-confirmed-gone'
+    assert.equal(readManifest(source.id).preserved, 'all-confirmed-gone');
+
+    const ctx = makeRouteCtx();
+    const listed = await call(ctx, 'GET', '/api/sources');
+    assert.equal(listed.status, 200);
+    const row = listed.body.sources.find((s) => s.id === source.id);
+    assert.equal(row.preserved, true, 'API 侧必须布尔化 preserved');
+    assert.equal(row.preserveReason, 'all-confirmed-gone', 'preserveReason 原样透出，all-confirmed-gone 信息不丢');
+    assert.ok(!('pruned' in row), '本轮 0 清理，不应出现 pruned 键');
+  });
+
+  it('正常清理轮 → API 透出 pruned + prunedUnconfirmed（缓存能减对用户可见）', async () => {
+    freshEnv('p2a-pruned');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p2a-pruned-'));
+    for (let i = 1; i <= 3; i++) fs.writeFileSync(path.join(dir, `a${i}.md`), `# A${i}`);
+    const source = mkDirSource({ type: 'dir', name: 'PR', target: dir }).source;
+    await refreshSource(source.id);
+    fs.rmSync(path.join(dir, 'a3.md')); // 上游真删一条 → 兜底分支清理
+    const r = await refreshSource(source.id);
+    assert.equal(r.removed, 1);
+    const m = readManifest(source.id);
+    assert.equal(m.pruned, 1);
+    assert.equal(m.prunedUnconfirmed, 1);
+
+    const ctx = makeRouteCtx();
+    const listed = await call(ctx, 'GET', '/api/sources');
+    const row = listed.body.sources.find((s) => s.id === source.id);
+    assert.equal(row.pruned, 1, 'API 透出 pruned 总量');
+    assert.equal(row.prunedUnconfirmed, 1, 'API 透出兜底清理数');
+    assert.ok(!('preserved' in row), '本轮正常清理未保命，不出现 preserved 键');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// P2-B 采集器根级不可读 → reject(500)，manifest 不动、磁盘 items 一条不少。
+//     不再依赖"单根 DFS 根失败必然 0 入库"这一巧合（桩件让根 readdir 抛错，与 euid 无关、确定性触发）。
+//     dir 与 vault 两个采集器都锁，验证两者语义一致（消除 r6 点名的 dir reject vs vault preserve 不对称）。
+// ---------------------------------------------------------------------------
+describe('P2-B root-level unreadable rejects with 500, manifest/disk untouched', () => {
+  function buildRoot(label) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), label + '-'));
+    for (let i = 1; i <= 10; i++) fs.writeFileSync(path.join(dir, `t${i}.md`), `# T${i}\nbody`);
+    const sub = path.join(dir, 'sub');
+    fs.mkdirSync(sub);
+    for (let j = 1; j <= 3; j++) fs.writeFileSync(path.join(sub, `s${j}.md`), `# S${j}\nbody`);
+    return { dir, sub };
+  }
+
+  it('vault 无 sub 根不可读 → refreshSource reject(500)、manifest 未更新、磁盘 items 文件数不变', async () => {
+    freshEnv('p2b-vault');
+    const { dir: vroot } = buildRoot('p2b-vault');
+    const source = upsertSource({ type: 'vault', name: 'V', target: '' }).source;
+    const r1 = await refreshSource(source.id, { vaultRoot: vroot });
+    assert.equal(r1.itemCount, 13);
+    const itemsDir = path.join(process.env.AI_PPT_SOURCE_CACHE_ROOT, source.id, 'items');
+    const diskBefore = fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length;
+
+    // 桩件让 vault 根 readdir 抛 EACCES（不依赖 chmod/euid；dir===scopeRoot → 采集器直接 throw 500）。
+    const realReaddir = fs.readdirSync;
+    fs.readdirSync = function (p, ...rest) {
+      if (String(p) === path.resolve(vroot)) { const e = new Error(`EACCES: permission denied, scandir '${p}'`); e.code = 'EACCES'; throw e; }
+      return realReaddir.call(fs, p, ...rest);
+    };
+    try {
+      await assert.rejects(
+        () => refreshSource(source.id, { vaultRoot: vroot }),
+        (e) => e.statusCode === 500,
+        'P2-B：vault 根不可读必须以 statusCode=500 reject（非静默保命、非清空）',
+      );
+      // 关键机制级断言（与本轮 0 入库无关）：
+      const m = readManifest(source.id);
+      assert.equal(m.items.length, 13, 'reject 后 manifest 必须未被改写，13 条原样');
+      assert.ok(!m.preserved && !m.pruned, '根级 reject 不写 preserved/pruned（它压根没进 prune 循环）');
+      assert.equal(fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length, diskBefore, '磁盘 items 文件一条不少');
+    } finally {
+      fs.readdirSync = realReaddir;
+    }
+  });
+
+  it('dir 根不可读 → 同语义 reject(500)、manifest 未更新、磁盘 items 文件数不变（两者对称）', async () => {
+    freshEnv('p2b-dir');
+    const { dir } = buildRoot('p2b-dir');
+    const source = mkDirSource({ type: 'dir', name: 'D', target: dir }).source;
+    const r1 = await refreshSource(source.id);
+    assert.equal(r1.itemCount, 13);
+    const itemsDir = path.join(process.env.AI_PPT_SOURCE_CACHE_ROOT, source.id, 'items');
+    const diskBefore = fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length;
+
+    const realReaddir = fs.readdirSync;
+    fs.readdirSync = function (p, ...rest) {
+      if (String(p) === path.resolve(dir)) { const e = new Error(`EACCES: permission denied, scandir '${p}'`); e.code = 'EACCES'; throw e; }
+      return realReaddir.call(fs, p, ...rest);
+    };
+    try {
+      await assert.rejects(
+        () => refreshSource(source.id),
+        (e) => e.statusCode === 500,
+        'P2-B：dir 根不可读与 vault 同语义，reject(500)',
+      );
+      const m = readManifest(source.id);
+      assert.equal(m.items.length, 13, 'manifest 未被改写');
+      assert.equal(fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length, diskBefore, '磁盘一条不少');
+    } finally {
+      fs.readdirSync = realReaddir;
+    }
+  });
+});

@@ -76,7 +76,15 @@ export async function* collectDir(source, ctx = {}) {
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (err) {
-      // isDirectoryLevel：这是「读目录」失败，不代表目录下文件在下游已删除——P2-② 据此判为未确认失败、子树保命。
+      // P2-B：整个 dir 源根读不到（statSync 通过但 readdir 抛 EACCES/ENOENT）→ 响亮 reject，
+      // 与上面"根不存在/不是目录/命中禁入"三处 reject 同语义，manifest 不动、磁盘 items 一条不少。
+      // 根级失败绝不落成一条目录级 error（那样只靠"0 入库"巧合被闸门接住，见 vault 同款注释）。
+      if (dir === root) {
+        const e = new Error(`dir 源根目录不可读：${root}: ${err.message}`);
+        e.statusCode = 500;
+        throw e;
+      }
+      // isDirectoryLevel：这是「读子目录」失败，不代表目录下文件在下游已删除——P2-② 据此判为未确认失败、子树保命。
       yield { kind: 'error', origin: dir, error: `读取目录失败 ${dir}: ${err.message}`, code: err.code, isDirectoryLevel: true };
       continue;
     }

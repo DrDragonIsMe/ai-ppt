@@ -80,11 +80,22 @@ export async function* collectVault(source, ctx = {}) {
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (err) {
-      // isDirectoryLevel：读目录失败 ≠ 目录下笔记已删除——P2-② 据此判为未确认失败、子树 stale 保命。
+      // P2-B：整个 vault 根（scopeRoot）读不到 = 配置坏了或挂载没就绪 → 响亮失败（reject），
+      // 与 collect-dir 根不存在/不可访问时 reject、manifest 不动的既有语义对齐。绝不 yield 一条
+      // origin 为空串的目录级错误——空串 falsy 会被 refresh 的 `if (entry.origin)` 整体丢弃、零记账，
+      // 今天全靠"单根 DFS 根失败必然 0 入库"这一巧合被闸门接住；一旦将来多根/BFS 让根失败与部分成功共存，
+      // 整个 vault 缓存会被 prune 兜底分支静默清空。根级失败改为 reject 后彻底摆脱该巧合。
+      if (dir === scopeRoot) {
+        const e = new Error(`vault 源根目录不可读：${scopeRoot}: ${err.message}`);
+        e.statusCode = 500;
+        throw e;
+      }
+      // isDirectoryLevel：读子目录失败 ≠ 目录下笔记已删除——P2-② 据此判为未确认失败、子树 stale 保命。
       // P2-③：origin 用与条目同源（path.relative(vaultRoot, dir)）的相对形式——原先是绝对 dir，
       // 而 refresh 侧条目 origin 是 rel（形如 sub/s0.md），erroredPrefixes 前缀（dir + sep）永不命中相对 origin，
       // 导致 vault 源目录级失败退回 r3 判 P2-F 的原始缺陷（实测 removed=3/stale=0）。改相对后前缀语义自然成立。
-      const relDir = path.relative(vaultRoot, dir);
+      // P2-B：非根目录级错误 origin 不得为空串（relDir 非空恒成立因 dir!==scopeRoot，仍加 `|| '.'` 兜底辨识标签）。
+      const relDir = path.relative(vaultRoot, dir) || '.';
       yield { kind: 'error', origin: relDir, error: `读取失败 ${dir}: ${err.message}`, code: err.code, isDirectoryLevel: true };
       continue;
     }

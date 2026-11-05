@@ -63,6 +63,12 @@ export default function sourcesRoutes(deps) {
               ...(m && Number.isFinite(m.policySkipped) ? { policySamples: Array.isArray(m.policySamples) ? m.policySamples : [] } : {}),
               // P1-A：部分抓取失败按 origin 保命的降级标记（加性透出）
               ...(m && m.degraded ? { degraded: true, staleCount: m.staleCount || 0 } : {}),
+              // P2-A：整源保命/清理信号贯通到 API（前几轮 truncated 同口径）。
+              // preserved 在此**布尔化**（值 'true | all-confirmed-gone' 的细节留在服务端 manifest，别让 M11 复刻 ===true 陷阱）；
+              // preserveReason 原样透出，保留 'all-confirmed-gone' 这条信息不丢。
+              ...(m && m.preserved ? { preserved: true, preserveReason: m.preserveReason || 'collection-failed' } : {}),
+              // pruned 仅在有清理时出现；透出总量 + 兜底清理数（confirmedGone 可由 pruned - prunedUnconfirmed 推出，不重复占键）。
+              ...(m && Number.isFinite(m.pruned) ? { pruned: m.pruned, prunedUnconfirmed: m.prunedUnconfirmed || 0 } : {}),
             };
           });
           send(res, 200, { version: data.version, sources });
