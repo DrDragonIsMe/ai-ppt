@@ -10,14 +10,17 @@
 //   优于「无上限静默遍历」；url 单页不受该上限影响。depth 仅 site 用，默认 1。
 // 写盘统一走 fs-utils 的 writeJsonAtomic；非法 id/target → SourceError(statusCode=400)，
 // 更新/删除不存在的 id → statusCode=404。
-// 路径安全（P1-1/P1-2）：dir/vault target 归一后须通过禁入目录段 + 敏感位置拒绝清单（见 paths.mjs），
-//   且 dir 绝对路径默认只允许仓库 ROOT 内；越 ROOT 需环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES=1
+// 路径安全（P1-1/P1-2/P2-B）：dir/vault target 归一后须通过禁入目录段 + 敏感位置拒绝清单（见 paths.mjs），
+//   并对**解析符号链接后的真实路径**重跑同样三查（词法路径可被仓库内软链同时越过 ROOT 归属与敏感清单）；
+//   dir 绝对路径默认只允许仓库 ROOT 内；越 ROOT 需环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES=1
 //   + 请求体 acknowledgeExternalPath:true 双重授权（本服务无鉴权，LAN 下"调用方≠用户"）。
+//   确认标记仅在目标**确为越界外部目录**时持久化（不在内部源上免费铸造，P2-C），
+//   且 PUT 改 target/type 时不继承旧标记（防"一次确认→永久任意改路径"，P2-C）。
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeJsonAtomic } from '../fs-utils.mjs';
 import { isSafeName } from '../config.mjs';
-import { ROOT, sourcesFile, isWithinRoot, hasForbiddenSegment, hasSensitiveSegment } from './paths.mjs';
+import { ROOT, sourcesFile, isWithinRoot, hasForbiddenSegment, hasSensitiveSegment, safeRealpath } from './paths.mjs';
 
 export const SOURCE_TYPES = ['dir', 'url', 'site', 'vault'];
 
@@ -147,14 +150,38 @@ export function externalSourcesAllowed() {
   return v === '1' || v === 'true' || v === 'yes';
 }
 
-// 校验/归一 dir target（P1-1 / P1-2 安全闸门，按顺序全部通过才落盘）：
+/**
+ * 撤回授权语义（P2-C ii）：refresh 入口对 dir 源重查 ROOT 归属（含符号链接解析）。
+ * 若目标解析后确在 ROOT 之外，而运维已关闭 AI_PPT_ALLOW_EXTERNAL_SOURCES，则拒绝刷新——
+ * 这样"关掉 env"对**已存在**的外部源也生效（此前只挡新建，存量外部源关掉 env 后仍能刷新读到正文）。
+ * 越界但 env 仍开 → 放行（沿用创建时的授权语境）。
+ */
+export function assertDirSourceAuthorized(source) {
+  if (!source || source.type !== 'dir') return;
+  const resolved = path.isAbsolute(source.target)
+    ? path.normalize(source.target)
+    : path.resolve(ROOT, source.target);
+  const rootReal = safeRealpath(ROOT) || ROOT;
+  const real = safeRealpath(resolved);
+  const withinLexical = isWithinRoot(ROOT, resolved);
+  const withinReal = real === null ? true : isWithinRoot(rootReal, real);
+  if ((!withinLexical || !withinReal) && !externalSourcesAllowed()) {
+    throw new SourceError(
+      '该目录源指向仓库根之外，但环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES 已关闭，已拒绝刷新；请重新开启该变量，或改用仓库内目录源',
+      403,
+    );
+  }
+}
+
+// 校验/归一 dir target（P1-1 / P1-2 / P2-B 安全闸门，按顺序全部通过才落盘）：
 //  1. 非空、无控制字符；
-//  2. 归一后绝对/相对路径本身不得穿越禁入目录（.git/.backup/.snapshots/node_modules）；
-//  3. 归一后不得落在敏感位置（.ssh/.aws/.docker/.config/keychain、/etc、/var/root 等前缀）；
-//  4. 默认只允许仓库 ROOT 之内；越 ROOT 的外部绝对路径须
-//     (b) 环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES=1 授权，且
-//     (c) 请求体显式带 acknowledgeExternalPath:true（前端弹一次确认）。
-// 相对路径越 ROOT 一律拒绝（与绝对外部路径不同：相对路径不存在"用户显式配置的绝对路径"语义）。
+//  2. 词法归一后不得穿越禁入目录 / 敏感位置；
+//  3. 解析符号链接（fs.realpathSync）后，对**真实路径**重跑禁入 + 敏感 + ROOT 归属三查——
+//     否则仓库内一个 `materials -> 仓库外` 或 `team-docs -> ~/.ssh` 的软链，用词法路径可同时骗过 ROOT 归属与敏感清单（P2-B）。
+//  4. 默认只允许 ROOT 之内；越 ROOT 的外部路径须 env 授权 + 请求显式确认（两道都过）。
+// 路径尚不存在时 realpath 失败 → 回退词法判定（保留"缺失目录在 collect 时才报 500"的既有语义）；
+// 真正的软链逃逸只在链接存在时发生，而那时 realpath 必然成功并触发重查。collect 层另有逐条 realpath 兜底。
+// @returns {{target:string, external:boolean}} external=true 表示最终判定为越 ROOT 的外部目录。
 function normalizeDirTarget(target, { acknowledgeExternalPath } = {}) {
   const t = String(target).trim();
   if (!t) throw new SourceError('dir 源的 target 不能为空');
@@ -162,6 +189,7 @@ function normalizeDirTarget(target, { acknowledgeExternalPath } = {}) {
   const isAbs = path.isAbsolute(t);
   const resolved = isAbs ? path.normalize(t) : path.resolve(ROOT, t);
 
+  // —— 词法层三查 ——
   if (hasForbiddenSegment(resolved)) {
     throw new SourceError(`dir 源 target 落在禁入目录内（禁止 .git/.backup/.snapshots/node_modules）：${resolved}`);
   }
@@ -169,16 +197,33 @@ function normalizeDirTarget(target, { acknowledgeExternalPath } = {}) {
     throw new SourceError(`dir 源 target 落在敏感位置拒绝清单内（.ssh/.aws/.docker/.config/keychain、/etc、/var/root 等）：${resolved}`);
   }
 
-  if (!isAbs) {
-    // 相对路径：必须仍落在仓库 ROOT 内，无外部授权通道。
-    if (!isWithinRoot(ROOT, resolved)) {
-      throw new SourceError('dir 源相对路径越出仓库根，禁止');
+  // —— realpath 层重查（P2-B）——
+  const rootReal = safeRealpath(ROOT) || ROOT;
+  const real = safeRealpath(resolved);
+  if (real !== null) {
+    if (hasForbiddenSegment(real)) {
+      throw new SourceError(`dir 源 target 解析符号链接后落在禁入目录内：${real}`);
     }
-    return resolved;
+    if (hasSensitiveSegment(real)) {
+      throw new SourceError(`dir 源 target 解析符号链接后落在敏感位置拒绝清单内：${real}`);
+    }
   }
 
-  // 绝对路径：ROOT 之内直接放行（敏感/禁入已在上面拦过）。
-  if (isWithinRoot(ROOT, resolved)) return resolved;
+  // ROOT 归属：以词法与真实两条路径都判定——任一越界即视为外部（real 存在但被软链带到 ROOT 外，同样算越界）。
+  const withinLexical = isWithinRoot(ROOT, resolved);
+  const withinReal = real === null ? true : isWithinRoot(rootReal, real);
+  const escapesRoot = !withinLexical || !withinReal;
+
+  if (!isAbs) {
+    // 相对路径：必须仍落在仓库 ROOT 内（词法与真实都要成立），无外部授权通道。
+    if (escapesRoot) {
+      throw new SourceError('dir 源相对路径越出仓库根（含符号链接解析后的真实路径），禁止');
+    }
+    return { target: resolved, external: false };
+  }
+
+  // 绝对路径：ROOT 之内（词法+真实）直接放行，且**不算 external**（不持久化 ack，P2-C）。
+  if (!escapesRoot) return { target: resolved, external: false };
 
   // 越 ROOT 的绝对路径：默认拒绝，需环境变量授权 + 请求显式确认（两道都过才放行）。
   if (!externalSourcesAllowed()) {
@@ -191,7 +236,7 @@ function normalizeDirTarget(target, { acknowledgeExternalPath } = {}) {
       '越出仓库根的目录源需在请求中显式确认 acknowledgeExternalPath:true',
     );
   }
-  return resolved;
+  return { target: resolved, external: true };
 }
 
 function normalizeUrlTarget(type, target) {
@@ -209,6 +254,7 @@ function normalizeUrlTarget(type, target) {
 }
 
 // 校验/归一 vault target：可选子目录，仓库内 vault/ 下相对路径，拒绝越界。
+// P2-B：对 realpath 重跑归属 + 禁入 + 敏感三查，防 vault 内软链把采集范围带出 vault 或指向敏感目录。
 function normalizeVaultTarget(target) {
   if (target === undefined || target === null || String(target).trim() === '') return '';
   const t = String(target).trim().replace(/^\/+/, '').replace(/\/+$/, '');
@@ -221,6 +267,16 @@ function normalizeVaultTarget(target) {
   }
   if (hasForbiddenSegment(resolved) || hasSensitiveSegment(resolved)) {
     throw new SourceError(`vault 源 target 命中禁入/敏感路径清单：${resolved}`);
+  }
+  const vaultReal = safeRealpath(vaultDir) || vaultDir;
+  const real = safeRealpath(resolved);
+  if (real !== null) {
+    if (!isWithinRoot(vaultReal, real)) {
+      throw new SourceError('vault 源 target 解析符号链接后越出 vault 目录，禁止');
+    }
+    if (hasForbiddenSegment(real) || hasSensitiveSegment(real)) {
+      throw new SourceError(`vault 源 target 解析符号链接后命中禁入/敏感路径清单：${real}`);
+    }
   }
   return path.relative(vaultDir, resolved).split(path.sep).join('/');
 }
@@ -245,9 +301,16 @@ export function validateSource(input, { id } = {}) {
   if (typeof targetRaw !== 'string') throw new SourceError('target 必须是字符串');
   const acknowledgeExternalPath = input.acknowledgeExternalPath === true;
   let target;
-  if (type === 'dir') target = normalizeDirTarget(targetRaw, { acknowledgeExternalPath });
-  else if (type === 'url' || type === 'site') target = normalizeUrlTarget(type, targetRaw);
-  else target = normalizeVaultTarget(targetRaw);
+  let external = false;
+  if (type === 'dir') {
+    const r = normalizeDirTarget(targetRaw, { acknowledgeExternalPath });
+    target = r.target;
+    external = r.external;
+  } else if (type === 'url' || type === 'site') {
+    target = normalizeUrlTarget(type, targetRaw);
+  } else {
+    target = normalizeVaultTarget(targetRaw);
+  }
 
   const enabled = input.enabled === undefined ? true : Boolean(input.enabled);
   const tags = normalizeTags(input.tags);
@@ -276,8 +339,9 @@ export function validateSource(input, { id } = {}) {
     tags,
     lastFetchedAt,
     options,
-    // 越 ROOT 的外部目录源的一次性确认标记（仅在确认时写入，随 PUT 合并保留；内部源不写）。
-    ...(acknowledgeExternalPath ? { acknowledgeExternalPath: true } : {}),
+    // 越 ROOT 的外部目录源的一次性确认标记：**仅当目标确为越 ROOT 外部目录时才写入**。
+    // 内部源（含带 acknowledgeExternalPath 的内部 target）不落该标记——杜绝在无害源上"免费铸造"（P2-C i）。
+    ...(external ? { acknowledgeExternalPath: true } : {}),
   };
 }
 
@@ -336,7 +400,18 @@ export function upsertSource(input, id = null) {
     if (!isSafeName(id) || !ID_RE.test(id)) throw new SourceError(`非法源 id：${String(id)}`);
     const idx = data.sources.findIndex((s) => s.id === id);
     if (idx === -1) throw new SourceError(`源不存在：${id}`, 404);
-    const merged = validateSource({ ...data.sources[idx], ...input }, { id });
+    const old = data.sources[idx];
+    // P2-C：target 或 type 相对旧值变化时，不继承已持久化的 acknowledgeExternalPath——
+    // 否则"建外部源时确认一次"会变成"永久免确认"，PUT 可静默换到任意外部目录。
+    // 仅在两个字段之一**实际出现且与旧值不同**时剥离标记；单纯改名/改 tags 仍免确认。
+    const changesTarget = input.target !== undefined && input.target !== old.target;
+    const changesType = input.type !== undefined && input.type !== old.type;
+    let base = old;
+    if (changesTarget || changesType) {
+      base = { ...old };
+      delete base.acknowledgeExternalPath;
+    }
+    const merged = validateSource({ ...base, ...input }, { id });
     data.sources[idx] = merged;
     saveSources(data);
     return { source: merged, isNew: false };

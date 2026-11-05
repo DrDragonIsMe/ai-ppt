@@ -4,7 +4,7 @@
 // 绝不写 vault 任何业务内容——写盘只发生在 source-cache（由编排器负责）。
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, isForbiddenPath, isSensitivePath } from './paths.mjs';
+import { ROOT, isForbiddenPath, isSensitivePath, safeRealpath, hasForbiddenSegment, hasSensitiveSegment } from './paths.mjs';
 import { matchesAny } from './glob.mjs';
 import { requireFiniteOption } from './registry.mjs';
 import { parseFrontMatter } from '../front-matter.mjs';
@@ -48,6 +48,13 @@ export async function* collectVault(source, ctx = {}) {
     err.statusCode = 400;
     throw err;
   }
+  // P2-B：vaultRoot/target 若本身是软链，解析后仍不得落在禁入/敏感位置（词法归属挡不住仓库外软链）。
+  const scopeReal = safeRealpath(scopeRoot) ?? scopeRoot;
+  if (hasForbiddenSegment(scopeReal) || hasSensitiveSegment(scopeReal)) {
+    const err = new Error(`vault 源 target 解析符号链接后命中禁入/敏感清单：${scopeReal}`);
+    err.statusCode = 400;
+    throw err;
+  }
 
   const include = Array.isArray(source.options?.include) && source.options.include.length
     ? source.options.include
@@ -61,6 +68,9 @@ export async function* collectVault(source, ctx = {}) {
   const visited = new Set();
   let collected = 0;
   let dropped = 0; // 因超过 maxPages 而未入库的合格笔记数
+  let policySkipped = 0; // P2-E：命中禁入/敏感清单而跳过的条目数（可观测，不再静默）
+  const policySamples = [];
+  const bumpPolicy = (rel) => { policySkipped++; if (policySamples.length < 10) policySamples.push(rel); };
 
   while (stack.length) {
     const dir = stack.pop();
@@ -75,9 +85,10 @@ export async function* collectVault(source, ctx = {}) {
     }
     for (const ent of entries) {
       const abs = path.join(dir, ent.name);
-      // P1-1a / P1-2 纵深：即便 target 已限在 vault 内，条目路径命中禁入/敏感清单也一律跳过。
-      if (isForbiddenPath(abs) || isSensitivePath(abs)) continue;
       const rel = path.relative(vaultRoot, abs).split(path.sep).join('/');
+      // P1-1a / P1-2 纵深：即便 target 已限在 vault 内，条目路径命中禁入/敏感清单也一律跳过——
+      // 命中数计入 policySkipped 并上报（P2-E，不再静默丢弃）。
+      if (isForbiddenPath(abs) || isSensitivePath(abs)) { bumpPolicy(rel); continue; }
       if (ent.isDirectory()) {
         if (ent.name.startsWith('.')) continue; // 跳过 .meta 等隐藏目录
         stack.push(abs);
@@ -117,5 +128,9 @@ export async function* collectVault(source, ctx = {}) {
 
   if (dropped > 0) {
     yield { kind: 'summary', collected, dropped, total: collected + dropped, cap };
+  }
+  // P2-E：命中禁入/敏感清单而跳过的条目单独上报（可观测，不再静默丢弃）。
+  if (policySkipped > 0) {
+    yield { kind: 'policy', skipped: policySkipped, samples: policySamples };
   }
 }

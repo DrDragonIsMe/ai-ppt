@@ -23,10 +23,11 @@ import { collectDir } from '../scripts/sources/collect-dir.mjs';
 import { collectSite } from '../scripts/sources/collect-site.mjs';
 import { fetchPage } from '../scripts/sources/net.mjs';
 import { capByBytes, classifyExt } from '../scripts/sources/text-extract.mjs';
-import { isWithinRoot } from '../scripts/sources/paths.mjs';
+import { isWithinRoot, isSensitivePath, hasSensitiveSegment } from '../scripts/sources/paths.mjs';
 import { matchesAny } from '../scripts/sources/glob.mjs';
 import sourcesRoutes from '../routes/sources.mjs';
 import { isSafeName } from '../scripts/config.mjs';
+import dns from 'node:dns/promises';
 
 // 每个测试独享临时 sources.json + 缓存根，避免污染仓库，也彼此隔离。
 // 外部临时目录（os.tmpdir()）在 ROOT 之外，测试运行在"运维已授权外部源"的语境下：
@@ -649,21 +650,29 @@ describe('P1-1 path safety: external gate + sensitive denylist', () => {
     }
   });
 
-  it('条目级 basename/段命中被排除：即使扩展名是 .md/.json 也不入库', async () => {
+  it('条目级 basename/段命中被排除：即使扩展名是 .md/.json 也不入库（P2-E 收窄 id_ 后双向锁定）', async () => {
     freshEnv('p11-entry');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'entry-'));
     fs.writeFileSync(path.join(dir, 'keep.md'), '# Keep\nlegit note');
-    fs.writeFileSync(path.join(dir, 'id_notes.md'), '# IDN\nlooks like a doc but id_ prefix');
+    // 真·SSH 私钥：无扩展名 id_ed25519 —— 收窄后仍命中 basename 清单，被排除
+    fs.writeFileSync(path.join(dir, 'id_ed25519'), 'PRIVATE KEY MATERIAL');
+    // 文档里极常见的 id_* 命名（P2-E 收窄前会被 ^id_.+ 误伤，收窄后应正常入库）
+    fs.writeFileSync(path.join(dir, 'id_mapping.md'), '# Mapping\nid mapping doc');
     fs.writeFileSync(path.join(dir, 'credentials.json'), '{"a":1}');
     fs.mkdirSync(path.join(dir, 'sub', '.ssh'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'sub', '.ssh', 'token.md'), '# Token');
     const source = mkDirSource({ type: 'dir', name: 'Entry', target: dir }).source;
-    await refreshSource(source.id);
+    const r = await refreshSource(source.id);
     const titles = listItems({ sourceId: source.id }).map((i) => i.title).sort();
-    assert.deepEqual(titles, ['Keep']); // 只有 keep.md 入库
+    // keep.md 与 id_mapping.md 入库；id_ed25519 / credentials.json / .ssh 段被清单排除
+    assert.deepEqual(titles, ['Keep', 'Mapping']);
     // 敏感文件确实在磁盘上（证明是清单挡的，不是没造出来）
     assert.ok(fs.existsSync(path.join(dir, 'credentials.json')));
+    assert.ok(fs.existsSync(path.join(dir, 'id_ed25519')));
+    // P2-E：命中清单被跳过的条目要可观测（这里 id_ed25519 + credentials.json + sub/.ssh/token.md = 3）
+    assert.ok(r.policySkipped >= 3, `policySkipped 应记录被跳过的敏感条目，实得 ${r.policySkipped}`);
   });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -914,3 +923,248 @@ async function call(ctx, method, pathname, { body } = {}) {
   await route.handler({ _body: body, url: `http://x${pathname}`, headers: { host: 'x' } }, res, matches);
   return res;
 }
+
+
+// ---------------------------------------------------------------------------
+// P1-A 部分抓取失败：按 origin 保命 + 降级阈值（不再是"成功 1 条就清空整库"）
+// ---------------------------------------------------------------------------
+describe('P1-A partial-failure refresh keeps errored origins as stale', () => {
+  it('site 源：入口成功 + 3 子页失败 → 3 条标 stale 保留（removed=0），非整体保留也非物理删除', async () => {
+    freshEnv('p1a');
+    const ENTRY = 'http://site.test/';
+    let round = 1;
+    const fetchStub = async (url) => {
+      if (url === ENTRY) {
+        return {
+          html: '<title>Home</title><a href="/a.html">A</a><a href="/b.html">B</a><a href="/c.html">C</a>',
+          finalUrl: ENTRY,
+        };
+      }
+      if (round === 1) return { html: `<title>${url}</title><article>body</article>`, finalUrl: url };
+      throw new Error('503 Service Unavailable');
+    };
+    const source = upsertSource({ type: 'site', name: 'S', target: ENTRY, options: { depth: 1, maxPages: 10 } }).source;
+
+    // 首轮全部成功：entry + 3 子页 = 4 条
+    const r1 = await refreshSource(source.id, { fetchPage: fetchStub });
+    assert.equal(r1.itemCount, 4, '首轮应入库 4 条');
+    assert.equal(r1.errors, 0);
+
+    // 次轮：入口成功、3 子页 503。旧闸门"只要成功 1 条即放行 prune"会把 3 条物理删光（评审复现 4→1）。
+    round = 2;
+    const events = [];
+    const r2 = await refreshSource(source.id, { fetchPage: fetchStub, onEvent: (e) => events.push(e) });
+
+    assert.equal(r2.errors, 3);
+    assert.equal(r2.staleCount, 3, '3 条失败 origin 应被标记 stale 保命');
+    assert.equal(r2.removed, 0, '部分失败不得物理删除任何条目');
+    assert.equal(r2.itemCount, 4, '总量守恒：1 成功 + 3 stale');
+    assert.equal(r2.degraded, true);
+    assert.equal(r2.preserved, false, '这不是整体失败保留，而是部分降级');
+
+    const m = readManifest(source.id);
+    assert.equal(m.degraded, true);
+    assert.equal(m.staleCount, 3);
+    assert.equal(m.items.length, 4);
+    assert.equal(m.items.filter((i) => i.stale === true).length, 3);
+
+    // 磁盘 item 文件仍在（未被 rm），4 个 .md
+    const itemsDir = path.join(process.env.AI_PPT_SOURCE_CACHE_ROOT, source.id, 'items');
+    const onDisk = fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md'));
+    assert.equal(onDisk.length, 4);
+
+    assert.ok(events.some((e) => e.step === 'degraded'), '应有 degraded 事件上报');
+  });
+
+  it('上游确实删除的条目（无对应错误）在正常轮次仍被清理 removed=1', async () => {
+    freshEnv('p1a-rm');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p1a-rm-'));
+    fs.writeFileSync(path.join(dir, 'a.md'), '# A');
+    fs.writeFileSync(path.join(dir, 'b.md'), '# B');
+    const source = mkDirSource({ type: 'dir', name: 'D', target: dir }).source;
+    const r1 = await refreshSource(source.id);
+    assert.equal(r1.itemCount, 2);
+    fs.rmSync(path.join(dir, 'b.md'));
+    const r2 = await refreshSource(source.id);
+    assert.equal(r2.removed, 1, '无错误、上游真删除 → 正常清理 1 条');
+    assert.equal(r2.staleCount, 0);
+    assert.equal(r2.degraded, false);
+    assert.equal(r2.itemCount, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-C ack 只在确为外部时持久化；PUT 改 target/type 不继承 ack；env 关对存量源撤回
+// ---------------------------------------------------------------------------
+describe('P2-C external-ack hardening', () => {
+  it('内部目录源即使请求带 acknowledgeExternalPath 也不持久化该标记（不免费铸造）', () => {
+    freshEnv('p2c-internal');
+    const s = validateSource({ type: 'dir', name: 'Ref', target: 'references', acknowledgeExternalPath: true });
+    assert.equal(s.external, undefined);
+    assert.ok(!('acknowledgeExternalPath' in s), '内部源不应写入 acknowledgeExternalPath');
+  });
+
+  it('PUT 更换 target 必须二次确认：不带 ack 改外部 target → 抛错；带上则成功；仅改名免确认', () => {
+    freshEnv('p2c-put');
+    const dirA = fs.mkdtempSync(path.join(os.tmpdir(), 'p2c-a-'));
+    const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'p2c-b-'));
+    fs.writeFileSync(path.join(dirA, 'x.md'), '# X');
+    fs.writeFileSync(path.join(dirB, 'y.md'), '# Y');
+    const created = upsertSource({ type: 'dir', name: 'Ext', target: dirA, acknowledgeExternalPath: true }).source;
+    assert.equal(created.acknowledgeExternalPath, true);
+
+    // 换 target 无 ack → 剥离旧标记 → 越界但缺确认 → 抛错
+    assert.throws(
+      () => upsertSource({ target: dirB }, created.id),
+      /acknowledgeExternalPath/,
+      '改 target 到另一个外部目录必须重新确认',
+    );
+    // 仅改名（不带 target）→ 继承标记 → 成功
+    const renamed = upsertSource({ name: 'Renamed' }, created.id).source;
+    assert.equal(renamed.name, 'Renamed');
+    assert.equal(renamed.acknowledgeExternalPath, true);
+    // 换 target 且带 ack → 成功
+    const moved = upsertSource({ target: dirB, acknowledgeExternalPath: true }, created.id).source;
+    assert.equal(moved.target, path.normalize(dirB));
+  });
+
+  it('撤回授权：建外部源后关掉 env → refreshSource 抛 403（对存量源生效）', async () => {
+    freshEnv('p2c-revoke');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p2c-rev-'));
+    fs.writeFileSync(path.join(dir, 'x.md'), '# X');
+    const source = upsertSource({ type: 'dir', name: 'Ext', target: dir, acknowledgeExternalPath: true }).source;
+    const saved = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    delete process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    try {
+      await assert.rejects(() => refreshSource(source.id), (err) => err.statusCode === 403);
+    } finally {
+      process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = saved;
+    }
+    // 重新开启 env 后仍可刷新（授权语境恢复）
+    const r = await refreshSource(source.id);
+    assert.equal(r.added, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-B 符号链接逃逸与大小写折叠（realpath 重查）
+// ---------------------------------------------------------------------------
+describe('P2-B symlink-escape + case-insensitive denylist', () => {
+  it('仓库内软链指向 ~/.ssh：validateSource(env+ack) 现按 realpath 判敏感而拒绝（旧词法判定会放行）', () => {
+    freshEnv('p2b-sym');
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'p2b-'));
+    const fakeSsh = path.join(base, 'fakehome', '.ssh');
+    fs.mkdirSync(fakeSsh, { recursive: true });
+    fs.writeFileSync(path.join(fakeSsh, 'id_ed25519'), 'KEY');
+    const link = path.join(base, 'link-to-ssh');
+    fs.symlinkSync(fakeSsh, link, 'dir');
+    // 词法上 link 在 base（非敏感）内，但 realpath 落在 .ssh 段 → 必须拒
+    assert.throws(
+      () => validateSource({ type: 'dir', name: 'X', target: link, acknowledgeExternalPath: true }),
+      /敏感位置/,
+    );
+  });
+
+  it('collect-time：软链根指向敏感目录 → collectDir 直接抛 400（防绕过 registry 直接喂）', async () => {
+    freshEnv('p2b-collect');
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'p2bc-'));
+    const fakeAws = path.join(base, '.aws');
+    fs.mkdirSync(fakeAws, { recursive: true });
+    fs.writeFileSync(path.join(fakeAws, 'creds.md'), '# C');
+    const link = path.join(base, 'docs');
+    fs.symlinkSync(fakeAws, link, 'dir');
+    await assert.rejects(
+      async () => { for await (const _ of collectDir({ type: 'dir', name: 'X', target: link, options: { maxPages: 30, maxBytesPerItem: 4096 } }, {})) { void _; } },
+      /敏感|禁入/,
+    );
+  });
+
+  it('大小写不敏感文件系统上 ~/.SSH 折叠命中敏感段（darwin/win32）', () => {
+    if (process.platform !== 'darwin' && process.platform !== 'win32') return; // Linux 上大小写敏感，跳过
+    assert.equal(hasSensitiveSegment('/Users/x/.SSH/foo'), true, '.SSH 应与 .ssh 同等命中');
+    assert.equal(hasSensitiveSegment('/Users/x/.ssh/foo'), true);
+    // 前导点区分不受折叠影响：普通 config 段不应命中敏感目录段
+    assert.equal(hasSensitiveSegment('/Users/x/config/foo'), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-E 被禁入/敏感清单跳过的条目可观测（policySkipped + 事件 + manifest + GET 透出）
+// ---------------------------------------------------------------------------
+describe('P2-E policy-skipped observability', () => {
+  it('isSensitivePath 收窄后的边界：id_ 仅挡无扩展名私钥，文档命名放行；.ai-ppt-*.json 拦截', () => {
+    assert.equal(isSensitivePath('/x/id_ed25519'), true);
+    assert.equal(isSensitivePath('/x/id_rsa'), true);
+    assert.equal(isSensitivePath('/x/id_mapping.md'), false, 'id_mapping.md 不应被误伤');
+    assert.equal(isSensitivePath('/x/ID_list.csv'), false, 'ID_list.csv 不应被误伤');
+    assert.equal(isSensitivePath('/x/credentials-api.md'), false, 'credentials-api.md 不应被误伤');
+    assert.equal(isSensitivePath('/x/credentials.json'), true);
+    assert.equal(isSensitivePath('/x/.ai-ppt-config.json'), true);
+    assert.equal(isSensitivePath('/x/.ai-ppt-tasks.json'), true);
+  });
+
+  it('dir 源命中清单 → refresh.policySkipped>0 + policy-skipped 事件 + manifest 记录 + GET /api/sources 透出', async () => {
+    freshEnv('p2e-vis');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p2e-'));
+    fs.writeFileSync(path.join(dir, 'good.md'), '# Good\ndoc');
+    fs.writeFileSync(path.join(dir, 'credentials.json'), '{"secret":1}');
+    fs.mkdirSync(path.join(dir, 'keys', '.ssh'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'keys', '.ssh', 'note.md'), '# note');
+    const source = mkDirSource({ type: 'dir', name: 'P', target: dir }).source;
+
+    const events = [];
+    const r = await refreshSource(source.id, { onEvent: (e) => events.push(e) });
+    assert.equal(r.itemCount, 1, '只 good.md 入库');
+    assert.ok(r.policySkipped >= 2, `policySkipped 至少 2（credentials.json + .ssh 段），实得 ${r.policySkipped}`);
+    assert.ok(events.some((e) => e.step === 'policy-skipped'), '应有 policy-skipped 事件');
+
+    const m = readManifest(source.id);
+    assert.ok(Number.isFinite(m.policySkipped) && m.policySkipped >= 2);
+    assert.ok(Array.isArray(m.policySamples));
+
+    // 经 HTTP GET 透出（加性字段，既有键不变）
+    const ctx = makeRouteCtx();
+    const listed = await call(ctx, 'GET', '/api/sources');
+    const row = listed.body.sources.find((s) => s.id === source.id);
+    assert.ok(row, 'GET 应能列出该源');
+    assert.ok(row.policySkipped >= 2, 'GET /api/sources 应透出 policySkipped');
+    assert.ok('itemCount' in row && 'truncated' in row && 'droppedCount' in row && 'target' in row,
+      '既有键 itemCount/truncated/droppedCount/target 必须保留');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-D url 采集器生产分支（无 allowPrivateNetwork）也走 net.fetchPage：
+//     抬高到 2MB 的 maxBytesPerItem 生效（旧 content-extractor 1MB 硬失败 → errors=1）
+// ---------------------------------------------------------------------------
+describe('P2-D url collector production branch respects maxBytesPerItem (net path)', () => {
+  it('生产默认路径（不带 allowPrivateNetwork）抓取 1.5MB 页面在 2MB 上限下成功入库、errors=0', async () => {
+    freshEnv('p2d');
+    const body = '<!doctype html><html><head><title>BigProd</title></head><body><article>'
+      + 'x'.repeat(Math.floor(1.5 * 1024 * 1024)) + '</article></body></html>';
+    assert.ok(Buffer.byteLength(body) > 1024 * 1024, '构造体应超过 content-extractor 的 1MB 硬上限');
+
+    const origLookup = dns.lookup;
+    const origFetch = globalThis.fetch;
+    dns.lookup = async () => [{ address: '93.184.216.34', family: 4 }]; // 让 isPublicHost 通过（生产分支不跳过 SSRF）
+    globalThis.fetch = async () => new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'text/html' },
+    });
+    try {
+      const source = upsertSource({
+        type: 'url', name: 'BigProd', target: 'https://docs.example.com/page',
+        options: { maxBytesPerItem: 2 * 1024 * 1024 },
+      }).source;
+      const r = await refreshSource(source.id); // 无 allowPrivateNetwork：走生产分支
+      assert.equal(r.errors, 0, `生产分支应经 net.fetchPage 成功；若回退 content-extractor 会因 >1MB 抛错，实得 errors=${r.errors} ${JSON.stringify(r.errorList || [])}`);
+      assert.equal(r.itemCount, 1);
+      const it = listItems({ sourceId: source.id })[0];
+      assert.match(it.title, /BigProd/);
+      assert.equal(it.truncated, undefined, '1.5MB < 2MB 上限，不应标记截断');
+    } finally {
+      dns.lookup = origLookup;
+      globalThis.fetch = origFetch;
+    }
+  });
+});

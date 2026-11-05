@@ -5,7 +5,7 @@
 // 每条文本条目在此就地抽正文（md/txt/html/csv/json/docx/pdf），抽正文失败降级为 error 条目、不中断整批。
 import fs from 'node:fs';
 import path from 'node:path';
-import { isWithinRoot, isForbiddenPath, isSensitivePath } from './paths.mjs';
+import { isWithinRoot, isForbiddenPath, isSensitivePath, safeRealpath, hasForbiddenSegment, hasSensitiveSegment } from './paths.mjs';
 import { matchesAny } from './glob.mjs';
 import { requireFiniteOption } from './registry.mjs';
 import { extOf, classifyExt, extractFileText } from './text-extract.mjs';
@@ -31,6 +31,8 @@ function titleFromHead(absPath, relPath) {
  */
 export async function* collectDir(source, ctx = {}) {
   const root = path.resolve(source.target);
+  // P2-B：根若本身是软链，其内部条目的 realpath 归属应以解析后的真实根为准。
+  const rootReal = safeRealpath(root) ?? root;
   let stat;
   try {
     stat = fs.statSync(root);
@@ -41,6 +43,13 @@ export async function* collectDir(source, ctx = {}) {
   }
   if (!stat.isDirectory()) {
     const err = new Error(`target 不是目录：${root}`);
+    err.statusCode = 400;
+    throw err;
+  }
+  // P2-B：target 经符号链接解析后不得落到敏感/禁入位置（registry 建源时已查一次，此处采集再兜底，
+  // 防建源与采集之间有人动了软链，或测试/其他调用方绕过 registry 直接喂 collectDir）。
+  if (hasForbiddenSegment(rootReal) || hasSensitiveSegment(rootReal)) {
+    const err = new Error(`dir 源 target 解析符号链接后命中禁入/敏感清单：${rootReal}`);
     err.statusCode = 400;
     throw err;
   }
@@ -55,6 +64,9 @@ export async function* collectDir(source, ctx = {}) {
   let collected = 0;
   let eligible = 0; // include 命中的文本/素材文件总数（含因超上限被丢弃的）
   const visited = new Set();
+  let policySkipped = 0; // P2-E：命中禁入/敏感清单而跳过的条目数（可观测，不再静默）
+  const policySamples = [];
+  const bumpPolicy = (rel) => { policySkipped++; if (policySamples.length < 10) policySamples.push(rel); };
 
   while (stack.length) {
     const dir = stack.pop();
@@ -74,11 +86,11 @@ export async function* collectDir(source, ctx = {}) {
       let realAbs = abs;
       if (ent.isSymbolicLink()) {
         try { realAbs = fs.realpathSync(abs); } catch { continue; }
-        if (!isWithinRoot(root, realAbs)) continue; // symlink 越界 → 拒绝
+        if (!isWithinRoot(rootReal, realAbs)) continue; // symlink 越界 → 拒绝
       }
-      // 禁入目录段（基于绝对路径判定，P1-2）+ 敏感位置/basename 拒绝清单（P1-1a）：
-      // 命中即整条跳过——目录不进入、文件不入库。对 symlink 亦以解析后的真实路径判定。
-      if (isForbiddenPath(realAbs) || isSensitivePath(realAbs)) continue;
+      // 禁入目录段（绝对路径判定，P1-2）+ 敏感位置/basename 拒绝清单（P1-1a）：命中即整条跳过——
+      // 目录不进入、文件不入库；对 symlink 以解析后真实路径判定。**跳过计数并上报**（P2-E，不再静默）。
+      if (isForbiddenPath(realAbs) || isSensitivePath(realAbs)) { bumpPolicy(rel); continue; }
 
       let isDir = ent.isDirectory();
       let isFile = ent.isFile();
@@ -142,5 +154,9 @@ export async function* collectDir(source, ctx = {}) {
   const dropped = eligible - collected;
   if (dropped > 0) {
     yield { kind: 'summary', collected, dropped, total: eligible, cap };
+  }
+  // P2-E：命中禁入/敏感清单而跳过的条目单独上报（可观测，不再静默丢弃）。
+  if (policySkipped > 0) {
+    yield { kind: 'policy', skipped: policySkipped, samples: policySamples };
   }
 }
