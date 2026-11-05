@@ -1359,3 +1359,34 @@ describe('P2-F dir directory-level failure: transient unreadable preserves subtr
     assert.ok(!readManifest(source.id).items.some((i) => String(i.origin).startsWith(pre)), '已删子树不应留在 manifest');
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// P2-H 撤回授权的外部目录源：POST /refresh 在 HTTP 边界同步 403（不等子进程、不假 202）
+// ---------------------------------------------------------------------------
+describe('P2-H refresh authorization revocation returns 403 synchronously', () => {
+  it('env 在时 POST refresh → 202；撤回 env 后同一源 → 同步 403 且不拉起刷新子进程', async () => {
+    freshEnv('p2h'); // freshEnv 已设 AI_PPT_ALLOW_EXTERNAL_SOURCES=1
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p2h-'));
+    fs.writeFileSync(path.join(dir, 'x.md'), '# X');
+    const ctx = makeRouteCtx();
+    const created = await call(ctx, 'POST', '/api/sources', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'Ext', target: dir } });
+    assert.equal(created.status, 201);
+    const id = created.body.source.id;
+
+    const ok = await call(ctx, 'POST', `/api/sources/${id}/refresh`);
+    assert.equal(ok.status, 202, '授权有效时照常异步启动刷新');
+
+    // 撤回授权：关掉 env（存量外部源也应被拒）。用新 ctx 断言 403 路径没有拉起子进程。
+    delete process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    try {
+      const ctx2 = makeRouteCtx();
+      const r = await call(ctx2, 'POST', `/api/sources/${id}/refresh`);
+      assert.equal(r.status, 403, 'P2-H：撤回授权须在 HTTP 边界同步返回 403，而非 202「已启动」');
+      assert.match(r.body.error, /AI_PPT_ALLOW_EXTERNAL_SOURCES/);
+      assert.equal(ctx2.captured.spawn, undefined, '403 时绝不能再拉起 refresh 子进程');
+    } finally {
+      process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = '1';
+    }
+  });
+});

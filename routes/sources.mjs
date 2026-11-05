@@ -2,12 +2,12 @@
 // 端点：GET/POST /api/sources、PUT/DELETE /api/sources/:id、
 //        POST /api/sources/:id/refresh（202 + SSE）、GET /api/sources/:id/refresh/events、
 //        GET /api/sources/:id/items、GET /api/sources/items?q=&limit=、POST /api/sources/preview。
-// 错误映射：非法 id/target → 400；源不存在 → 404；刷新进行中重复触发 → 409；
-//          全局刷新并发超限 → 429；磁盘/网络真实失败 → 500。
+// 错误映射：非法 id/target → 400；源不存在 → 404；外部目录源授权已撤回 → 403（见 P2-H，跨 mission 契约新增）；
+//          刷新进行中重复触发 → 409；全局刷新并发超限 → 429；磁盘/网络真实失败 → 500。
 // 刷新走 202 + NDJSON SSE：spawnNdjsonTask(store=sourceRefreshes, script='sources/refresh.mjs', args=[id])，
 // 同 id 重复刷新 409；服务重启后由 taskRegistry.load()/restoreInterruptedNdjsonTasks 标为 interrupted。
 import {
-  loadSources, getSource, upsertSource, removeSource, SourceError,
+  loadSources, getSource, upsertSource, removeSource, SourceError, assertDirSourceAuthorized,
 } from '../scripts/sources/registry.mjs';
 import { listItems, readManifest, removeCache } from '../scripts/sources/store.mjs';
 import { previewSource } from '../scripts/sources/refresh.mjs';
@@ -192,6 +192,13 @@ export default function sourcesRoutes(deps) {
         if (!validSourceId(id, res)) return;
         const source = getSource(id);
         if (!source) return send(res, 404, { error: `源不存在：${id}` });
+        // P2-H：撤回授权的外部目录源在 HTTP 边界同步返回 403——不能只靠子进程里 refreshSource 抛错，
+        // 否则调用方先拿到 202「刷新已启动」、迟到再连 SSE 又 404，把注定失败的刷新显示成进行中。
+        try {
+          assertDirSourceAuthorized(source);
+        } catch (err) {
+          return send(res, errStatus(err), { error: err.message });
+        }
         if (hasActiveTask(sourceRefreshes, id)) {
           return send(res, 409, { error: '该源正在刷新中，请等待完成' });
         }
