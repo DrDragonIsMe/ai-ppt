@@ -476,7 +476,7 @@ describe('site source low-relevance page filter (B080800)', () => {
       }
       if (u === '/marketing') {
         res.writeHead(200, { 'content-type': 'text/html' });
-        return res.end(HTML('GitHub · Change is constant',
+        return res.end(HTML('GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub',
           'Change is constant. Build the future. Join us. Careers Press Contact.'));
       }
       if (u === '/docs/guide') {
@@ -531,7 +531,7 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(r.itemCount, 5, `关闭过滤后应入库 5 条，实得 ${r.itemCount}`);
     assert.equal(r.lowRelevanceSkipped, 0);
     assert.ok(titles.includes('Sign in to GitHub · GitHub'));
-    assert.ok(titles.includes('GitHub · Change is constant'));
+    assert.ok(titles.includes('GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub'));
   });
 
   it('registry normalizes and persists skipLowRelevanceCheck', () => {
@@ -610,14 +610,18 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length, 3, '磁盘 items 文件一条不少');
   });
 
-  it('isLowRelevancePage 24-case adversarial table (B080800-P1-1/P2-1)', () => {
+  it('isLowRelevancePage adversarial table (B080800-P1-1/P2-1/B091100)', () => {
     const longBody = 'This page contains substantial documentation content that explains features, usage, and best practices. '.repeat(10);
     const shortBody = 'Short marketing slogan text.';
     const e = (title, origin, body) => ({ title, origin, body });
+    const realGitHubTitle = 'GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub';
 
     // 必须丢弃（真垃圾）
     assert.equal(isLowRelevancePage(e('Sign in to GitHub · GitHub', 'https://github.com/login', shortBody)), true);
-    assert.equal(isLowRelevancePage(e('GitHub · Change is constant', 'https://github.com/about', shortBody)), true);
+    // B091100：多段式品牌口号标题 + /about 等浅层路径，即使正文厚实也 DROP（放宽正则的真实收益）。
+    assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/about', longBody)), true);
+    // 多段式品牌口号 + 薄正文，在任意路径下都 DROP。
+    assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/', shortBody)), true);
     assert.equal(isLowRelevancePage(e('登录', 'https://kb.example.com/login', shortBody)), true);
     assert.equal(isLowRelevancePage(e('Log in to your account', 'https://app.example.com/sso', shortBody)), true);
     assert.equal(isLowRelevancePage(e('Terms of Service', 'https://example.com/legal/terms', shortBody)), true);
@@ -642,7 +646,12 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(isLowRelevancePage(e('产品更新', 'https://example.com/updates', longBody)), false);
     assert.equal(isLowRelevancePage(e('新员工 · 培训资料', 'https://kb.example.com/staff', longBody)), false);
     assert.equal(isLowRelevancePage(e('三人行 · 技术笔记', 'https://blog.example.com/', longBody)), false);
+    // B091100：多段式中文知识中心标题，即使正文很薄也因 WHITELIST_CN 补词而 KEEP。
+    assert.equal(isLowRelevancePage(e('知识中心 · Acme', 'https://acme.com/kb', shortBody)), false);
+    // B091100 设计边界：正文厚实的站点根首页不在本过滤器目标范围内，不得加 / 回浅层清单。
+    assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/', longBody)), false);
   });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -1933,6 +1942,7 @@ describe('P2-B root-level unreadable rejects with 500, manifest/disk untouched',
 
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // M19 config file gate for external source dirs
 // ---------------------------------------------------------------------------
 const CONFIG_FILE = path.join(process.cwd(), '.ai-ppt-config.json');
@@ -2031,5 +2041,55 @@ describe('M19 config file gate for external source dirs', () => {
     const get2 = await call(ctx, 'GET', '/api/config');
     assert.equal(get2.status, 200);
     assert.equal(get2.body.sourcesConfig?.allowExternalPaths, false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B091100 first-round all-filtered degraded event
+// 独立 describe，追加在文件末尾，避免与 M19 新增区块产生 rebase 冲突。
+// ---------------------------------------------------------------------------
+describe('B091100 first-round all low-relevance filtered', () => {
+  it('首轮采集全部被低相关过滤时发出 degraded 事件并如实落盘', async () => {
+    freshEnv('site-all-filtered');
+    const realGitHubTitle = 'GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub';
+    const HTML = (title, body, links = '') =>
+      `<!doctype html><html><head><title>${title}</title></head><body>${links}<article><h1>${title}</h1><p>${body}</p></article></body></html>`;
+    const server = http.createServer((req, res) => {
+      const u = req.url.split('?')[0];
+      if (u === '/') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML(realGitHubTitle,
+          'Build the future. Join us. Careers Press Contact.',
+          '<a href="/about">About</a>'));
+      }
+      if (u === '/about') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML(realGitHubTitle,
+          'About GitHub. Careers Press Contact.'));
+      }
+      res.writeHead(404); res.end('nope');
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const port = server.address().port;
+    try {
+      const source = upsertSource({
+        type: 'site', name: 'AF', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 3 },
+      }).source;
+      const events = [];
+      const r = await refreshSource(source.id, { allowPrivateNetwork: true, onEvent: (e) => events.push(e) });
+
+      assert.equal(r.itemCount, 0, '应 0 入库');
+      assert.equal(r.lowRelevanceSkipped, 1, '应报告 1 个低相关页被跳过');
+      assert.equal(r.degraded, true, 'summary 应标记 degraded');
+      assert.ok(events.some((e) => e.step === 'low-relevance-skipped'), '应发出 low-relevance-skipped 事件');
+      assert.ok(events.some((e) => e.step === 'degraded'), '应发出 degraded 事件');
+
+      const m = readManifest(source.id);
+      assert.equal(m.degraded, true, 'manifest 应标记 degraded');
+      assert.equal(m.lowRelevanceSkipped, 1, 'manifest 应记录 lowRelevanceSkipped');
+      assert.equal(m.items.length, 0, 'manifest 应 0 条目');
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
   });
 });

@@ -223,6 +223,16 @@ export async function refreshSource(sourceOrId, opts = {}) {
   // 不该把它们计入 errors 而把整库推向保守保命。
   const uncertainErrors = errors.length - confirmedGoneCount;
   const lowRelevanceSkippedCount = lowRelevanceSkip ? lowRelevanceSkip.skipped : 0;
+  // B091100：首轮采集即全部被低相关过滤（0 入库 / 0 既有 / 有低相关丢弃）时，不能静默 status:done。
+  // 沿用已有 'degraded' 语义发 warning 事件，并在 manifest/summary 中如实体现。
+  const allFiltered = newItems.length === 0 && prevItemCount === 0 && lowRelevanceSkippedCount > 0;
+  if (allFiltered) {
+    onEvent({
+      step: 'degraded',
+      message: `素材源「${source.name}」本轮采集全部被低相关过滤跳过（0 入库 / ${lowRelevanceSkippedCount} 个低相关页）`,
+      detail: { keptStale: 0, removed: 0, errors: uncertainErrors, overallDegraded: false, reason: 'all-low-relevance' },
+    });
+  }
   // P1-①（r5 回归修复）：整源归零闸门必须只看「本轮有没有错误」，绝不能只看「未确认错误」。
   // 反例：site 源入口页单独 404（本轮 1 条 confirmed-gone 错误、0 入库），10 条子页本轮根本没被抓过、
   // 上游对它们没有任何"已删除"表态——若用 uncertainErrors>0 判定，闸门被免检放行，子页会落进 prune 末尾
@@ -310,7 +320,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
     ? (prev.fingerprint || '')
     : sha256(outItems.map((i) => `${i.id}:${i.stale ? 'S' : ''}${i.hash}`).sort().join('\n'));
   const fetchedAt = new Date().toISOString();
-  const degraded = stalePreserved > 0;
+  const degraded = stalePreserved > 0 || allFiltered;
   writeManifest(sourceId, {
     sourceId,
     fetchedAt,
