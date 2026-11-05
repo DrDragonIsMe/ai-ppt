@@ -26,6 +26,8 @@ export const DEFAULT_GLOBAL_CONFIG = {
   },
   sourcesConfig: {
     allowExternalPaths: false,
+    pruneGuard: true,
+    pruneGuardRatio: 0.2,
   },
   modelConfig: {
     presetId: 'volc-ark-doubao-seed-2.0-lite',

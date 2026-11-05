@@ -39,7 +39,14 @@ function freshEnv(label) {
   process.env.AI_PPT_SOURCES_FILE = path.join(tmp, 'sources.json');
   process.env.AI_PPT_SOURCE_CACHE_ROOT = path.join(tmp, 'cache');
   process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = '1';
+  // 每个测试独享隔离的全局配置路径（默认不存在 ⇒ 走默认值），避免任何用例读写仓库根真实配置。
+  process.env.AI_PPT_CONFIG_PATH = path.join(tmp, '.ai-ppt-config.json');
   return tmp;
+}
+
+// 供「prune 正常清理」语义的用例显式关闭 B091300 熔断，避免与兜底清理比例阈值耦合。
+function disablePruneGuard() {
+  fs.writeFileSync(process.env.AI_PPT_CONFIG_PATH, JSON.stringify({ sourcesConfig: { pruneGuard: false } }));
 }
 
 // 外部临时目录作为 dir 源：模拟生产"运维开 env + 前端确认一次"两道闸门（P1-1b/c）。
@@ -179,6 +186,7 @@ describe('dir source: collect + incremental + listItems', () => {
   });
 
   it('incremental: unchanged on second pass, updates on edit', async () => {
+    disablePruneGuard(); // 本用例专测 prune 正常清理语义，显式关闭 B091300 熔断
     const r1 = await refreshSource(source.id);
     const r2 = await refreshSource(source.id);
     assert.equal(r2.added, 0);
@@ -1287,6 +1295,7 @@ describe('P1-A partial-failure refresh keeps errored origins as stale', () => {
 
   it('上游确实删除的条目（无对应错误）在正常轮次仍被清理 removed=1', async () => {
     freshEnv('p1a-rm');
+    disablePruneGuard(); // 专测「上游真删 → 正常清理」，显式关闭 B091300 熔断
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p1a-rm-'));
     fs.writeFileSync(path.join(dir, 'a.md'), '# A');
     fs.writeFileSync(path.join(dir, 'b.md'), '# B');
@@ -1735,6 +1744,7 @@ describe('P2-F dir directory-level failure: transient unreadable preserves subtr
 
   it('对照：子目录被真删除 → 子树 3 条正常清理(removed=3、非 stale)，与"暂时不可读保命"分叉', async () => {
     freshEnv('p2f-del');
+    disablePruneGuard(); // 专测子树真删除的正常清理，显式关闭 B091300 熔断
     const { dir, sub } = buildDirSrc('p2f-del');
     const source = mkDirSource({ type: 'dir', name: 'FD', target: dir }).source;
     const r1 = await refreshSource(source.id);
@@ -1893,6 +1903,7 @@ describe('P2-A preserved/pruned surfaced on GET /api/sources', () => {
 
   it('正常清理轮 → API 透出 pruned + prunedUnconfirmed（缓存能减对用户可见）', async () => {
     freshEnv('p2a-pruned');
+    disablePruneGuard(); // 专测 pruned/prunedUnconfirmed 透出，显式关闭 B091300 熔断
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p2a-pruned-'));
     for (let i = 1; i <= 3; i++) fs.writeFileSync(path.join(dir, `a${i}.md`), `# A${i}`);
     const source = mkDirSource({ type: 'dir', name: 'PR', target: dir }).source;
@@ -1994,12 +2005,11 @@ describe('P2-B root-level unreadable rejects with 500, manifest/disk untouched',
 // ---------------------------------------------------------------------------
 // M19 config file gate for external source dirs
 // ---------------------------------------------------------------------------
-// 隔离：配置一律写临时目录，绝不碰仓库根真实的 .ai-ppt-config.json。
-// 用 process.cwd() 拼该路径曾在 beforeEach 里 unlink 掉用户真实配置，故另有守卫用例钉住。
-const CONFIG_TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-ppt-m19-config-'));
-const CONFIG_FILE = path.join(CONFIG_TMP, '.ai-ppt-config.json');
-function rmConfigFile() { try { fs.unlinkSync(CONFIG_FILE); } catch {} }
-function writeConfigFile(cfg) { fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg), 'utf8'); }
+// 隔离：读写都走 freshEnv 给的 AI_PPT_CONFIG_PATH（os.tmpdir() 下），绝不碰仓库根真实的
+// .ai-ppt-config.json。曾用 process.cwd() 拼该路径并在 beforeEach 里 unlink 掉用户真实配置。
+function currentConfigFile() { return process.env.AI_PPT_CONFIG_PATH; }
+function rmConfigFile() { try { fs.unlinkSync(currentConfigFile()); } catch {} }
+function writeConfigFile(cfg) { fs.writeFileSync(currentConfigFile(), JSON.stringify(cfg), 'utf8'); }
 
 function makeConfigRouteCtx() {
   const deps = {
@@ -2015,14 +2025,7 @@ function makeConfigRouteCtx() {
 }
 
 describe('M19 config file gate for external source dirs', () => {
-  beforeEach(() => {
-    process.env.AI_PPT_CONFIG_PATH = CONFIG_FILE;
-    rmConfigFile();
-  });
-  after(() => {
-    delete process.env.AI_PPT_CONFIG_PATH;
-    fs.rmSync(CONFIG_TMP, { recursive: true, force: true });
-  });
+  // 每个用例自行 freshEnv() ⇒ 配置文件路径指向全新临时目录，无需 beforeEach 清理。
 
   it('config allowExternalPaths=true + env unset → external dir source allowed', () => {
     freshEnv('m19-cfg-on');
@@ -2160,19 +2163,15 @@ describe('global config isolation guard', () => {
     const repoRoot = fileURLToPath(new URL('..', import.meta.url));
     const realConfig = path.join(repoRoot, '.ai-ppt-config.json');
     const before = fs.existsSync(realConfig) ? fs.readFileSync(realConfig) : null;
-    const saved = process.env.AI_PPT_CONFIG_PATH;
-    process.env.AI_PPT_CONFIG_PATH = CONFIG_FILE;
+    freshEnv('config-isolation-guard');
     try {
-      rmConfigFile();
       writeGlobalConfig({ sourcesConfig: { allowExternalPaths: true } });
-      const written = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      const written = JSON.parse(fs.readFileSync(currentConfigFile(), 'utf8'));
       assert.equal(written.sourcesConfig.allowExternalPaths, true);
       assert.equal(readGlobalConfig().sourcesConfig.allowExternalPaths, true, '读取须走同一隔离路径');
       const after = fs.existsSync(realConfig) ? fs.readFileSync(realConfig) : null;
       assert.deepEqual(after, before, '仓库根真实配置不得被测试改动或删除');
     } finally {
-      if (saved === undefined) delete process.env.AI_PPT_CONFIG_PATH;
-      else process.env.AI_PPT_CONFIG_PATH = saved;
       rmConfigFile();
     }
   });
@@ -2186,5 +2185,128 @@ describe('global config isolation guard', () => {
       if (/process\.cwd\(\)[^\n]*\.ai-ppt-config\.json/.test(src)) offenders.push(f);
     }
     assert.deepEqual(offenders, [], '测试必须改用 AI_PPT_CONFIG_PATH 指向的隔离临时文件');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B091300 prune 熔断：兜底清理比例超阈值 ⇒ 一条不删
+// 真实 dir 源 + 真实 refreshSource（非判据层单测），钉住「判据/上游变化 × refresh prune」连带后果。
+// ---------------------------------------------------------------------------
+describe('B091300 prune guard circuit breaker', () => {
+  function seedDirSource(label, count) {
+    const tmp = freshEnv(label);
+    const target = path.join(tmp, 'docs');
+    fs.mkdirSync(target, { recursive: true });
+    for (let i = 1; i <= count; i++) {
+      fs.writeFileSync(path.join(target, `doc-${i}.md`), `# 文档 ${i}\n\n正文内容 ${i}\n`);
+    }
+    process.env.AI_PPT_CONFIG_PATH = path.join(tmp, '.ai-ppt-config.json');
+    const { source } = mkDirSource({ type: 'dir', name: `PG-${label}`, target });
+    return { tmp, target, source };
+  }
+  const itemsOnDisk = (tmp, id) => fs.readdirSync(path.join(tmp, 'cache', id, 'items')).filter((f) => f.endsWith('.md'));
+
+  it('大面积未再采到（5/10 > 20%）⇒ 熔断：一条不删、报 prune-blocked、manifest 如实记录', async () => {
+    const { tmp, target, source } = seedDirSource('pg-block', 10);
+    const first = await refreshSource(source.id);
+    assert.equal(first.itemCount, 10);
+
+    for (let i = 1; i <= 5; i++) fs.rmSync(path.join(target, `doc-${i}.md`));
+    const events = [];
+    const r = await refreshSource(source.id, { onEvent: (e) => events.push(e) });
+
+    assert.equal(r.removed, 0, '熔断时不得删除任何素材');
+    assert.equal(r.prunedUnconfirmed, 0);
+    assert.equal(r.pruneGuardBlocked, true);
+    assert.equal(r.pruneGuardCandidates, 5);
+    assert.equal(r.itemCount, 10, 'manifest 条目一条不少');
+    assert.equal(itemsOnDisk(tmp, source.id).length, 10, '磁盘上的条目文件一条不少');
+    assert.ok(events.some((e) => e.step === 'prune-blocked'), '必须发出 prune-blocked 事件，不得静默');
+    const m = readManifest(source.id);
+    assert.equal(m.pruneGuardBlocked, true);
+    assert.equal(m.pruneGuardCandidates, 5);
+    assert.equal(m.pruneGuardThreshold, 0.2);
+    assert.equal(m.pruneGuardSamples.length, 5);
+    assert.equal(m.items.filter((i) => i.stale).length, 5, '被熔断保留的条目标记 stale');
+
+    const listed = await call(makeRouteCtx(), 'GET', '/api/sources');
+    const row = listed.body.sources.find((s) => s.id === source.id);
+    assert.equal(row.pruneGuardBlocked, true, 'GET /api/sources 必须透出熔断状态');
+    assert.equal(row.pruneGuardCandidates, 5);
+    assert.equal(row.pruneGuardThreshold, 0.2);
+    assert.equal(row.pruneGuardSamples.length, 5);
+  });
+
+  it('小比例正常消失（1/10 ≤ 20%）⇒ 不误熔断，prune 照常执行', async () => {
+    const { tmp, target, source } = seedDirSource('pg-allow', 10);
+    await refreshSource(source.id);
+    fs.rmSync(path.join(target, 'doc-1.md'));
+    const r = await refreshSource(source.id);
+
+    assert.equal(r.pruneGuardBlocked, false);
+    assert.equal(r.removed, 1);
+    assert.equal(r.prunedUnconfirmed, 1);
+    assert.equal(r.itemCount, 9);
+    assert.equal(itemsOnDisk(tmp, source.id).length, 9);
+    assert.equal(readManifest(source.id).pruneGuardBlocked, undefined, '未熔断时不落该键');
+  });
+
+  it('sourcesConfig.pruneGuard=false ⇒ 关闭熔断，回到现状语义', async () => {
+    const { tmp, target, source } = seedDirSource('pg-off', 10);
+    await refreshSource(source.id);
+    fs.writeFileSync(process.env.AI_PPT_CONFIG_PATH, JSON.stringify({ sourcesConfig: { pruneGuard: false } }));
+    for (let i = 1; i <= 5; i++) fs.rmSync(path.join(target, `doc-${i}.md`));
+    const r = await refreshSource(source.id);
+
+    assert.equal(r.pruneGuardBlocked, false);
+    assert.equal(r.removed, 5);
+    assert.equal(r.itemCount, 5);
+    assert.equal(itemsOnDisk(tmp, source.id).length, 5);
+  });
+
+  it('非法阈值（字符串 / 超界）⇒ 回落默认 0.2 且不抛错', async () => {
+    const { target, source } = seedDirSource('pg-badcfg', 10);
+    await refreshSource(source.id);
+    fs.writeFileSync(process.env.AI_PPT_CONFIG_PATH, JSON.stringify({ sourcesConfig: { pruneGuardRatio: 'nope' } }));
+    for (let i = 1; i <= 5; i++) fs.rmSync(path.join(target, `doc-${i}.md`));
+    const r = await refreshSource(source.id);
+    assert.equal(r.pruneGuardBlocked, true, '非法值不得让熔断失效');
+    assert.equal(r.removed, 0);
+    assert.equal(readManifest(source.id).pruneGuardThreshold, 0.2);
+  });
+
+  it('上游确认消失（HTTP 404）走 confirmed-gone，不进熔断候选、照常清理', async () => {
+    freshEnv('pg-gone');
+    const body = '这是一段足够厚实的知识库正文，用来避免被低相关过滤误判。'.repeat(30);
+    const page = (t) => `<!doctype html><html><head><title>${t}</title></head><body><article><h1>${t}</h1><p>${body}</p></article></body></html>`;
+    let bGone = false;
+    const server = http.createServer((req, res) => {
+      const u = req.url.split('?')[0];
+      if (u === '/') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(page('索引页').replace('</body>', '<a href="/a">A</a><a href="/b">B</a></body>'));
+      }
+      if (u === '/b' && bGone) { res.writeHead(404); return res.end('nope'); }
+      if (u === '/a' || u === '/b') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(page(u === '/a' ? '部署指南' : '运维手册'));
+      }
+      res.writeHead(404); res.end('nope');
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const port = server.address().port;
+    try {
+      const { source } = upsertSource({ type: 'site', name: 'PGG', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 10 } });
+      const r1 = await refreshSource(source.id, { allowPrivateNetwork: true });
+      assert.equal(r1.itemCount, 3, '首轮应入库索引页 + A + B');
+
+      bGone = true;
+      const r2 = await refreshSource(source.id, { allowPrivateNetwork: true });
+      assert.equal(r2.removedConfirmedGone ?? r2.prunedConfirmedGone, 1, '404 条目按上游确认消失清理');
+      assert.equal(r2.pruneGuardBlocked, false, 'confirmed-gone 不得触发熔断');
+      assert.equal(r2.itemCount, 2);
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
   });
 });

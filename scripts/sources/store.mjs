@@ -65,6 +65,12 @@ export function writeManifest(sourceId, manifest) {
     ...(Number.isFinite(manifest.pruned) ? { pruned: manifest.pruned } : {}),
     ...(Number.isFinite(manifest.prunedConfirmedGone) ? { prunedConfirmedGone: manifest.prunedConfirmedGone } : {}),
     ...(Number.isFinite(manifest.prunedUnconfirmed) ? { prunedUnconfirmed: manifest.prunedUnconfirmed } : {}),
+    // B091300：兜底清理熔断（加性字段，供 GET /api/sources 与前端告警使用）
+    ...(manifest.pruneGuardBlocked ? { pruneGuardBlocked: true } : {}),
+    ...(Number.isFinite(manifest.pruneGuardCandidates) ? { pruneGuardCandidates: manifest.pruneGuardCandidates } : {}),
+    ...(Number.isFinite(manifest.pruneGuardRatio) ? { pruneGuardRatio: manifest.pruneGuardRatio } : {}),
+    ...(Number.isFinite(manifest.pruneGuardThreshold) ? { pruneGuardThreshold: manifest.pruneGuardThreshold } : {}),
+    ...(Array.isArray(manifest.pruneGuardSamples) ? { pruneGuardSamples: manifest.pruneGuardSamples } : {}),
     // P1-A：部分失败按 origin 保命后的降级标记（加性字段，供 GET /api/sources 与前端徽标使用）
     ...(manifest.degraded ? { degraded: true, staleCount: manifest.staleCount || 0 } : {}),
     // P2-E：命中禁入/敏感清单跳过的条目数与样本（加性字段，形状对齐 droppedCount 徽标）

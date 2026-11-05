@@ -73,6 +73,16 @@ export default function sourcesRoutes(deps) {
               ...(m && m.preserved ? { preserved: true, preserveReason: m.preserveReason || 'collection-failed' } : {}),
               // pruned 仅在有清理时出现；透出总量 + 兜底清理数（confirmedGone 可由 pruned - prunedUnconfirmed 推出，不重复占键）。
               ...(m && Number.isFinite(m.pruned) ? { pruned: m.pruned, prunedUnconfirmed: m.prunedUnconfirmed || 0 } : {}),
+              // B091300：兜底清理熔断状态透出（未熔断不出现该键，避免每个源都挂一个 false 徽标）
+              ...(m && m.pruneGuardBlocked
+                ? {
+                  pruneGuardBlocked: true,
+                  pruneGuardCandidates: m.pruneGuardCandidates || 0,
+                  pruneGuardRatio: m.pruneGuardRatio || 0,
+                  pruneGuardThreshold: m.pruneGuardThreshold || 0,
+                  pruneGuardSamples: Array.isArray(m.pruneGuardSamples) ? m.pruneGuardSamples : [],
+                }
+                : {}),
               // F050500-A：refresh 任务终态持久可观测（读 taskRegistry，不新建存储）
               ...(task ? { lastRefreshStatus: task.status, lastRefreshError: task.error || null } : {}),
             };

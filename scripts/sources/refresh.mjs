@@ -16,6 +16,18 @@ import { collectDir } from './collect-dir.mjs';
 import { collectUrl } from './collect-url.mjs';
 import { collectSite } from './collect-site.mjs';
 import { collectVault } from './collect-vault.mjs';
+import { readGlobalConfig } from '../global-config.mjs';
+
+// B091300 熔断配置：默认开启，兜底清理比例 > 0.2 即中止。
+// 非法值（非数字、≤0、>1）一律回落默认，绝不抛错阻断刷新。
+function pruneGuardSettings() {
+  const sc = readGlobalConfig().sourcesConfig || {};
+  const raw = sc.pruneGuardRatio;
+  return {
+    enabled: sc.pruneGuard !== false,
+    ratio: typeof raw === 'number' && Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.2,
+  };
+}
 
 function dispatch(source) {
   switch (source.type) {
@@ -254,6 +266,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
   let removedUnconfirmed = 0;   // P1-①.3：兜底分支清理（本轮没抓到也没报错，视为上游确认消失）的条数
   let stalePreserved = 0;
   const staleKeptItems = [];
+  let pruneGuardInfo = null; // B091300：兜底清理被熔断时的可观测信息（null = 未熔断）
   if (pruneBlocked) {
     let preserveMessage;
     let preserveDetail;
@@ -271,17 +284,16 @@ export async function refreshSource(sourceOrId, opts = {}) {
   } else {
     const itemsDir = sourceItemsDir(sourceId);
     const erroredPre = isDirVault ? [...erroredPrefixes] : []; // P2-F/②：dir/vault 失败目录前缀 → 子树 stale 保命
+    // B091300：先分类、后执行。兜底清理要按整批比例熔断，不能边删边发现删多了。
+    const goneItems = [];
+    const unconfirmedItems = [];
     for (const old of prevItems) {
       if (newIds.has(old.id)) continue; // 本轮已重新收录，正常
       const o = old.origin;
       const oStr = String(o || '');
       // P2-G：本轮上游确认删除（url/site 的 404/410，dir/vault 的文件级 ENOENT，均精确 origin 命中）
       // → 正常清理，即便整体降级也不 stale（缓存要能减）。P2-② 后目录级错误不再进入此集合。
-      const gone = o != null && confirmedGoneOrigins.has(o);
-      if (gone) {
-        try { fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true }); removed++; removedConfirmedGone++; } catch { /* 可能已不在 */ }
-        continue;
-      }
+      if (o != null && confirmedGoneOrigins.has(o)) { goneItems.push(old); continue; }
       // P1-A/P2-F/②：本轮明确失败（origin 命中，或 dir/vault 子树落在失败/中途消失的目录前缀下）或整体降级 → 标 stale 保命，绝不 rm。
       const covered = (o != null && erroredOrigins.has(o)) || erroredPre.some((pre) => oStr.startsWith(pre));
       if (covered || overallDegraded) {
@@ -289,12 +301,43 @@ export async function refreshSource(sourceOrId, opts = {}) {
         stalePreserved++;
         continue;
       }
-      // 其余 = 本轮没抓到、也没报错（含"目录整体消失 → 父枚举不再列出它"）→ 正常清理。缓存能减由此分支保证。
-      try {
-        fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true });
-        removed++;
-        removedUnconfirmed++;
-      } catch { /* 文件可能已不在 */ }
+      // 其余 = 本轮没抓到、也没报错（含"目录整体消失 → 父枚举不再列出它"）→ 待兜底清理，是否真删由熔断决定。
+      unconfirmedItems.push(old);
+    }
+    for (const old of goneItems) {
+      try { fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true }); removed++; removedConfirmedGone++; } catch { /* 可能已不在 */ }
+    }
+    // B091300 熔断：兜底清理数 / 既有语料数 超阈值 ⇒ 一条不删，全部转 stale 保留并显式告警。
+    // 理由：低相关判据或采集器一旦收紧，整批合法素材会落进这个兜底分支被静默物理删除，而 preserve 闸门
+    // 只在 0 入库时触发、救不了它（评审实测同 fixture 下被 prunedUnconfirmed 删掉 2 条已入库素材）。
+    // 宁可缓存晚一轮收敛，也不删用户已入库素材。confirmed-gone 不受熔断影响——上游已对它们明确表态。
+    const guard = pruneGuardSettings();
+    const guardRatio = prevItemCount > 0 ? unconfirmedItems.length / prevItemCount : 0;
+    if (guard.enabled && unconfirmedItems.length > 0 && guardRatio > guard.ratio) {
+      const samples = unconfirmedItems.slice(0, 5).map((i) => i.title || i.origin || i.id);
+      pruneGuardInfo = {
+        candidates: unconfirmedItems.length,
+        ratio: guardRatio,
+        threshold: guard.ratio,
+        samples,
+      };
+      for (const old of unconfirmedItems) {
+        staleKeptItems.push({ ...old, stale: true });
+        stalePreserved++;
+      }
+      onEvent({
+        step: 'prune-blocked',
+        message: `素材源「${source.name}」本轮有 ${unconfirmedItems.length} 条素材未再采到（占既有 ${prevItemCount} 条的 ${Math.round(guardRatio * 100)}%），超过熔断阈值 ${Math.round(guard.ratio * 100)}%：已一条不删、全部保留并标记 stale。若确属上游删除，请在设置里调高 sourcesConfig.pruneGuardRatio 或临时将 pruneGuard 设为 false`,
+        detail: { pruneGuardBlocked: true, ...pruneGuardInfo },
+      });
+    } else {
+      for (const old of unconfirmedItems) {
+        try {
+          fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true });
+          removed++;
+          removedUnconfirmed++;
+        } catch { /* 文件可能已不在 */ }
+      }
     }
     // P1-①.3：prune 侧可观测性——只要发生清理就广播 'pruned'，让"语料被清理"在 SSE 流可见，
     // 并区分"上游确认删除"与"本轮没抓到"两类，杜绝静默清空。
@@ -308,7 +351,9 @@ export async function refreshSource(sourceOrId, opts = {}) {
     if (stalePreserved > 0) {
       onEvent({
         step: 'degraded',
-        message: `素材源「${source.name}」本轮部分抓取失败：已保留 ${stalePreserved} 条未能确认的上游素材（标记 stale，未删除），另有 ${removed} 条确认消失被清理`,
+        message: pruneGuardInfo
+          ? `素材源「${source.name}」熔断保留 ${stalePreserved} 条未再采到的素材（标记 stale，未删除），另有 ${removed} 条上游确认消失被清理`
+          : `素材源「${source.name}」本轮部分抓取失败：已保留 ${stalePreserved} 条未能确认的上游素材（标记 stale，未删除），另有 ${removed} 条确认消失被清理`,
         detail: { keptStale: stalePreserved, removed, errors: uncertainErrors, overallDegraded },
       });
     }
@@ -342,6 +387,16 @@ export async function refreshSource(sourceOrId, opts = {}) {
     ...(truncation && truncation.dropped > 0
       ? { truncated: true, droppedCount: truncation.dropped, totalCandidates: truncation.total, maxPages: truncation.cap }
       : {}),
+    // B091300：兜底清理熔断（加性字段，与 pruned/prunedUnconfirmed 同口径）
+    ...(pruneGuardInfo
+      ? {
+        pruneGuardBlocked: true,
+        pruneGuardCandidates: pruneGuardInfo.candidates,
+        pruneGuardRatio: pruneGuardInfo.ratio,
+        pruneGuardThreshold: pruneGuardInfo.threshold,
+        pruneGuardSamples: pruneGuardInfo.samples,
+      }
+      : {}),
     ...(errors.length ? { errors } : {}),
   });
   // B080800：store.mjs 的 writeManifest 只持久化已知字段，低相关过滤的可观测字段需要显式补丁写入。
@@ -368,6 +423,10 @@ export async function refreshSource(sourceOrId, opts = {}) {
     pruned: removed,
     prunedConfirmedGone: removedConfirmedGone,
     prunedUnconfirmed: removedUnconfirmed,
+    // B091300：兜底清理熔断（加性字段；未熔断时为 false/0）
+    pruneGuardBlocked: !!pruneGuardInfo,
+    pruneGuardCandidates: pruneGuardInfo ? pruneGuardInfo.candidates : 0,
+    pruneGuardRatio: pruneGuardInfo ? pruneGuardInfo.ratio : 0,
     errors: errors.length,
     errorList: errors,
     fingerprint,
