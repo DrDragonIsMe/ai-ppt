@@ -19,6 +19,9 @@ export const DEFAULT_GLOBAL_CONFIG = {
     allowSettingsMutation: true,
     allowKnowledgeMutation: true,
   },
+  sourcesConfig: {
+    allowExternalPaths: false,
+  },
   modelConfig: {
     presetId: 'volc-ark-doubao-seed-2.0-lite',
     provider: 'openai',
@@ -84,6 +87,7 @@ export function readGlobalConfig() {
   return {
     appConfig: { ...DEFAULT_GLOBAL_CONFIG.appConfig, ...fileConfig?.appConfig },
     agentConfig: { ...DEFAULT_GLOBAL_CONFIG.agentConfig, ...fileConfig?.agentConfig },
+    sourcesConfig: { ...DEFAULT_GLOBAL_CONFIG.sourcesConfig, ...fileConfig?.sourcesConfig },
     modelConfig: envCfg || fileConfig?.modelConfig || DEFAULT_GLOBAL_CONFIG.modelConfig,
     imageModelConfig: { ...DEFAULT_GLOBAL_CONFIG.imageModelConfig, ...fileConfig?.imageModelConfig },
     videoModelConfig: { ...DEFAULT_GLOBAL_CONFIG.videoModelConfig, ...fileConfig?.videoModelConfig },
@@ -103,7 +107,7 @@ export function writeGlobalConfig(config) {
     }
   }
   const merged = { ...existing, ...safe };
-  for (const key of ['appConfig', 'agentConfig', 'modelConfig', 'imageModelConfig', 'videoModelConfig', 'pdfConfig']) {
+  for (const key of ['appConfig', 'agentConfig', 'sourcesConfig', 'modelConfig', 'imageModelConfig', 'videoModelConfig', 'pdfConfig']) {
     if (safe[key]) merged[key] = { ...existing[key], ...safe[key] };
   }
   writeJsonAtomic(GLOBAL_CONFIG_PATH, merged);

@@ -956,6 +956,11 @@ export default {
     '素材源服务未就绪，请先在「素材源」建源': "Sources service not ready — create a source in \"Sources\" first",
     '还没有素材源，请先到「素材源」新建': "No sources yet — create one in \"Sources\" first",
     '该源已停用': "This source is disabled",
+    '允许仓库外的目录源': "Allow directories outside the repo",
+    '开启后，素材源可添加仓库根目录之外的本地绝对路径；仍会对每次建源/改源要求显式确认。': "When enabled, sources can use absolute paths outside the repo root; each create/edit still requires explicit confirmation.",
+    '我确认该目录位于仓库之外，且已获授权': "I confirm this directory is outside the repo and authorized",
+    '内部目录源无需勾选；仅在目标确实位于仓库根之外时才需要确认。': "Internal directories do not need this; only confirm when the target is truly outside the repo root.",
+    '该目录在仓库根之外，请勾选确认后重试': "This directory is outside the repo root; check the box and retry",
 
     // —— 素材库：营销大纲与批量生成（M11）——
     '生成营销大纲': "Generate Marketing Outline",

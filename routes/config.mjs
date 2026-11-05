@@ -47,6 +47,11 @@ export default function configRoutes({ send, readBody, presentGlobalConfig, read
                         allowKnowledgeMutation: body.agentConfig.allowKnowledgeMutation !== false,
                     };
                 }
+                if (body.sourcesConfig && typeof body.sourcesConfig === 'object') {
+                    safe.sourcesConfig = {
+                        allowExternalPaths: body.sourcesConfig.allowExternalPaths === true,
+                    };
+                }
                 for (const key of ['modelConfig', 'imageModelConfig', 'videoModelConfig']) {
                     if (body[key] && typeof body[key] === 'object') {
                         if (persistApiKey) {

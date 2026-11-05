@@ -60,10 +60,10 @@ curl -X POST http://localhost:3456/api/sources \
 
 仓库**根之外**的绝对路径目录源，两道闸都过才放行：
 
-1. 服务启动时设环境变量 `AI_PPT_ALLOW_EXTERNAL_SOURCES=1`；
+1. 在 Web 设置面板勾选「允许仓库外的目录源」（写进仓库根 `.ai-ppt-config.json` 的 `sourcesConfig.allowExternalPaths`），或设置环境变量 `AI_PPT_ALLOW_EXTERNAL_SOURCES=1` 作为无头 / CI 的强制覆盖；
 2. 建源请求体带 `acknowledgeExternalPath:true`。
 
-缺任一 → 400。仓库**内部**目录不需要该标记。刷新时还会重查授权：关掉 env 后，已存在的外部源再刷新会 403——「关掉 env」对存量外部源同样生效。
+缺任一 → 400。仓库**内部**目录不需要该标记。刷新时还会重查授权：关闭配置文件开关或 env 后，已存在的外部源再刷新会 403——授权撤回对存量外部源同样生效。
 
 ## 刷新抓取
 

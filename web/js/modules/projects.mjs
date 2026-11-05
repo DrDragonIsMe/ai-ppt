@@ -80,6 +80,11 @@ function renderAgentConfigUI() {
     if (allowKnowledge) allowKnowledge.checked = cfg.allowKnowledgeMutation !== false;
 }
 
+function renderSourcesConfigUI() {
+    const cb = document.getElementById('input-allow-external-paths');
+    if (cb) cb.checked = S.globalConfig?.sourcesConfig?.allowExternalPaths === true;
+}
+
 // === 项目列表 ===
 export async function loadProjects(selectName = null) {
     try {
@@ -290,6 +295,7 @@ export function renderModelConfigUI() {
     renderPdfConfigUI();
     applyAppBranding();
     renderAgentConfigUI();
+    renderSourcesConfigUI();
       syncQuickSetupFromAdvanced();
 }
 
@@ -431,7 +437,8 @@ export async function saveGlobalModelConfig() {
         if (e.inputModelPersistApiKey?.checked && e.inputModelApiKey.value.trim()) { modelConfig.apiKey = e.inputModelApiKey.value.trim(); keyPersisted = true; }
         if (e.inputImageModelPersistApiKey?.checked && e.inputImageModelApiKey.value.trim()) { imageModelConfig.apiKey = e.inputImageModelApiKey.value.trim(); keyPersisted = true; }
         if (e.inputVideoModelPersistApiKey?.checked && e.inputVideoModelApiKey.value.trim()) { videoModelConfig.apiKey = e.inputVideoModelApiKey.value.trim(); keyPersisted = true; }
-        const body = { appConfig, agentConfig, modelConfig, imageModelConfig, videoModelConfig, ...(persistApiKey ? { persistApiKey: true } : {}) };
+        const sourcesConfig = { allowExternalPaths: !!document.getElementById('input-allow-external-paths')?.checked };
+        const body = { appConfig, agentConfig, sourcesConfig, modelConfig, imageModelConfig, videoModelConfig, ...(persistApiKey ? { persistApiKey: true } : {}) };
         if (pdfConfig) body.pdfConfig = pdfConfig;
         S.globalConfig = await api('POST', '/api/config', body);
         renderModelConfigUI();

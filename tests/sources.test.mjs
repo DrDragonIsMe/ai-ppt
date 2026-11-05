@@ -26,7 +26,9 @@ import { capByBytes, classifyExt } from '../scripts/sources/text-extract.mjs';
 import { isWithinRoot, isSensitivePath, hasSensitiveSegment } from '../scripts/sources/paths.mjs';
 import { matchesAny } from '../scripts/sources/glob.mjs';
 import sourcesRoutes from '../routes/sources.mjs';
+import configRoutes from '../routes/config.mjs';
 import { isSafeName } from '../scripts/config.mjs';
+import { readGlobalConfig, writeGlobalConfig } from '../scripts/global-config.mjs';
 import dns from 'node:dns/promises';
 
 // 每个测试独享临时 sources.json + 缓存根，避免污染仓库，也彼此隔离。
@@ -846,10 +848,10 @@ describe('routes/sources.mjs handlers', () => {
 // P1-1 路径安全：外部授权（env）+ 显式确认 + 敏感/禁入拒绝清单
 // ---------------------------------------------------------------------------
 describe('P1-1 path safety: external gate + sensitive denylist', () => {
-  it('仓库外绝对 target 在未设 env 时默认被拒', () => {
+  it('仓库外绝对 target 在 env 显式关闭时默认被拒', () => {
     freshEnv('p11-deny');
     const saved = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
-    delete process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = '0';
     try {
       assert.throws(
         () => validateSource({ type: 'dir', name: 'X', target: os.tmpdir(), acknowledgeExternalPath: true }),
@@ -1400,7 +1402,7 @@ describe('P2-C external-ack hardening', () => {
     fs.writeFileSync(path.join(dir, 'x.md'), '# X');
     const source = upsertSource({ type: 'dir', name: 'Ext', target: dir, acknowledgeExternalPath: true }).source;
     const saved = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
-    delete process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = '0';
     try {
       await assert.rejects(() => refreshSource(source.id), (err) => err.statusCode === 403);
     } finally {
@@ -1783,7 +1785,8 @@ describe('P2-H refresh authorization revocation returns 403 synchronously', () =
     assert.equal(ok.status, 202, '授权有效时照常异步启动刷新');
 
     // 撤回授权：关掉 env（存量外部源也应被拒）。用新 ctx 断言 403 路径没有拉起子进程。
-    delete process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    const savedEnv = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = '0';
     try {
       const ctx2 = makeRouteCtx();
       const r = await call(ctx2, 'POST', `/api/sources/${id}/refresh`);
@@ -1791,7 +1794,7 @@ describe('P2-H refresh authorization revocation returns 403 synchronously', () =
       assert.match(r.body.error, /AI_PPT_ALLOW_EXTERNAL_SOURCES/);
       assert.equal(ctx2.captured.spawn, undefined, '403 时绝不能再拉起 refresh 子进程');
     } finally {
-      process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = '1';
+      process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = savedEnv;
     }
   });
 });
@@ -1925,5 +1928,108 @@ describe('P2-B root-level unreadable rejects with 500, manifest/disk untouched',
     } finally {
       fs.readdirSync = realReaddir;
     }
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// M19 config file gate for external source dirs
+// ---------------------------------------------------------------------------
+const CONFIG_FILE = path.join(process.cwd(), '.ai-ppt-config.json');
+function rmConfigFile() { try { fs.unlinkSync(CONFIG_FILE); } catch {} }
+function writeConfigFile(cfg) { fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg), 'utf8'); }
+
+function makeConfigRouteCtx() {
+  const deps = {
+    send: (res, status, data) => { res.status = status; res.body = data; },
+    readBody: async (req) => req._body ?? {},
+    presentGlobalConfig: (cfg) => cfg,
+    readGlobalConfig,
+    writeGlobalConfig,
+    PRESET_MODELS: [],
+    listModels: async () => [],
+  };
+  return { routes: configRoutes(deps), deps };
+}
+
+describe('M19 config file gate for external source dirs', () => {
+  beforeEach(() => rmConfigFile());
+  after(() => rmConfigFile());
+
+  it('config allowExternalPaths=true + env unset → external dir source allowed', () => {
+    freshEnv('m19-cfg-on');
+    const saved = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    delete process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    writeConfigFile({ sourcesConfig: { allowExternalPaths: true } });
+    try {
+      const s = validateSource({ type: 'dir', name: 'X', target: os.tmpdir(), acknowledgeExternalPath: true });
+      assert.equal(s.acknowledgeExternalPath, true);
+    } finally {
+      process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = saved;
+      rmConfigFile();
+    }
+  });
+
+  it('config allowExternalPaths=false + env unset → external dir source rejected', () => {
+    freshEnv('m19-cfg-off');
+    const saved = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    delete process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    writeConfigFile({ sourcesConfig: { allowExternalPaths: false } });
+    try {
+      assert.throws(
+        () => validateSource({ type: 'dir', name: 'X', target: os.tmpdir(), acknowledgeExternalPath: true }),
+        /AI_PPT_ALLOW_EXTERNAL_SOURCES/,
+      );
+    } finally {
+      process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = saved;
+      rmConfigFile();
+    }
+  });
+
+  it('env=0 overrides config true → external source rejected', () => {
+    freshEnv('m19-env-off');
+    const saved = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = '0';
+    writeConfigFile({ sourcesConfig: { allowExternalPaths: true } });
+    try {
+      assert.throws(
+        () => validateSource({ type: 'dir', name: 'X', target: os.tmpdir(), acknowledgeExternalPath: true }),
+        /AI_PPT_ALLOW_EXTERNAL_SOURCES/,
+      );
+    } finally {
+      process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = saved;
+      rmConfigFile();
+    }
+  });
+
+  it('env=1 overrides config false → external source allowed', () => {
+    freshEnv('m19-env-on');
+    const saved = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+    process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = '1';
+    writeConfigFile({ sourcesConfig: { allowExternalPaths: false } });
+    try {
+      const s = validateSource({ type: 'dir', name: 'X', target: os.tmpdir(), acknowledgeExternalPath: true });
+      assert.equal(s.acknowledgeExternalPath, true);
+    } finally {
+      process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES = saved;
+      rmConfigFile();
+    }
+  });
+
+  it('GET/POST /api/config round-trips sourcesConfig and normalizes non-boolean to false', async () => {
+    freshEnv('m19-config-api');
+    rmConfigFile();
+    const ctx = makeConfigRouteCtx();
+    const get1 = await call(ctx, 'GET', '/api/config');
+    assert.equal(get1.status, 200);
+    assert.equal(get1.body.sourcesConfig?.allowExternalPaths, false);
+
+    const post = await call(ctx, 'POST', '/api/config', { body: { sourcesConfig: { allowExternalPaths: 'true' } } });
+    assert.equal(post.status, 200);
+    assert.equal(post.body.sourcesConfig?.allowExternalPaths, false);
+
+    const get2 = await call(ctx, 'GET', '/api/config');
+    assert.equal(get2.status, 200);
+    assert.equal(get2.body.sourcesConfig?.allowExternalPaths, false);
   });
 });

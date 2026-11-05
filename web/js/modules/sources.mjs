@@ -215,9 +215,19 @@ function sourceCardHtml(src) {
 // 新建 / 编辑 / 删除
 // ============================================================
 let editingSourceId = null;
+let pendingExternalAck = false;
+
+function resetExternalAckUI() {
+    pendingExternalAck = false;
+    const row = document.getElementById('source-external-ack-row');
+    const cb = document.getElementById('source-input-external-ack');
+    if (row) row.classList.add('hidden');
+    if (cb) cb.checked = false;
+}
 
 export function openSourceModal(id) {
     editingSourceId = id || null;
+    resetExternalAckUI();
     const src = id ? S.sources.list.find((s) => s.id === id) : null;
     const titleEl = document.getElementById('source-modal-title');
     if (titleEl) titleEl.textContent = src ? t('编辑素材源') : t('新建素材源');
@@ -241,6 +251,7 @@ export function openSourceModal(id) {
 function closeSourceModal() {
     document.getElementById('source-modal')?.classList.add('hidden');
     editingSourceId = null;
+    resetExternalAckUI();
 }
 
 async function saveSource() {
@@ -264,6 +275,9 @@ async function saveSource() {
         tags: document.getElementById('source-input-tags').value.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
         options,
     };
+    // 仅在用户显式勾选确认时才带 acknowledgeExternalPath；内部目录源不发送，避免"免费铸造"。
+    const ackChecked = document.getElementById('source-input-external-ack')?.checked;
+    if (ackChecked) body.acknowledgeExternalPath = true;
     const btn = document.getElementById('btn-save-source');
     btn.disabled = true;
     try {
@@ -277,7 +291,16 @@ async function saveSource() {
         closeSourceModal();
         await loadSources();
     } catch (err) {
-        showToast(t('保存失败：{msg}', { msg: errText(err) }), 'error');
+        const msg = errText(err);
+        // 后端返回"越出仓库根"或要求 ack 时，揭示确认复选框让用户重试。
+        if (!pendingExternalAck && /越出仓库根|acknowledgeExternalPath/.test(msg)) {
+            pendingExternalAck = true;
+            const row = document.getElementById('source-external-ack-row');
+            if (row) row.classList.remove('hidden');
+            showToast(t('该目录在仓库根之外，请勾选确认后重试'), 'error');
+        } else {
+            showToast(t('保存失败：{msg}', { msg }), 'error');
+        }
     } finally {
         btn.disabled = false;
     }

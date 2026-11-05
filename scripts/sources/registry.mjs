@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { writeJsonAtomic } from '../fs-utils.mjs';
 import { isSafeName } from '../config.mjs';
+import { readGlobalConfig } from '../global-config.mjs';
 import { ROOT, sourcesFile, isWithinRoot, hasForbiddenSegment, hasSensitiveSegment, safeRealpath } from './paths.mjs';
 
 export const SOURCE_TYPES = ['dir', 'url', 'site', 'vault'];
@@ -154,10 +155,22 @@ function normalizeOptions(type, rawOptions) {
   return out;
 }
 
-// 是否越 ROOT 的外部目录源被环境变量授权（P1-1b：默认关闭，越界抓取需运维显式打开）。
+// 是否允许越 ROOT 的外部目录源。
+// 三段式即时判定（不缓存，保证设置面板改完立刻生效）：
+//   1. env 显式真值（1/true/yes）→ 强制开；
+//   2. env 显式假值（0/false/no）→ 强制关；
+//   3. env 未设（或空值）→ 读全局配置 sourcesConfig.allowExternalPaths。
+// 保留 env 强制覆盖有两个原因：
+//   - 关掉它才能确定性测试"闸门关闭"，否则结论取决于本机私有配置文件；
+//   - 无头部署 / CI 需要一个不落盘的强制关。
 export function externalSourcesAllowed() {
-  const v = String(process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES || '').toLowerCase();
-  return v === '1' || v === 'true' || v === 'yes';
+  const v = process.env.AI_PPT_ALLOW_EXTERNAL_SOURCES;
+  if (v !== undefined && v !== '') {
+    const lower = String(v).toLowerCase();
+    if (lower === '0' || lower === 'false' || lower === 'no') return false;
+    return lower === '1' || lower === 'true' || lower === 'yes';
+  }
+  return readGlobalConfig().sourcesConfig?.allowExternalPaths === true;
 }
 
 /**
@@ -177,7 +190,7 @@ export function assertDirSourceAuthorized(source) {
   const withinReal = real === null ? true : isWithinRoot(rootReal, real);
   if ((!withinLexical || !withinReal) && !externalSourcesAllowed()) {
     throw new SourceError(
-      '该目录源指向仓库根之外，但环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES 已关闭，已拒绝刷新；请重新开启该变量，或改用仓库内目录源',
+      '该目录源指向仓库根之外，但外部目录授权未开启（可在设置面板勾选「允许仓库外的目录源」，或设置环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES=1 后重试），已拒绝刷新',
       403,
     );
   }
@@ -235,10 +248,10 @@ function normalizeDirTarget(target, { acknowledgeExternalPath } = {}) {
   // 绝对路径：ROOT 之内（词法+真实）直接放行，且**不算 external**（不持久化 ack，P2-C）。
   if (!escapesRoot) return { target: resolved, external: false };
 
-  // 越 ROOT 的绝对路径：默认拒绝，需环境变量授权 + 请求显式确认（两道都过才放行）。
+  // 越 ROOT 的绝对路径：默认拒绝，需配置文件 / env 授权 + 请求显式确认（两道都过才放行）。
   if (!externalSourcesAllowed()) {
     throw new SourceError(
-      '默认仅允许仓库根目录内的目录源；越出仓库根的绝对路径需设置环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES=1 后重试',
+      '默认仅允许仓库根目录内的目录源；越出仓库根的绝对路径需在设置面板勾选「允许仓库外的目录源」，或设置环境变量 AI_PPT_ALLOW_EXTERNAL_SOURCES=1 后重试',
     );
   }
   if (acknowledgeExternalPath !== true) {
