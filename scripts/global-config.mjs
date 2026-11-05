@@ -7,7 +7,12 @@ import { writeJsonAtomic } from './fs-utils.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
-const GLOBAL_CONFIG_PATH = path.join(ROOT, '.ai-ppt-config.json');
+// AI_PPT_CONFIG_PATH 可重定向配置文件位置（测试隔离用）；未设时才是仓库根那份。
+// 每次调用即时求值，不做模块级缓存，与 sourcesConfig 的即时读盘口径一致。
+function globalConfigPath() {
+  const override = process.env.AI_PPT_CONFIG_PATH;
+  return override ? path.resolve(override) : path.join(ROOT, '.ai-ppt-config.json');
+}
 
 export const DEFAULT_GLOBAL_CONFIG = {
   appConfig: {
@@ -74,10 +79,11 @@ function envModelConfig() {
 }
 
 export function readGlobalConfig() {
+  const configPath = globalConfigPath();
   let fileConfig = null;
-  if (fs.existsSync(GLOBAL_CONFIG_PATH)) {
+  if (fs.existsSync(configPath)) {
     try {
-      fileConfig = JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf8'));
+      fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     } catch {
       fileConfig = null;
     }
@@ -110,7 +116,7 @@ export function writeGlobalConfig(config) {
   for (const key of ['appConfig', 'agentConfig', 'sourcesConfig', 'modelConfig', 'imageModelConfig', 'videoModelConfig', 'pdfConfig']) {
     if (safe[key]) merged[key] = { ...existing[key], ...safe[key] };
   }
-  writeJsonAtomic(GLOBAL_CONFIG_PATH, merged);
+  writeJsonAtomic(globalConfigPath(), merged);
   return merged;
 }
 

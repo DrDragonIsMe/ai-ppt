@@ -1994,7 +1994,10 @@ describe('P2-B root-level unreadable rejects with 500, manifest/disk untouched',
 // ---------------------------------------------------------------------------
 // M19 config file gate for external source dirs
 // ---------------------------------------------------------------------------
-const CONFIG_FILE = path.join(process.cwd(), '.ai-ppt-config.json');
+// 隔离：配置一律写临时目录，绝不碰仓库根真实的 .ai-ppt-config.json。
+// 用 process.cwd() 拼该路径曾在 beforeEach 里 unlink 掉用户真实配置，故另有守卫用例钉住。
+const CONFIG_TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-ppt-m19-config-'));
+const CONFIG_FILE = path.join(CONFIG_TMP, '.ai-ppt-config.json');
 function rmConfigFile() { try { fs.unlinkSync(CONFIG_FILE); } catch {} }
 function writeConfigFile(cfg) { fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg), 'utf8'); }
 
@@ -2012,8 +2015,14 @@ function makeConfigRouteCtx() {
 }
 
 describe('M19 config file gate for external source dirs', () => {
-  beforeEach(() => rmConfigFile());
-  after(() => rmConfigFile());
+  beforeEach(() => {
+    process.env.AI_PPT_CONFIG_PATH = CONFIG_FILE;
+    rmConfigFile();
+  });
+  after(() => {
+    delete process.env.AI_PPT_CONFIG_PATH;
+    fs.rmSync(CONFIG_TMP, { recursive: true, force: true });
+  });
 
   it('config allowExternalPaths=true + env unset → external dir source allowed', () => {
     freshEnv('m19-cfg-on');
@@ -2140,5 +2149,42 @@ describe('B091100 first-round all low-relevance filtered', () => {
     } finally {
       await new Promise((r) => server.close(r));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 全局配置隔离守卫：测试不得触碰仓库根真实的 .ai-ppt-config.json
+// ---------------------------------------------------------------------------
+describe('global config isolation guard', () => {
+  it('AI_PPT_CONFIG_PATH 重定向后写配置只落隔离文件，仓库根真实配置字节不变', () => {
+    const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+    const realConfig = path.join(repoRoot, '.ai-ppt-config.json');
+    const before = fs.existsSync(realConfig) ? fs.readFileSync(realConfig) : null;
+    const saved = process.env.AI_PPT_CONFIG_PATH;
+    process.env.AI_PPT_CONFIG_PATH = CONFIG_FILE;
+    try {
+      rmConfigFile();
+      writeGlobalConfig({ sourcesConfig: { allowExternalPaths: true } });
+      const written = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      assert.equal(written.sourcesConfig.allowExternalPaths, true);
+      assert.equal(readGlobalConfig().sourcesConfig.allowExternalPaths, true, '读取须走同一隔离路径');
+      const after = fs.existsSync(realConfig) ? fs.readFileSync(realConfig) : null;
+      assert.deepEqual(after, before, '仓库根真实配置不得被测试改动或删除');
+    } finally {
+      if (saved === undefined) delete process.env.AI_PPT_CONFIG_PATH;
+      else process.env.AI_PPT_CONFIG_PATH = saved;
+      rmConfigFile();
+    }
+  });
+
+  it('守卫：任何测试源码都不得用 process.cwd() 定位真实全局配置', () => {
+    const testsDir = fileURLToPath(new URL('.', import.meta.url));
+    const offenders = [];
+    for (const f of fs.readdirSync(testsDir)) {
+      if (!f.endsWith('.test.mjs')) continue;
+      const src = fs.readFileSync(path.join(testsDir, f), 'utf8');
+      if (/process\.cwd\(\)[^\n]*\.ai-ppt-config\.json/.test(src)) offenders.push(f);
+    }
+    assert.deepEqual(offenders, [], '测试必须改用 AI_PPT_CONFIG_PATH 指向的隔离临时文件');
   });
 });
