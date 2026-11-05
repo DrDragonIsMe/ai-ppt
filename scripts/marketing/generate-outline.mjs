@@ -246,7 +246,8 @@ export async function generateOutline(opts = {}) {
         llmProbed.disabledAfterFailure
           ? `角度 ${idx + 1}/${angles.length}「${angle.title}」：前序 LLM 调用已失败（${llmReason || '未知原因'}），直接用确定性兜底，不再等待网络`
           : `角度 ${idx + 1}/${angles.length}「${angle.title}」：未配置可用 LLM（远程无 API Key），使用确定性兜底规划`,
-        { angleKey: angle.key, index: idx, total: angles.length, llm: false, shortCircuited: true });
+        // shortCircuited 只标「试过且失败后跳过」；从未配置成功是 reachable=false，不是短路
+        { angleKey: angle.key, index: idx, total: angles.length, llm: false, shortCircuited: llmProbed.disabledAfterFailure });
       continue;
     }
 

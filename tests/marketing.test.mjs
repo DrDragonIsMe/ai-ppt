@@ -401,6 +401,12 @@ describe('generateOutline', () => {
     const evSets = new Set(outline.angles.map((a) => a.evidenceItemIds.join(',')));
     assert.ok(evSets.size >= 4, `兜底大纲角度区分度不足：${evSets.size}/${outline.angles.length} 种证据组合`);
     assert.equal(summary.llmUsed, 0);
+    // 从未配置成功 ≠ 试过又失败：这种情形不该冒充"短路"
+    assert.equal(summary.llmReachable, false);
+    assert.equal(summary.llmAttempted, false);
+    assert.equal(summary.llmShortCircuited, false);
+    assert.ok(!events.some((e) => e.type === 'progress' && e.step === 'angle' && e.detail?.shortCircuited === true),
+      '无 LLM 配置的兜底不该把每个角度都标成 shortCircuited');
     assert.ok(summary.corpusChars > 0 && summary.usedMaterialChars > 0);
     assert.ok(events.some((e) => e.type === 'outline' && e.outline?.id === outline.id));
     assert.ok(summary.angleKeys.length >= 6);
