@@ -119,6 +119,18 @@ export function normalizeAngleSlides(raw, { idMap, slideCount }) {
 
 // ---- 确定性兜底 ----
 
+/** 兜底页标题超长时按词/语义边界收尾并加省略号，不再 20 字硬截断。 */
+export function smartTruncateHeading(text, maxLen = 20) {
+  const s = stripMarkdown(String(text || '').replace(/\s+/g, ' ')).trim();
+  if (s.length <= maxLen) return s;
+  // 在 maxLen-1 范围内找最后一个语义断点（标点/空格/中英文边界），避免切在词中间
+  const cut = s.slice(0, maxLen - 1);
+  const boundary = /[\s，。！？、；：“”‘’（）【】《》"'()\[\]{}|/\\,!?;:.]/.exec([...cut].reverse().join(''));
+  const idx = boundary ? cut.length - boundary.index - 1 : cut.length;
+  const safe = idx > 0 ? cut.slice(0, idx).trimEnd() : cut;
+  return (safe || cut).replace(/[\s，。！？、；：“”‘’（）【】《》"'()\[\]{}|/\\,!?;:.]+$/g, '') + '…';
+}
+
 /**
  * 无 LLM（或 LLM 输出不可用）时的兜底角度规划。
  * 区分度来源：角度关键词分桶 + thesis 取角度集定义；素材不足时各角度会复用条目，
@@ -135,7 +147,7 @@ export function fallbackAnglePlan(angle, entries, slideCount = SLIDES_PER_ANGLE_
       .slice(0, 3);
     const headingRaw = stripMarkdown(e.item.title || '').replace(/\s+/g, ' ').trim();
     slides.push({
-      heading: (headingRaw || angle.title).slice(0, 20),
+      heading: smartTruncateHeading(headingRaw || angle.title, 20),
       lead: picked[0] ? picked[0].slice(0, 40) : angle.lens.slice(0, 40),
       points: picked.slice(0, 3),
       evidenceItemIds: [e.item.itemId],
@@ -148,7 +160,7 @@ export function fallbackAnglePlan(angle, entries, slideCount = SLIDES_PER_ANGLE_
     const e = entries[i % entries.length];
     const body = String(e.digest || '').replace(/\s+/g, ' ').trim();
     slides.push({
-      heading: `${angle.title} · 补充 ${slides.length + 1}`.slice(0, 20),
+      heading: smartTruncateHeading(`${angle.title} · 补充 ${slides.length + 1}`, 20),
       lead: body.slice(0, 40),
       points: body ? [body.slice(0, 40), body.slice(40, 80)].filter(Boolean) : [],
       evidenceItemIds: [e.item.itemId],
@@ -193,6 +205,7 @@ export async function generateOutline(opts = {}) {
   const material = doCollect({
     sourceIds: opts.sourceIds,
     includeStale: !!opts.includeStale,
+    placeholderThreshold: opts.placeholderThreshold,
     listItemsFn: deps.listItemsFn,
     readItemFn: deps.readItemFn,
     readManifestFn: deps.readManifestFn,
@@ -210,6 +223,21 @@ export async function generateOutline(opts = {}) {
   for (const w of material.warnings) emitter.progress('material-warning', w);
 
   const assignment = assignMaterial(angles, material.items, { perAngleItems: Math.max(slideCount, 6) });
+
+  // F050500-3：语料不足/角度区分度塌缩时如实告警（不静默产出低区分度大纲）
+  const angleEvidenceSets = angles.map((a) => new Set((assignment.get(a.key) || []).map((e) => e.item.itemId)));
+  const distinctEvidenceSets = new Set(angleEvidenceSets.map((s) => [...s].sort().join(','))).size;
+  if (material.items.length < angles.length) {
+    material.warnings.push(
+      `素材不足：语料仅 ${material.items.length} 条，少于 ${angles.length} 个角度，建议增加数据源；当前各角度会复用同一批素材，大纲区分度可能不足`
+    );
+    emitter.progress('material-warning', `素材不足：语料仅 ${material.items.length} 条，少于 ${angles.length} 个角度`);
+  } else if (distinctEvidenceSets < angles.length) {
+    material.warnings.push(
+      `角度取材区分度塌缩：${angles.length} 个角度只拿到 ${distinctEvidenceSets} 种不同的素材集合，部分角度实质未分到独立语料（仅顺序不同），建议补充更多素材或调整产品/受众/语气参数`
+    );
+    emitter.progress('material-warning', `角度取材区分度塌缩：${angles.length} 个角度仅 ${distinctEvidenceSets} 种不同素材集合`);
+  }
 
   const modelOptions = deps.modelOptions ?? buildModelOptions();
   // 可达性用 llmReachable（真信号：远程必须有 key），再加"失败一次即短路"的探测位：
@@ -356,8 +384,11 @@ export async function generateOutline(opts = {}) {
       corpusChars: material.stats.corpusChars,
       usedMaterialChars: materialChars,
       staleSkipped: material.stats.staleSkipped,
+      excludedPlaceholderCount: material.stats.excludedPlaceholderCount || 0,
       includeStale: material.stats.includeStale,
       droppedEvidenceCount: integrity.dropped,
+      angleCount: angles.length,
+      distinctEvidenceSets,
       perSource: material.perSource,
       llm: {
         used: llmUsed, failed: llmFailed,
@@ -401,6 +432,8 @@ export async function generateOutline(opts = {}) {
     usedMaterialChars: materialChars,
     droppedEvidenceCount: integrity.dropped,
     thesisCollisions,
+    distinctEvidenceSets,
+    angleCount: angles.length,
     llmUsed,
     llmFailed,
     llmReachable: llmUsable,

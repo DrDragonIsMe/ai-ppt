@@ -600,6 +600,51 @@ describe('routes/sources.mjs handlers', () => {
     assert.equal(items.status, 200);
     assert.ok(items.body.items.some((i) => i.title === 'K'));
   });
+
+  it('F050500-A: GET /api/sources surfaces lastRefreshStatus/lastRefreshError from taskRegistry after failure', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'src-failvis-'));
+    fs.writeFileSync(path.join(tmp, 'x.md'), '# X\nbody');
+    const created = await call(ctx, 'POST', '/api/sources', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'F', target: tmp } });
+    const id = created.body.source.id;
+    // 模拟一次已失败的刷新任务落进注册表（与真实子进程 close 时 fail() 等效）
+    ctx.deps.taskRegistry.create(`ndjson:source-refresh:${id}`, { type: 'source-refresh' });
+    ctx.deps.taskRegistry.fail(`ndjson:source-refresh:${id}`, 'EACCES: 目录不可读');
+    const listed = await call(ctx, 'GET', '/api/sources');
+    const row = listed.body.sources.find((s) => s.id === id);
+    assert.equal(row.lastRefreshStatus, 'error');
+    assert.match(row.lastRefreshError, /EACCES/);
+    // 健康行也要有 lastRefreshStatus（无失败时 status 应为 done，error 为 null）
+    ctx.deps.taskRegistry.remove(`ndjson:source-refresh:${id}`);
+    ctx.deps.taskRegistry.create(`ndjson:source-refresh:${id}`, { type: 'source-refresh' });
+    ctx.deps.taskRegistry.complete(`ndjson:source-refresh:${id}`, {});
+    const listed2 = await call(ctx, 'GET', '/api/sources');
+    const row2 = listed2.body.sources.find((s) => s.id === id);
+    assert.equal(row2.lastRefreshStatus, 'done');
+    assert.equal(row2.lastRefreshError, null);
+  });
+
+  it('F050500-B: POST /api/sources/preview returns {error} without origin when dir root is unreadable', async () => {
+    const miss = await call(ctx, 'POST', '/api/sources/preview', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'P', target: path.join(os.tmpdir(), 'src-preview-missing-dir-xxx') } });
+    assert.equal(miss.status, 500);
+    assert.ok(miss.body.error, '应返回错误消息');
+    assert.ok(!('origin' in miss.body), '500 体不得包含 origin 字段');
+  });
+
+  it('F050500-B: POST /api/sources/preview returns {error} without origin when vault root is unreadable', async () => {
+    const miss = await call(ctx, 'POST', '/api/sources/preview', { body: { type: 'vault', name: 'V', target: 'definitely-not-a-real-subdir-xxx' } });
+    assert.equal(miss.status, 500);
+    assert.ok(miss.body.error);
+    assert.ok(!('origin' in miss.body), 'vault 根不可读时 500 体也不得包含 origin');
+  });
+
+  it('F050500-B: POST /api/sources/preview returns {error} without origin when a file extraction fails', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'src-pv-badfile-'));
+    fs.writeFileSync(path.join(tmp, 'bad.pdf'), 'not a real pdf');
+    const bad = await call(ctx, 'POST', '/api/sources/preview', { body: { acknowledgeExternalPath: true, type: 'dir', name: 'B', target: tmp } });
+    assert.equal(bad.status, 500);
+    assert.ok(bad.body.error);
+    assert.ok(!('origin' in bad.body), '文件抽取失败时 500 体也不得包含 origin');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -893,7 +938,16 @@ describe('P2-3 network cap follows maxBytesPerItem, oversize truncates (visible)
 function makeRouteCtx() {
   const captured = {};
   const sourceRefreshes = new Map();
-  const taskRegistry = { get: () => undefined, create() {}, complete() {}, fail() {} };
+  // 内存版 taskRegistry 桩：足以支撑路由读取 lastRefreshStatus/lastRefreshError
+  const tasks = new Map();
+  const now = () => new Date().toISOString();
+  const taskRegistry = {
+    get: (id) => tasks.get(id),
+    create(id, data = {}) { tasks.set(id, { ...data, id, status: 'pending', createdAt: now(), updatedAt: now() }); return tasks.get(id); },
+    complete(id, patch = {}) { const t = tasks.get(id); if (!t) return null; t.status = 'done'; Object.assign(t, patch, { updatedAt: now(), finishedAt: now() }); return t; },
+    fail(id, error, patch = {}) { const t = tasks.get(id); if (!t) return null; t.status = 'error'; t.error = error; Object.assign(t, patch, { updatedAt: now(), finishedAt: now() }); return t; },
+    remove(id) { return tasks.delete(id); },
+  };
   const deps = {
     send: (res, status, data) => { res.status = status; res.body = data; },
     readBody: async (req) => req._body ?? {},

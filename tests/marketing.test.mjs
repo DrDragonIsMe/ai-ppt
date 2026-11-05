@@ -17,7 +17,7 @@ import { getAngleSet, DEFAULT_ANGLE_SET, findAngle, listAngleSets } from '../scr
 import {
   digestItemForAngle, assignMaterial, buildAngleMaterial, collectMaterial, sourceWarnings,
 } from '../scripts/marketing/material.mjs';
-import { generateOutline, extractJsonObject, normalizeAngleSlides, fallbackAnglePlan } from '../scripts/marketing/generate-outline.mjs';
+import { generateOutline, extractJsonObject, normalizeAngleSlides, fallbackAnglePlan, smartTruncateHeading } from '../scripts/marketing/generate-outline.mjs';
 import { batchGenerate, loadAngleItems, buildDeckFallback, cancelFlagFor } from '../scripts/marketing/batch-generate.mjs';
 import { makeEmitter, withHeartbeat } from '../scripts/marketing/events.mjs';
 import { llmReachable } from '../scripts/marketing/llm.mjs';
@@ -274,7 +274,7 @@ describe('material tiered digest', () => {
   it('assignMaterial gives every angle material and does not hand all angles the same set', () => {
     const angles = getAngleSet(DEFAULT_ANGLE_SET);
     const fake = makeFakeStore({ sources: CORPUS });
-    const material = collectMaterial(fake);
+    const material = collectMaterial({ ...fake, placeholderThreshold: 0 });
     const assign = assignMaterial(angles, material.items, { perAngleItems: 3 });
     const sets = angles.map((a) => (assign.get(a.key) || []).map((e) => e.item.itemId).join(','));
     assert.ok(sets.every(Boolean), '有角度没分到素材');
@@ -293,7 +293,7 @@ describe('material tiered digest', () => {
       text: `第${i}段：这里没有任何与营销角度相关的词，用来把相关度打分压成完全平手。`.padEnd(60 + i * 5, '字'),
     }));
     const fake = makeFakeStore({ sources: flat });
-    const material = collectMaterial(fake);
+    const material = collectMaterial({ ...fake, placeholderThreshold: 0 });
     assert.equal(material.items.length, 18);
     const assign0 = assignMaterial(angles, material.items, { perAngleItems: 3 });
     // 前置确认：打分确实全平手，否则本用例退化成上一条而失去意义
@@ -311,7 +311,7 @@ describe('material tiered digest', () => {
 
   it('buildAngleMaterial reports how many characters actually entered the prompt', () => {
     const fake = makeFakeStore({ sources: CORPUS });
-    const material = collectMaterial(fake);
+    const material = collectMaterial({ ...fake, placeholderThreshold: 0 });
     const angle = findAngle(DEFAULT_ANGLE_SET, 'roi');
     const entries = assignMaterial([angle], material.items, { perAngleItems: 3 }).get('roi');
     const built = buildAngleMaterial(entries, { title: angle.title, thesis: angle.thesis, maxChars: 600 });
@@ -327,11 +327,11 @@ describe('material tiered digest', () => {
       ],
     };
     const fake = makeFakeStore({ sources });
-    const off = collectMaterial(fake);
+    const off = collectMaterial({ ...fake, placeholderThreshold: 0 });
     assert.equal(off.items.length, 1, '默认不得静默混入 stale 素材');
     assert.equal(off.stats.staleSkipped, 1);
 
-    const on = collectMaterial({ ...fake, includeStale: true });
+    const on = collectMaterial({ ...fake, includeStale: true, placeholderThreshold: 0 });
     assert.equal(on.items.length, 2);
     assert.ok(on.items.some((i) => i.stale));
   });
@@ -359,6 +359,22 @@ describe('material tiered digest', () => {
   it('a source with no manifest is reported, not treated as empty-by-design', () => {
     assert.match(sourceWarnings('src-x', null).join(''), /没有抓取记录/);
   });
+
+  it('F050500-4: placeholder stub items are excluded by effective char count and reported', () => {
+    const sources = {
+      'src-a': [
+        { title: '真实文章', text: '这是真实内容。' + '内容很长，包含大量有效信息，远远超过占位阈值。'.repeat(30) },
+        { title: '占位 README', text: 'docs/marketing\n推广素材存放处（截图、演示 GIF、发布文案、社交媒体素材等），后续批次填入。' },
+      ],
+    };
+    const fake = makeFakeStore({ sources });
+    const material = collectMaterial(fake);
+    assert.equal(material.items.length, 1, '占位条目应被排除');
+    assert.equal(material.items[0].title, '真实文章');
+    assert.equal(material.stats.excludedPlaceholderCount, 1);
+    assert.ok(material.warnings.some((w) => w.includes('占位')));
+    assert.ok(material.perSource[0].excludedPlaceholderCount === 1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -372,6 +388,7 @@ async function runOutline(extra = {}) {
   const res = await generateOutline({
     product: { name: '薪人薪事演示助手', audience: 'HR 负责人', tone: '专业' },
     emitter,
+    placeholderThreshold: 0,        // 测试语料短，关闭占位过滤
     deps: {
       listItemsFn: fake.listItemsFn,
       readItemFn: fake.readItemFn,
@@ -466,6 +483,7 @@ describe('generateOutline', () => {
     const { outline } = await generateOutline({
       product: { name: 'P' },
       emitter: makeEmitter((l) => events.push(JSON.parse(l))),
+      placeholderThreshold: 0,
       deps: {
         listItemsFn: fake.listItemsFn, readItemFn: fake.readItemFn, readManifestFn: fake.readManifestFn,
         modelOptions: {}, saveOutline: (o) => o, heartbeatMs: 50,
@@ -475,6 +493,54 @@ describe('generateOutline', () => {
     assert.match(text, /保命/);
     assert.match(text, /截断/);
     assert.ok(events.some((e) => e.type === 'progress' && e.step === 'material-warning'));
+  });
+
+  it('F050500-3: warns when material items are fewer than angles and when evidence sets collapse', async () => {
+    // 4 条语料喂 6 个角度：触发「素材不足」告警
+    const short = {};
+    short['src-short'] = [
+      { title: 'A', text: '痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点痛点。' },
+      { title: 'B', text: '效率效率效率效率效率效率效率效率效率效率效率效率效率效率效率效率效率效率效率效率效率效率效率。' },
+      { title: 'C', text: '场景场景场景场景场景场景场景场景场景场景场景场景场景场景场景场景场景场景场景场景场景场景场景。' },
+      { title: 'D', text: '落地落地落地落地落地落地落地落地落地落地落地落地落地落地落地落地落地落地落地落地落地落地落地。' },
+    ];
+    const fake = makeFakeStore({ sources: short });
+    const events = [];
+    const { outline, summary } = await generateOutline({
+      product: { name: 'P' },
+      emitter: makeEmitter((l) => events.push(JSON.parse(l))),
+      placeholderThreshold: 0,
+      deps: {
+        listItemsFn: fake.listItemsFn, readItemFn: fake.readItemFn, readManifestFn: fake.readManifestFn,
+        modelOptions: {}, saveOutline: (o) => o, heartbeatMs: 50,
+      },
+    });
+    assert.ok(outline.warnings.some((w) => w.includes('素材不足')), `应有素材不足警告，实际 ${outline.warnings}`);
+    assert.ok(events.some((e) => e.type === 'progress' && e.step === 'material-warning' && e.message.includes('素材不足')));
+    assert.equal(summary.angleCount, 6);
+    assert.equal(summary.itemCount, 4);
+
+    // 6 条无关键词语料喂 6 个角度：score 全 0 → 各角度拿到同一集合（顺序不同），触发「区分度塌缩」告警
+    const flat = {};
+    flat['src-flat'] = Array.from({ length: 6 }, (_, i) => ({
+      title: `条目 ${i}`,
+      text: `第${i}段：这里没有任何与营销角度相关的词，用来把相关度打分压成完全平手。`.padEnd(80 + i * 5, '字'),
+    }));
+    const fakeFlat = makeFakeStore({ sources: flat });
+    const events2 = [];
+    const { outline: outline2, summary: summary2 } = await generateOutline({
+      product: { name: 'P' },
+      emitter: makeEmitter((l) => events2.push(JSON.parse(l))),
+      placeholderThreshold: 0,
+      deps: {
+        listItemsFn: fakeFlat.listItemsFn, readItemFn: fakeFlat.readItemFn, readManifestFn: fakeFlat.readManifestFn,
+        modelOptions: {}, saveOutline: (o) => o, heartbeatMs: 50,
+      },
+    });
+    assert.ok(outline2.warnings.some((w) => w.includes('区分度塌缩')), `应有区分度塌缩警告，实际 ${outline2.warnings}`);
+    assert.ok(events2.some((e) => e.type === 'progress' && e.step === 'material-warning' && e.message.includes('区分度塌缩')));
+    assert.equal(summary2.distinctEvidenceSets, 1);
+    assert.equal(summary2.angleCount, 6);
   });
 
   it('empty material is a real error, not a silently successful empty outline', async () => {
@@ -495,6 +561,7 @@ describe('generateOutline', () => {
     const { outline } = await generateOutline({
       product: { name: 'P' },
       emitter: makeEmitter(() => {}),
+      placeholderThreshold: 0,
       deps: {
         listItemsFn: fake.listItemsFn, readItemFn: fake.readItemFn, readManifestFn: fake.readManifestFn,
         modelOptions: {}, heartbeatMs: 50,
@@ -544,10 +611,17 @@ describe('LLM output parsing helpers', () => {
   it('fallbackAnglePlan cites real itemIds', () => {
     const angle = findAngle(DEFAULT_ANGLE_SET, 'roi');
     const fake = makeFakeStore({ sources: CORPUS });
-    const entries = assignMaterial([angle], collectMaterial(fake).items, { perAngleItems: 3 }).get('roi');
+    const entries = assignMaterial([angle], collectMaterial({ ...fake, placeholderThreshold: 0 }).items, { perAngleItems: 3 }).get('roi');
     const plan = fallbackAnglePlan(angle, entries, 4);
     assert.ok(plan.slides.length >= 3);
     for (const s of plan.slides) for (const id of s.evidenceItemIds) assert.ok(ALL_IDS.includes(id));
+  });
+
+  it('F050500-5: smartTruncateHeading avoids hard 20-char cutoff and adds ellipsis', () => {
+    assert.equal(smartTruncateHeading('期末复习实操：用 ai-ppt 把错题和知识卡片变成复习课件', 20), '期末复习实操：用 ai-ppt…');
+    assert.equal(smartTruncateHeading('从散会到汇报：30 分钟把会议纪要变成一份像样的 PPT', 20), '从散会到汇报：30…');
+    assert.equal(smartTruncateHeading('短标题', 20), '短标题');
+    assert.ok(smartTruncateHeading('a '.repeat(30), 20).endsWith('…'));
   });
 });
 
@@ -641,6 +715,7 @@ async function makeOutlineForBatch() {
   const { outline } = await generateOutline({
     product: { name: 'mkttest', audience: 'HR', tone: '专业' },
     emitter: makeEmitter(() => {}),
+    placeholderThreshold: 0,        // 测试语料短，关闭占位过滤
     deps: {
       listItemsFn: fake.listItemsFn, readItemFn: fake.readItemFn, readManifestFn: fake.readManifestFn,
       modelOptions: {}, heartbeatMs: 50,

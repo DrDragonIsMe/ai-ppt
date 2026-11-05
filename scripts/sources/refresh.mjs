@@ -368,7 +368,11 @@ export async function previewSource(sourceOrId, opts = {}) {
   };
   for await (const entry of collector(probe, ctx)) {
     if (entry.kind === 'error') {
-      return { ok: false, origin: entry.origin, error: entry.error };
+      // F050500-B：preview 是「试抓预览」，任何采集错误都按失败处理，不再返回带 origin 的部分结果，
+      // 使 POST /api/sources/preview 的 500 体统一为 {error}。
+      const err = new Error(entry.error || '试抓失败');
+      err.statusCode = 500;
+      throw err;
     }
     const capped = entry.kind === 'text'
       ? capByBytes(entry.body || '', 20000)
