@@ -652,49 +652,6 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/', longBody)), false);
   });
 
-  it('B091100: 首轮采集全部被低相关过滤时发出 degraded 事件并如实落盘', async () => {
-    freshEnv('site-all-filtered');
-    const realGitHubTitle = 'GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub';
-    const HTML = (title, body, links = '') =>
-      `<!doctype html><html><head><title>${title}</title></head><body>${links}<article><h1>${title}</h1><p>${body}</p></article></body></html>`;
-    const server = http.createServer((req, res) => {
-      const u = req.url.split('?')[0];
-      if (u === '/') {
-        res.writeHead(200, { 'content-type': 'text/html' });
-        return res.end(HTML(realGitHubTitle,
-          'Build the future. Join us. Careers Press Contact.',
-          '<a href="/about">About</a>'));
-      }
-      if (u === '/about') {
-        res.writeHead(200, { 'content-type': 'text/html' });
-        return res.end(HTML(realGitHubTitle,
-          'About GitHub. Careers Press Contact.'));
-      }
-      res.writeHead(404); res.end('nope');
-    });
-    await new Promise((r) => server.listen(0, '127.0.0.1', r));
-    const port = server.address().port;
-    try {
-      const source = upsertSource({
-        type: 'site', name: 'AF', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 3 },
-      }).source;
-      const events = [];
-      const r = await refreshSource(source.id, { allowPrivateNetwork: true, onEvent: (e) => events.push(e) });
-
-      assert.equal(r.itemCount, 0, '应 0 入库');
-      assert.equal(r.lowRelevanceSkipped, 1, '应报告 1 个低相关页被跳过');
-      assert.equal(r.degraded, true, 'summary 应标记 degraded');
-      assert.ok(events.some((e) => e.step === 'low-relevance-skipped'), '应发出 low-relevance-skipped 事件');
-      assert.ok(events.some((e) => e.step === 'degraded'), '应发出 degraded 事件');
-
-      const m = readManifest(source.id);
-      assert.equal(m.degraded, true, 'manifest 应标记 degraded');
-      assert.equal(m.lowRelevanceSkipped, 1, 'manifest 应记录 lowRelevanceSkipped');
-      assert.equal(m.items.length, 0, 'manifest 应 0 条目');
-    } finally {
-      await new Promise((r) => server.close(r));
-    }
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1985,6 +1942,7 @@ describe('P2-B root-level unreadable rejects with 500, manifest/disk untouched',
 
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // M19 config file gate for external source dirs
 // ---------------------------------------------------------------------------
 const CONFIG_FILE = path.join(process.cwd(), '.ai-ppt-config.json');
@@ -2083,5 +2041,55 @@ describe('M19 config file gate for external source dirs', () => {
     const get2 = await call(ctx, 'GET', '/api/config');
     assert.equal(get2.status, 200);
     assert.equal(get2.body.sourcesConfig?.allowExternalPaths, false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B091100 first-round all-filtered degraded event
+// 独立 describe，追加在文件末尾，避免与 M19 新增区块产生 rebase 冲突。
+// ---------------------------------------------------------------------------
+describe('B091100 first-round all low-relevance filtered', () => {
+  it('首轮采集全部被低相关过滤时发出 degraded 事件并如实落盘', async () => {
+    freshEnv('site-all-filtered');
+    const realGitHubTitle = 'GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub';
+    const HTML = (title, body, links = '') =>
+      `<!doctype html><html><head><title>${title}</title></head><body>${links}<article><h1>${title}</h1><p>${body}</p></article></body></html>`;
+    const server = http.createServer((req, res) => {
+      const u = req.url.split('?')[0];
+      if (u === '/') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML(realGitHubTitle,
+          'Build the future. Join us. Careers Press Contact.',
+          '<a href="/about">About</a>'));
+      }
+      if (u === '/about') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML(realGitHubTitle,
+          'About GitHub. Careers Press Contact.'));
+      }
+      res.writeHead(404); res.end('nope');
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const port = server.address().port;
+    try {
+      const source = upsertSource({
+        type: 'site', name: 'AF', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 3 },
+      }).source;
+      const events = [];
+      const r = await refreshSource(source.id, { allowPrivateNetwork: true, onEvent: (e) => events.push(e) });
+
+      assert.equal(r.itemCount, 0, '应 0 入库');
+      assert.equal(r.lowRelevanceSkipped, 1, '应报告 1 个低相关页被跳过');
+      assert.equal(r.degraded, true, 'summary 应标记 degraded');
+      assert.ok(events.some((e) => e.step === 'low-relevance-skipped'), '应发出 low-relevance-skipped 事件');
+      assert.ok(events.some((e) => e.step === 'degraded'), '应发出 degraded 事件');
+
+      const m = readManifest(source.id);
+      assert.equal(m.degraded, true, 'manifest 应标记 degraded');
+      assert.equal(m.lowRelevanceSkipped, 1, 'manifest 应记录 lowRelevanceSkipped');
+      assert.equal(m.items.length, 0, 'manifest 应 0 条目');
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
   });
 });
