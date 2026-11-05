@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 import {
   normalizeOutline, validateOutline, enforceEvidenceIntegrity, makeDeckName,
@@ -54,10 +55,12 @@ afterEach(cleanProjects);
 // ---------------------------------------------------------------------------
 // 假 store：素材条目形状完全按 scripts/sources/store.mjs 契约
 // itemId 真实形状 <sourceId>--<12hex>（不是契约示意的 it-xxx）
+// 与 store.mjs makeItemId 同款算法（sha256(originKey) 前 12 位）——曾因截位方式不同
+// 让中文标题的 18 条素材塌成同一个 id，把"跨角度轮转"用例整体做空（测试形状必须等于生产形状）。
 // ---------------------------------------------------------------------------
 function fakeItemId(sourceId, seed) {
-  const hex = Buffer.from(String(seed)).toString('hex').padEnd(12, '0').slice(0, 12);
-  return `${sourceId}--${hex}`;
+  const h = crypto.createHash('sha256').update(String(seed)).digest('hex').slice(0, 12);
+  return `${sourceId}--${h}`;
 }
 
 function makeFakeStore({ sources, staleIds = [], manifests = {} } = {}) {
@@ -275,6 +278,34 @@ describe('material tiered digest', () => {
     const sets = angles.map((a) => (assign.get(a.key) || []).map((e) => e.item.itemId).join(','));
     assert.ok(sets.every(Boolean), '有角度没分到素材');
     assert.ok(new Set(sets).size >= 4, `六个角度只产出 ${new Set(sets).size} 种取材组合，区分度不足`);
+  });
+
+  // 上一条的相关度打分本身就能拉开角度，删掉跨角度 usage 次级排序它照样绿（变异自查实测）。
+  // 这条把打分压成完全平手（正文不含任何角度关键词 → 每个角度对每条素材 score 都是 0），
+  // 此时"角度各拿不同素材"只可能来自 usage 轮转：实测有机制 = 6 种组合 / 无机制 = 1 种。
+  it('rotates material across angles even when relevance is a perfect tie (usage tiebreaker is load-bearing)', () => {
+    const angles = getAngleSet(DEFAULT_ANGLE_SET);
+    const flat = {};
+    // 18 条 × 每角度 3 条 = 恰好够 6 个角度各拿一组互不重叠的素材（9 条只够 3 组，会误判）
+    flat['src-flat'] = Array.from({ length: 18 }, (_, i) => ({
+      title: `无关键词条目 ${i}`,
+      text: `第${i}段：这里没有任何与营销角度相关的词，用来把相关度打分压成完全平手。`.padEnd(60 + i * 5, '字'),
+    }));
+    const fake = makeFakeStore({ sources: flat });
+    const material = collectMaterial(fake);
+    assert.equal(material.items.length, 18);
+    const assign0 = assignMaterial(angles, material.items, { perAngleItems: 3 });
+    // 前置确认：打分确实全平手，否则本用例退化成上一条而失去意义
+    for (const a of angles) {
+      const scores = (assign0.get(a.key) || []).map((e) => e.score);
+      assert.ok(scores.length === 3 && scores.every((s) => s === 0),
+        `角度 ${a.key} 的打分并非全平手：${scores.join(',')}`);
+    }
+    const sets = angles.map((a) => (assign0.get(a.key) || []).map((e) => e.item.itemId));
+    assert.equal(new Set(sets.map((s) => s.join(','))).size, angles.length,
+      `平手素材下 ${angles.length} 个角度只产出 ${new Set(sets.map((s) => s.join(','))).size} 种组合——跨角度轮转失效，各角度会拿到同一批素材`);
+    const overlap = sets[0].filter((id) => sets[1].includes(id));
+    assert.deepEqual(overlap, [], '相邻两个角度拿到了完全相同的素材，角度区分度是假的');
   });
 
   it('buildAngleMaterial reports how many characters actually entered the prompt', () => {
