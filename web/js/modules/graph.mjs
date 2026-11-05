@@ -33,7 +33,7 @@ export function initGraphModule(callbacks) {
 // 通用：隐藏主工作区所有面板
 // ============================================================
 export function hideAllMainPanels() {
-    ['empty-state', 'project-panel', 'graph-panel', 'cards-panel', 'study-panel', 'vault-panel', 'dashboard-panel', 'tags-panel', 'tasks-panel', 'settings-panel', 'agent-panel']
+    ['empty-state', 'project-panel', 'graph-panel', 'cards-panel', 'study-panel', 'vault-panel', 'dashboard-panel', 'tags-panel', 'tasks-panel', 'settings-panel', 'agent-panel', 'materials-panel']
         .forEach((id) => document.getElementById(id)?.classList.add('hidden'));
 }
 

@@ -6,7 +6,7 @@
 //   /projects/、/published/、/base/ → network-first，成功回写缓存，离线读缓存副本
 // 版本维护：CACHE_VERSION 必须与 package.json 的 version 保持同步；
 // 改动任何静态资源后 bump 版本号，activate 阶段会清理旧版本 cache。
-const CACHE_VERSION = '2.8.3';
+const CACHE_VERSION = '2.8.5';
 const CACHE_NAME = `ai-ppt-v${CACHE_VERSION}`;
 const CACHE_PREFIX = 'ai-ppt-v';
 
@@ -19,14 +19,17 @@ const PRECACHE_URLS = [
   '/css/web.css',
   '/js/vendor/marked.umd.js',
   '/js/modules/app.mjs',
+  '/js/modules/agent.mjs',
   '/js/modules/cards.mjs',
   '/js/modules/exams.mjs',
   '/js/modules/fragments.mjs',
   '/js/modules/generate.mjs',
   '/js/modules/graph.mjs',
   '/js/modules/i18n.mjs',
+  '/js/modules/marketing.mjs',
   '/js/modules/modals.mjs',
   '/js/modules/projects.mjs',
+  '/js/modules/sources.mjs',
   '/js/modules/state.mjs',
   '/js/modules/vault.mjs',
   '/js/i18n/zh.mjs',

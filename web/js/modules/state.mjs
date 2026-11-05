@@ -71,6 +71,27 @@ export const S = {
     // 学习面板当前子 tab（exams | mistakes | training）
     studySubtab: 'exams',
 
+    // 素材库（多数据源 + 营销大纲 + 批量生成）
+    sources: {
+        list: [],            // GET /api/sources 返回的源数组
+        loading: false,
+        error: null,         // 加载失败信息（后端未就绪时优雅降级为空态）
+        itemsCache: {},      // sourceId -> items 数组（条目抽屉/计数缓存）
+        refresh: {},         // sourceId -> { status, message } 刷新中状态
+    },
+    // 素材库面板当前子 tab（sources | outline | batch）
+    marketingSubtab: 'sources',
+    marketing: {
+        outlines: [],
+        currentOutline: null,     // 打开编辑的大纲对象
+        outlineError: null,
+        generating: false,        // 大纲生成 SSE 进行中
+        selectedAngleKeys: [],    // 批量生成勾选的角度
+        batch: null,              // 进行中的批次 { total, rows: [{deckName,status,message,index}] }
+        batches: [],              // 历史批次列表
+        batchError: null,
+    },
+
     // 模型/配置
     models: [],
     globalConfig: null,

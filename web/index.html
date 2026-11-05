@@ -66,6 +66,7 @@
           <button class="sidebar-tab" data-tab="vault"><span data-i18n="知识库">知识库</span><span class="tab-badge hidden" id="badge-vault"></span></button>
           <button class="sidebar-tab" data-tab="projects"><span data-i18n="作品">作品</span></button>
           <button class="sidebar-tab" data-tab="review"><span data-i18n="复习">复习</span><span class="tab-badge hidden" id="badge-review"></span></button>
+          <button class="sidebar-tab" data-tab="materials"><span data-i18n="素材库">素材库</span></button>
         </div>
 
         <div id="fragments-sidebar-content" class="sidebar-content">
@@ -224,6 +225,31 @@
               <button id="btn-cards-new" class="btn-primary" data-i18n="新建卡片">新建卡片</button>
             </div>
             <div class="review-sidebar-hint" data-i18n="选择上方任一入口，右侧会切换到对应的复习界面。">选择上方任一入口，右侧会切换到对应的复习界面。</div>
+          </div>
+        </div>
+
+        <div id="materials-sidebar-content" class="sidebar-content hidden">
+          <div class="sidebar-header">
+            <div>
+              <div class="sidebar-title" data-i18n="素材库">素材库</div>
+              <div class="sidebar-subtitle" data-i18n="管理多数据源，生成营销大纲并批量出片">管理多数据源，生成营销大纲并批量出片</div>
+            </div>
+          </div>
+          <div class="materials-sidebar-shell">
+            <section class="materials-overview-card">
+              <div class="materials-overview-kicker" data-i18n="营销生产线">营销生产线</div>
+              <div class="materials-overview-title" data-i18n="先接数据源，再生成大纲，最后批量成稿">先接数据源，再生成大纲，最后批量成稿</div>
+            </section>
+            <div class="materials-nav-grid">
+              <button class="materials-nav-btn active" data-materials-target="sources" data-i18n="素材源">素材源</button>
+              <button class="materials-nav-btn" data-materials-target="outline" data-i18n="营销大纲">营销大纲</button>
+              <button class="materials-nav-btn" data-materials-target="batch" data-i18n="批量生成">批量生成</button>
+            </div>
+            <div class="materials-sidebar-actions">
+              <button id="btn-materials-new-source" class="btn-primary" data-i18n="+ 新建源">+ 新建源</button>
+              <button id="btn-materials-refresh-sources" class="btn-secondary" data-i18n="刷新">刷新</button>
+            </div>
+            <div class="materials-sidebar-hint" data-i18n="数据源支持本地目录、网页 URL、站点抓取与知识库；刷新后素材条目可全文检索。">数据源支持本地目录、网页 URL、站点抓取与知识库；刷新后素材条目可全文检索。</div>
           </div>
         </div>
       </aside>
@@ -598,6 +624,84 @@
             </div>
           </div>
         </div>
+        </div>
+
+        <!-- 素材库：素材源 / 营销大纲 / 批量生成 -->
+        <div id="materials-panel" class="materials-panel hidden">
+          <div class="materials-subtabs">
+            <button class="materials-subtab active" data-subtab="sources" data-i18n="素材源">素材源</button>
+            <button class="materials-subtab" data-subtab="outline" data-i18n="营销大纲">营销大纲</button>
+            <button class="materials-subtab" data-subtab="batch" data-i18n="批量生成">批量生成</button>
+          </div>
+
+          <div id="sources-panel" class="sources-panel">
+            <div id="sources-banner" class="sources-banner hidden"></div>
+            <div id="source-list" class="source-list"></div>
+            <div id="sources-empty" class="sources-empty hidden"></div>
+          </div>
+
+          <div id="outline-panel" class="outline-panel hidden">
+            <section class="card outline-generator">
+              <div class="card-title" data-i18n="生成营销大纲">生成营销大纲</div>
+              <div class="field">
+                <label data-i18n="选择素材源（可多选）">选择素材源（可多选）</label>
+                <div id="outline-source-chips" class="outline-source-chips"></div>
+              </div>
+              <div class="outline-gen-fields">
+                <div class="field">
+                  <label data-i18n="大纲标题">大纲标题</label>
+                  <input type="text" id="outline-input-title" placeholder="例如：新品上市营销方案" data-i18n-placeholder="例如：新品上市营销方案">
+                </div>
+                <div class="field">
+                  <label data-i18n="产品名">产品名</label>
+                  <input type="text" id="outline-input-product-name" placeholder="产品名称" data-i18n-placeholder="产品名称">
+                </div>
+                <div class="field">
+                  <label data-i18n="目标受众">目标受众</label>
+                  <input type="text" id="outline-input-audience" placeholder="例如：中小企业 HR 负责人" data-i18n-placeholder="例如：中小企业 HR 负责人">
+                </div>
+                <div class="field">
+                  <label data-i18n="语气">语气</label>
+                  <input type="text" id="outline-input-tone" placeholder="例如：专业、可信、有活力" data-i18n-placeholder="例如：专业、可信、有活力">
+                </div>
+                <div class="field">
+                  <label data-i18n="角度集">角度集</label>
+                  <input type="text" id="outline-input-angle-set" placeholder="standard" value="standard">
+                </div>
+              </div>
+              <div class="modal-actions outline-gen-actions">
+                <button id="btn-generate-outline" class="btn-primary" data-i18n="生成大纲">生成大纲</button>
+                <span id="outline-gen-progress" class="outline-gen-progress hidden"></span>
+              </div>
+            </section>
+            <section class="card outline-list-section">
+              <div class="card-title" data-i18n="大纲列表">大纲列表</div>
+              <div id="outline-list" class="outline-list"></div>
+              <div id="outline-list-empty" class="outline-list-empty hidden" data-i18n="还没有营销大纲。选好素材源、填好产品信息，点上方「生成大纲」开始。">还没有营销大纲。选好素材源、填好产品信息，点上方「生成大纲」开始。</div>
+            </section>
+            <section id="outline-editor" class="card outline-editor hidden"></section>
+          </div>
+
+          <div id="batch-panel" class="batch-panel hidden">
+            <div id="batch-hint" class="batch-hint" data-i18n="在「营销大纲」里勾选角度，点「批量生成 PPT」后这里会显示逐页进度。">在「营销大纲」里勾选角度，点「批量生成 PPT」后这里会显示逐页进度。</div>
+            <section id="batch-active" class="card batch-active hidden">
+              <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <span id="batch-active-title" data-i18n="批量生成进行中">批量生成进行中</span>
+                <button id="btn-batch-cancel" class="btn-secondary" data-i18n="取消">取消</button>
+              </div>
+              <div id="batch-progress-text" class="batch-progress-text">0 / 0</div>
+              <div class="batch-progress-bar"><div id="batch-progress-fill" class="batch-progress-fill"></div></div>
+              <div id="batch-rows" class="batch-rows"></div>
+              <div class="batch-footer">
+                <button id="btn-batch-go-projects" class="btn-secondary hidden" data-i18n="去作品列表查看">去作品列表查看</button>
+              </div>
+            </section>
+            <section class="card batch-history-section">
+              <div class="card-title" data-i18n="历史批次">历史批次</div>
+              <div id="batch-history" class="batch-history"></div>
+              <div id="batch-history-empty" class="outline-list-empty hidden" data-i18n="暂无历史批次记录">暂无历史批次记录</div>
+            </section>
+          </div>
         </div>
 
         <div id="agent-panel" class="agent-panel hidden">
@@ -1728,6 +1832,79 @@
       </div>
       <div class="modal-actions">
         <button id="btn-close-assets" class="btn-secondary" data-i18n="关闭">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 素材源新建/编辑弹窗 -->
+  <div id="source-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body modal-wide">
+      <h3 id="source-modal-title" data-i18n="新建素材源">新建素材源</h3>
+      <div class="source-form-grid">
+        <div class="field">
+          <label data-i18n="名称">名称</label>
+          <input type="text" id="source-input-name" placeholder="例如：产品资料目录" data-i18n-placeholder="例如：产品资料目录">
+        </div>
+        <div class="field">
+          <label data-i18n="类型">类型</label>
+          <select id="source-input-type">
+            <option value="dir" data-i18n="本地目录">本地目录</option>
+            <option value="url" data-i18n="网页 URL">网页 URL</option>
+            <option value="site" data-i18n="站点抓取">站点抓取</option>
+            <option value="vault" data-i18n="知识库">知识库</option>
+          </select>
+        </div>
+        <div class="field source-field-full">
+          <label data-i18n="目标路径 / 地址">目标路径 / 地址</label>
+          <input type="text" id="source-input-target" placeholder="本地目录路径、URL 或 vault 专题名" data-i18n-placeholder="本地目录路径、URL 或 vault 专题名">
+        </div>
+        <div class="field">
+          <label data-i18n="标签（逗号分隔）">标签（逗号分隔）</label>
+          <input type="text" id="source-input-tags" placeholder="例如：产品,竞品" data-i18n-placeholder="例如：产品,竞品">
+        </div>
+        <div class="field">
+          <label data-i18n="启用">启用</label>
+          <label class="source-enabled-row"><input type="checkbox" id="source-input-enabled" checked><span data-i18n="参与抓取与选材">参与抓取与选材</span></label>
+        </div>
+        <div class="field">
+          <label data-i18n="最大页数（站点抓取）">最大页数（站点抓取）</label>
+          <input type="number" id="source-input-max-pages" min="1" placeholder="20">
+        </div>
+        <div class="field">
+          <label data-i18n="抓取深度">抓取深度</label>
+          <input type="number" id="source-input-depth" min="1" placeholder="2">
+        </div>
+        <div class="field source-field-full">
+          <label data-i18n="包含过滤（可选）">包含过滤（可选）</label>
+          <input type="text" id="source-input-include" placeholder="例如：*.md 或 /blog/ 前缀" data-i18n-placeholder="例如：*.md 或 /blog/ 前缀">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-cancel-source" class="btn-secondary" data-i18n="取消">取消</button>
+        <button id="btn-save-source" class="btn-primary" data-i18n="保存">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 素材条目抽屉（浏览 / 搜索 / 正文预览） -->
+  <div id="items-drawer" class="items-drawer hidden">
+    <div class="items-drawer-backdrop"></div>
+    <div class="items-drawer-panel">
+      <div class="items-drawer-header">
+        <div id="items-drawer-title" class="items-drawer-title" data-i18n="素材条目">素材条目</div>
+        <button id="btn-close-items-drawer" class="btn-icon" title="关闭" data-i18n-title="关闭">×</button>
+      </div>
+      <input type="search" id="items-search-input" class="items-search-input" placeholder="搜索全部素材条目…" data-i18n-placeholder="搜索全部素材条目…">
+      <div class="items-drawer-body">
+        <div id="items-list" class="items-list"></div>
+        <div id="items-preview" class="items-preview hidden">
+          <div class="items-preview-head">
+            <button id="btn-items-preview-back" class="btn-secondary" data-i18n="← 返回列表">← 返回列表</button>
+            <div id="items-preview-title" class="items-preview-title"></div>
+          </div>
+          <pre id="items-preview-content" class="items-preview-content"></pre>
+        </div>
       </div>
     </div>
   </div>

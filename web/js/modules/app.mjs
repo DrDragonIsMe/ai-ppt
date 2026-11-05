@@ -21,6 +21,8 @@ import { initFragmentsModule, loadFragments, revealFragment, focusFragmentInput,
 import { bindModalEvents } from './modals.mjs';
 import { initGenerateModule, openGenerateModal, bindGenerateEvents } from './generate.mjs';
 import { initAgentModule, loadAgentWorkspace, bindAgentEvents } from './agent.mjs';
+import { initSourcesModule, bindSourcesEvents } from './sources.mjs';
+import { initMarketingModule, bindMarketingEvents, switchMaterialsSubtab } from './marketing.mjs';
 import { t, applyStaticI18n, getLang, setLang } from './i18n.mjs';
 
 // ============================================================
@@ -212,6 +214,7 @@ function switchSidebarTab(tab, subTab) {
     document.getElementById('vault-sidebar-content').classList.add('hidden');
     document.getElementById('agent-sidebar-content').classList.add('hidden');
     document.getElementById('review-sidebar-content').classList.add('hidden');
+    document.getElementById('materials-sidebar-content').classList.add('hidden');
 
     if (tab === 'home') {
         document.getElementById('fragments-sidebar-content').classList.remove('hidden');
@@ -239,6 +242,10 @@ function switchSidebarTab(tab, subTab) {
             document.getElementById('study-panel').classList.remove('hidden');
             switchStudySubtab(subTab || S.studySubtab || 'exams');
         }
+    } else if (tab === 'materials') {
+        document.getElementById('materials-sidebar-content').classList.remove('hidden');
+        document.getElementById('materials-panel').classList.remove('hidden');
+        switchMaterialsSubtab(subTab || S.marketingSubtab || 'sources');
     } else if (tab === 'settings') {
         document.getElementById('settings-panel').classList.remove('hidden');
         renderModelConfigUI();
@@ -492,6 +499,8 @@ initCardsModule(commonCbs);
 initFragmentsModule(commonCbs);
 initGenerateModule(commonCbs);
 initAgentModule(commonCbs);
+initSourcesModule(commonCbs);
+initMarketingModule(commonCbs);
 
 // 启动加载链
 loadModels().then(loadGlobalConfig).then(() => {
@@ -511,6 +520,8 @@ loadModels().then(loadGlobalConfig).then(() => {
     bindModalEvents();
     bindGenerateEvents();
     bindAgentEvents();
+    bindSourcesEvents();
+    bindMarketingEvents();
     bindEmptyStateEvents();
     bindStudyEvents();
     bindSidebarDrawerEvents();
