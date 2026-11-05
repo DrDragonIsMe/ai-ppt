@@ -626,6 +626,19 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(isLowRelevancePage(e('Log in to your account', 'https://app.example.com/sso', shortBody)), true);
     assert.equal(isLowRelevancePage(e('Terms of Service', 'https://example.com/legal/terms', shortBody)), true);
     assert.equal(isLowRelevancePage(e('404 Not Found', 'https://example.com/nope', shortBody)), true);
+    // B091200：强信号整标题命中先于白名单——标题主体本身就是登录墙/404 时，
+    // WHITELIST_CN（中心/资料）无权救援，即使正文厚实也必须 DROP。
+    assert.equal(isLowRelevancePage(e('登录中心', 'https://portal.example.com/login', longBody)), true);
+    assert.equal(isLowRelevancePage(e('登录入口', 'https://kb.example.com/login', longBody)), true);
+    assert.equal(isLowRelevancePage(e('404 资料中心', 'https://example.com/docs/resource', longBody)), true);
+    // B091200 r1：「错误码 + 任意栏目名」是开放集，由错误码前缀规则泛化拦住，不靠字面量枚举。
+    // 栏目名（帮助/中心/资料/知识）不构成文档名词负保护，正文再厚也 DROP。
+    assert.equal(isLowRelevancePage(e('404 帮助中心', 'https://example.com/docs/help', longBody)), true);
+    assert.equal(isLowRelevancePage(e('404 产品资料', 'https://example.com/docs/product', longBody)), true);
+    assert.equal(isLowRelevancePage(e('403 知识库', 'https://example.com/docs/kb', longBody)), true);
+    // B091200 r2：准入表同时覆盖「紧贴无空格」与「栏目名+中心」形态（r1 要求码后必须空白而漏掉）。
+    assert.equal(isLowRelevancePage(e('404知识中心', 'https://kb.example.com/p/1', longBody)), true);
+    assert.equal(isLowRelevancePage(e('404 文档中心', 'https://kb.example.com/p/2', longBody)), true);
 
     // 必须保留（合法知识中心/内容页，误杀即 P1）
     assert.equal(isLowRelevancePage(e('知识中心', 'https://help.example.com/', longBody)), false);
@@ -648,6 +661,42 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(isLowRelevancePage(e('三人行 · 技术笔记', 'https://blog.example.com/', longBody)), false);
     // B091100：多段式中文知识中心标题，即使正文很薄也因 WHITELIST_CN 补词而 KEEP。
     assert.equal(isLowRelevancePage(e('知识中心 · Acme', 'https://acme.com/kb', shortBody)), false);
+    // B091200：同「· 站点名」后缀段结构的合法中心页，剥离后缀后主体不是强信号词干 → 仍 KEEP。
+    assert.equal(isLowRelevancePage(e('帮助中心 · 产品', 'https://help.example.com/product', longBody)), false);
+    // B091200 r1（错误码前缀规则的文档名词负保护）：`404/404 万…` 除错误码外含 guide/参考/
+    // 手册类文档名词或数量单位时是合法文档页，不得被前缀规则打死。
+    assert.equal(isLowRelevancePage(e('404 Error Handling Guide', 'https://docs.example.com/errors/404', longBody)), false);
+    assert.equal(isLowRelevancePage(e('404 万条数据的治理实践', 'https://blog.example.com/data', longBody)), false);
+    // B091200 r1（尾段剥离边界）：`·` 后是栏目/文档名（指南/docs/说明）而非站点名时不得剥离，
+    // 否则主体恰为 `登录`/`sign in`/`隐私政策` 词干，合法页会被强信号层误杀（r0 的三例回归）。
+    assert.equal(isLowRelevancePage(e('登录 · 接入指南', 'https://docs.example.com/guide/login', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Sign in · Developer Docs', 'https://docs.example.com/dev', longBody)), false);
+    assert.equal(isLowRelevancePage(e('隐私政策 · 数据安全说明', 'https://example.com/privacy', longBody)), false);
+    // B091200 r2（P1 回归）：r1 的「封闭否决表」把 `错误码 + 开放主题词` 成批打成 DROP，
+    // 下面 5 条是评审实测的误杀样本（工程知识库核心内容形态），改成封闭准入表后必须全部 KEEP。
+    assert.equal(isLowRelevancePage(e('502 故障复盘', 'https://kb.example.com/p/10', longBody)), false);
+    assert.equal(isLowRelevancePage(e('404 页面优化', 'https://kb.example.com/p/11', longBody)), false);
+    assert.equal(isLowRelevancePage(e('500 系列服务器选型', 'https://kb.example.com/p/12', longBody)), false);
+    assert.equal(isLowRelevancePage(e('429 号文政策解读', 'https://kb.example.com/p/13', longBody)), false);
+    assert.equal(isLowRelevancePage(e('403 越权漏洞修复记录', 'https://kb.example.com/p/14', longBody)), false);
+    // B091200 r2：码表从 11 个收窄到 404/403——其余 9 个码在 main 上没有「裸码即拦」的概念
+    // （429 常见文号、401 与正文词同形、500 常见产品系列号），整体回到 main 的判定。
+    assert.equal(isLowRelevancePage(e('503 资料库', 'https://kb.example.com/p/15', longBody)), false);
+    assert.equal(isLowRelevancePage(e('401 未授权', 'https://kb.example.com/p/16', longBody)), false);
+    assert.equal(isLowRelevancePage(e('403', 'https://kb.example.com/p/17', longBody)), false);
+    // B091200 r2：准入表只认封闭栏目名。表外栏目别名（视频学院）与含表外词的主体（文档说明）
+    // 按「宁可漏杀也不误伤」放回 KEEP——这是准入方向的已知召回边界，不是回归。
+    assert.equal(isLowRelevancePage(e('404 视频学院', 'https://kb.example.com/p/18', longBody)), false);
+    assert.equal(isLowRelevancePage(e('404 文档说明', 'https://kb.example.com/p/19', longBody)), false);
+    // B091200 r2：独立数字词元负保护——前导数字串整体必须恰为表内码，`4040`/小数拼出的
+    // `404`（归一化删小数点）都不放行给强信号层。
+    assert.equal(isLowRelevancePage(e('4040 端口性能调优', 'https://kb.example.com/p/20', longBody)), false);
+    assert.equal(isLowRelevancePage(e('40.4 增长率测算', 'https://kb.example.com/p/21', longBody)), false);
+    // B091200 r2（P2-观察 1 收口）：– 与 | 只是标点，归一化后拼成 `404 帮助中心` 走准入前缀规则
+    // → DROP；但拼出的主体超长且含表外词（`404 帮助中心 中文站`）→ 准入表不放行 → KEEP。
+    assert.equal(isLowRelevancePage(e('404 – 帮助中心', 'https://kb.example.com/p/22', longBody)), true);
+    assert.equal(isLowRelevancePage(e('404 | 帮助中心', 'https://kb.example.com/p/23', longBody)), true);
+    assert.equal(isLowRelevancePage(e('404 帮助中心 — 中文站', 'https://kb.example.com/p/24', longBody)), false);
     // B091100 设计边界：正文厚实的站点根首页不在本过滤器目标范围内，不得加 / 回浅层清单。
     assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/', longBody)), false);
   });
