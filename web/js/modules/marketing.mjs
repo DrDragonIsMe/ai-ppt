@@ -10,12 +10,16 @@
 import { S, api, showToast, escapeHtml, escapeHtmlAttr } from './state.mjs';
 import { showConfirmModal } from './modals.mjs';
 import { t } from './i18n.mjs';
-import { ensureSourcesLoaded, isNotReadyError, errText } from './sources.mjs';
+import { ensureSourcesLoaded, isCollectionEmptyError, errText, reapFinishedRefreshStreams } from './sources.mjs';
 
 let _cb = {};
 export function initMarketingModule(callbacks) {
     _cb = callbacks; // { switchSidebarTab, loadProjects, selectProject }
 }
+
+// SSE 无终止事件兜底：对端挂着不发 done/error 时不至于永久禁用生成按钮（P2-4）
+const OUTLINE_WATCHDOG_MS = 4 * 60 * 1000;
+const BATCH_WATCHDOG_MS = 4 * 60 * 1000;
 
 function relativeTime(iso) {
     const ts = new Date(iso).getTime();
@@ -33,6 +37,13 @@ function relativeTime(iso) {
 // ============================================================
 // 子 tab 编排（sources 子 tab 由 sources.mjs 负责数据加载）
 // ============================================================
+// 离开视图时显式回收已终止的 SSE 句柄（正常终止路径已 close，这里兜底清引用；P2-4）
+function reapFinishedStreams() {
+    if (outlineEs && outlineEs.readyState === EventSource.CLOSED) { outlineEs.close?.(); outlineEs = null; }
+    if (batchEs && batchEs.readyState === EventSource.CLOSED) { batchEs.close?.(); batchEs = null; }
+    reapFinishedRefreshStreams();
+}
+
 export function switchMaterialsSubtab(subtab) {
     if (!['sources', 'outline', 'batch'].includes(subtab)) subtab = 'sources';
     S.marketingSubtab = subtab;
@@ -42,9 +53,10 @@ export function switchMaterialsSubtab(subtab) {
     document.querySelectorAll('.materials-nav-btn').forEach((el) => {
         el.classList.toggle('active', el.dataset.materialsTarget === subtab);
     });
-    document.getElementById('sources-panel').classList.toggle('hidden', subtab !== 'sources');
-    document.getElementById('outline-panel').classList.toggle('hidden', subtab !== 'outline');
-    document.getElementById('batch-panel').classList.toggle('hidden', subtab !== 'batch');
+    document.getElementById('sources-panel')?.classList.toggle('hidden', subtab !== 'sources');
+    document.getElementById('outline-panel')?.classList.toggle('hidden', subtab !== 'outline');
+    document.getElementById('batch-panel')?.classList.toggle('hidden', subtab !== 'batch');
+    reapFinishedStreams();
     if (subtab === 'sources') ensureSourcesLoaded(true);
     else if (subtab === 'outline') loadOutlineTab();
     else if (subtab === 'batch') loadBatchTab();
@@ -121,25 +133,35 @@ export async function generateOutline() {
     outlineEs?.close();
     const es = new EventSource('/api/marketing/outline/events');
     outlineEs = es;
+    let settled = false;
+    const watchdog = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        es.close(); if (outlineEs === es) outlineEs = null;
+        finishOutlineGen(t('大纲生成超时（长时间无进度回报），请稍后在列表中确认结果'), true);
+    }, OUTLINE_WATCHDOG_MS);
+    const settle = () => { if (settled) return false; settled = true; clearTimeout(watchdog); return true; };
     es.onmessage = (ev) => {
         let event; try { event = JSON.parse(ev.data); } catch { event = { type: 'progress', message: ev.data }; }
         const message = event.message || event.step || '';
         if (event.type === 'progress') {
             progress.textContent = message || t('大纲生成中…');
         } else if (event.type === 'done') {
-            es.close(); outlineEs = null;
+            if (!settle()) return;
+            es.close(); if (outlineEs === es) outlineEs = null;
             finishOutlineGen(t('大纲已生成'), false);
             loadOutlines();
             showToast(t('营销大纲生成完成'));
         } else if (event.type === 'error') {
-            es.close(); outlineEs = null;
+            if (!settle()) return;
+            es.close(); if (outlineEs === es) outlineEs = null;
             finishOutlineGen(t('大纲生成失败：{msg}', { msg: message || t('未知错误') }), true);
             showToast(t('大纲生成失败：{msg}', { msg: message || t('未知错误') }), 'error');
         }
     };
     es.onerror = () => {
-        if (!outlineEs) return; // 已正常结束
-        es.close(); outlineEs = null;
+        if (outlineEs !== es || !settle()) return; // 已正常结束或已被新流替换
+        es.close(); if (outlineEs === es) outlineEs = null;
         finishOutlineGen(t('大纲进度连接中断（后端可能未就绪），请稍后在列表中确认结果'), true);
     };
 }
@@ -168,7 +190,7 @@ async function loadOutlines() {
         S.marketing.outlineError = null;
     } catch (err) {
         S.marketing.outlines = [];
-        S.marketing.outlineError = isNotReadyError(err) ? t('营销大纲服务尚未就绪（后端未启用或版本过旧）') : err.message;
+        S.marketing.outlineError = isCollectionEmptyError(err) ? t('营销大纲服务尚未就绪（后端未启用或版本过旧）') : err.message;
     }
     if (list) {
         list.innerHTML = S.marketing.outlines.map(renderOutlineCardHtml).join('');
@@ -390,8 +412,16 @@ function attachBatchEvents() {
     batchEs?.close();
     const es = new EventSource('/api/marketing/batch/events');
     batchEs = es;
+    let batchSettled = false;
+    const watchdog = setTimeout(() => {
+        if (!batchSettled && batchEs === es) {
+            finishBatch(t('批量生成超时（长时间无进度回报），请到作品列表确认结果'), true);
+        }
+    }, BATCH_WATCHDOG_MS);
     const finishBatch = (message, isError) => {
-        es.close(); batchEs = null;
+        batchSettled = true;
+        clearTimeout(watchdog);
+        es.close(); if (batchEs === es) batchEs = null;
         if (S.marketing.batch) {
             S.marketing.batch.finished = true;
             S.marketing.batch.message = message;
@@ -416,7 +446,7 @@ function attachBatchEvents() {
                 status: event.status || 'running',
                 message: event.message || '',
             };
-            const existing = b.rows.findIndex((r) => r.deckName === row.deckName);
+            const existing = b.rows.findIndex((r) => (Number.isFinite(idx) ? r.index === row.index : r.deckName === row.deckName));
             if (existing >= 0) b.rows[existing] = row;
             else b.rows.push(row);
             b.total = row.total || b.total;
@@ -432,9 +462,10 @@ function attachBatchEvents() {
         }
     };
     es.onerror = () => {
-        if (!batchEs) return; // 已正常结束
+        if (batchEs !== es) return; // 已正常结束或已被新流替换
         batchEs = null;
         es.close();
+        clearTimeout(watchdog); batchSettled = true;
         if (S.marketing.batch && !S.marketing.batch.finished) {
             finishBatch(t('批量生成进度连接中断（后端可能未就绪），请到作品列表确认结果'), true);
         }
@@ -538,7 +569,7 @@ async function loadBatchHistory() {
         S.marketing.batchError = null;
     } catch (err) {
         S.marketing.batches = [];
-        S.marketing.batchError = isNotReadyError(err) ? t('批量生成服务尚未就绪（后端未启用或版本过旧）') : err.message;
+        S.marketing.batchError = isCollectionEmptyError(err) ? t('批量生成服务尚未就绪（后端未启用或版本过旧）') : err.message;
     }
     box.innerHTML = S.marketing.batches.map((rec) => {
         const title = rec.outlineTitle || rec.title || rec.name || rec.outlineId || t('未命名批次');

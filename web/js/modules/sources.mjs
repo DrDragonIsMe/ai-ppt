@@ -15,16 +15,25 @@ export function initSourcesModule(callbacks) {
 
 const SOURCE_TYPES = ['dir', 'url', 'site', 'vault'];
 
-// 后端路由未注册时 server 回退 SPA 壳（200 + HTML），api() 会在 res.json() 处抛 SyntaxError；
-// 与真 404 一并视为「后端未就绪」，给出友好空态而不是 JSON 解析报错。
+// 后端路由未注册时 server 回退 SPA 壳（2xx + text/html），api() 会在 res.json() 处抛 SyntaxError；
+// 只有这种「2xx 非 JSON」才是后端未就绪的特征。真 404 说明路由已注册、资源确实不存在，
+// 必须透传后端错误体而不是误报「服务未就绪」。
 export function isNotReadyError(err) {
-    return !!err && (err.status === 404 || err instanceof SyntaxError);
+    return err instanceof SyntaxError;
 }
 
-// 统一错误文案：SPA 回退壳 / 404 → 后端未就绪提示；其余透传 message
+// 集合类端点（GET /api/sources、/api/marketing/outlines、/api/marketing/batches）兼容：
+// 路由未挂载时后端也可能直接回 404，空列表比报错横幅对首屏更友好，故仍降级「未就绪」空态。
+export function isCollectionEmptyError(err) {
+    return isNotReadyError(err) || err?.status === 404;
+}
+
+// 统一错误文案：优先信任 api() 挂到 err.data 的 JSON 错误体；SPA 壳 → 未就绪；404 → 资源不存在
 export function errText(err) {
     if (isNotReadyError(err)) return t('后端服务尚未就绪（接口未注册或版本过旧）');
-    return err.message || t('未知错误');
+    if (err?.data?.error) return err.data.error;
+    if (err?.status === 404) return t('资源不存在或已被删除（404）');
+    return err?.message || t('未知错误');
 }
 
 function sourceTypeLabel(type) {
@@ -70,7 +79,7 @@ export async function loadSources() {
         S.sources.error = null;
     } catch (err) {
         S.sources.list = [];
-        S.sources.error = isNotReadyError(err)
+        S.sources.error = isCollectionEmptyError(err)
             ? t('素材源服务尚未就绪（后端未启用或版本过旧）')
             : t('素材源加载失败：{msg}', { msg: errText(err) });
     }
@@ -80,14 +89,29 @@ export async function loadSources() {
     return S.sources.list;
 }
 
-// 条目数缓存：/api/sources 列表不带计数，逐源懒加载（失败静默显示占位）
+// 条目计数：优先直接消费 GET /api/sources 每源返回的 itemCount（M9 契约已带，零额外请求）。
+// 仅对不带该字段的后端降级为逐源取 items，且并发上限 3 + 合并重渲染，避免 N+1 风暴。
+const COUNT_FETCH_CONCURRENCY = 3;
+let countRenderTimer = null;
+
+function scheduleCountRender() {
+    if (countRenderTimer) return;
+    countRenderTimer = setTimeout(() => { countRenderTimer = null; renderSourceList(); }, 250);
+}
+
 async function loadSourceCounts() {
-    for (const src of S.sources.list) {
-        if (!src?.id || src.id in S.sources.itemsCache) continue;
-        fetchSourceItems(src.id).then((items) => {
-            if (items) renderSourceList();
-        });
-    }
+    const pending = S.sources.list.filter(
+        (src) => src?.id && src.itemCount == null && !(src.id in S.sources.itemsCache));
+    if (!pending.length) return;
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(COUNT_FETCH_CONCURRENCY, pending.length) }, async () => {
+        while (cursor < pending.length) {
+            const src = pending[cursor++];
+            const items = await fetchSourceItems(src.id);
+            if (items) scheduleCountRender();
+        }
+    });
+    await Promise.all(workers);
 }
 
 async function fetchSourceItems(id) {
@@ -146,8 +170,11 @@ function renderSourceList() {
 
 function sourceCardHtml(src) {
     const known = SOURCE_TYPES.includes(src.type);
-    const items = S.sources.itemsCache[src.id];
-    const count = items ? String(items.length) : (S.sources.loading ? '…' : '—');
+    const cached = S.sources.itemsCache[src.id];
+    let count;
+    if (src.itemCount != null) count = `${src.itemCount}${src.truncated ? '+' : ''}`;
+    else if (cached) count = String(cached.length);
+    else count = S.sources.loading ? '…' : '—';
     const state = S.sources.refresh[src.id];
     const time = src.lastFetchedAt ? relativeTime(src.lastFetchedAt) : t('从未抓取');
     const tags = Array.isArray(src.tags) && src.tags.length
@@ -269,11 +296,26 @@ async function deleteSource(id) {
 // ============================================================
 // 刷新（POST 202 → SSE progress|done|error）
 // ============================================================
-const refreshEventSources = new Map();
+const refreshEventSources = new Map(); // sourceId -> EventSource
+const refreshClearTimers = new Map();  // sourceId -> done 后清理状态的定时器句柄
+const REFRESH_WATCHDOG_MS = 4 * 60 * 1000; // SSE 无终止事件兜底（P2-4）
+
+function clearRefreshTimer(id) {
+    const t = refreshClearTimers.get(id);
+    if (t) { clearTimeout(t); refreshClearTimers.delete(id); }
+}
+
+// 供子 tab / 侧边栏切换时显式回收已结束的刷新流（P2-4）
+export function reapFinishedRefreshStreams() {
+    for (const [id, es] of refreshEventSources) {
+        if (!es || es.readyState === EventSource.CLOSED) { es?.close?.(); refreshEventSources.delete(id); }
+    }
+}
 
 async function refreshSource(id) {
     const src = S.sources.list.find((s) => s.id === id);
     if (!src || S.sources.refresh[id]?.status === 'running') return;
+    clearRefreshTimer(id); // 撤销上一次 done 的延迟清理，避免抹掉本次进行中状态（P2-2）
     S.sources.refresh[id] = { status: 'running', message: t('正在启动抓取…') };
     renderSourceList();
     try {
@@ -287,13 +329,22 @@ async function refreshSource(id) {
 }
 
 function subscribeRefresh(id) {
+    clearRefreshTimer(id);
     refreshEventSources.get(id)?.close();
     const es = new EventSource(`/api/sources/${encodeURIComponent(id)}/refresh/events`);
     refreshEventSources.set(id, es);
+    let done = false;
+    const watchdog = setTimeout(() => {
+        if (!done) { done = true; finish('error', t('刷新超时（无进度回报），请重试')); }
+    }, REFRESH_WATCHDOG_MS);
     const finish = (status, message) => {
+        if (done && status !== 'error') return;
+        done = true;
+        clearTimeout(watchdog);
         es.close();
-        refreshEventSources.delete(id);
-        S.sources.refresh[id] = { status, message };
+        if (refreshEventSources.get(id) === es) refreshEventSources.delete(id); // 身份校验：不误删更新的连接（P2-2）
+        const stateObj = { status, message };
+        S.sources.refresh[id] = stateObj;
         if (status === 'done') {
             delete S.sources.itemsCache[id];
             api('GET', '/api/sources').then((data) => {
@@ -302,7 +353,12 @@ function subscribeRefresh(id) {
                 renderSourceList();
                 loadSourceCounts();
             }).catch(() => renderSourceList());
-            setTimeout(() => { delete S.sources.refresh[id]; renderSourceList(); }, 6000);
+            // 延迟清理，但校验状态仍是本次写入的 stateObj 才删，避免抹掉后续新刷新（P2-2）
+            clearRefreshTimer(id);
+            refreshClearTimers.set(id, setTimeout(() => {
+                refreshClearTimers.delete(id);
+                if (S.sources.refresh[id] === stateObj) { delete S.sources.refresh[id]; renderSourceList(); }
+            }, 6000));
         } else {
             renderSourceList();
         }
@@ -321,7 +377,7 @@ function subscribeRefresh(id) {
         }
     };
     es.onerror = () => {
-        if (!refreshEventSources.has(id)) return; // 已正常结束
+        if (refreshEventSources.get(id) !== es) return; // 已正常结束或已被新连接替换
         finish('error', t('刷新进度连接中断（后端可能未就绪），请稍后重试'));
     };
 }

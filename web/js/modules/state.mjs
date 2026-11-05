@@ -86,6 +86,7 @@ export const S = {
         currentOutline: null,     // 打开编辑的大纲对象
         outlineError: null,
         generating: false,        // 大纲生成 SSE 进行中
+        selectedSourceIds: [],    // 大纲生成勾选的素材源
         selectedAngleKeys: [],    // 批量生成勾选的角度
         batch: null,              // 进行中的批次 { total, rows: [{deckName,status,message,index}] }
         batches: [],              // 历史批次列表
