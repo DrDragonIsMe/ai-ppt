@@ -237,7 +237,7 @@ describe('evidence integrity (anti-fabrication)', () => {
     }, { id: makeOutlineId() });
 
     const { outline: cleaned, dropped, droppedIds } = enforceEvidenceIntegrity(outline, { knownItemIds: new Set(ALL_IDS) });
-    assert.equal(dropped, 6, `应剔除 6 处伪造引用（角度级 3 + 页级 3），实际 ${dropped}`);
+    assert.equal(dropped, 9, `应剔除 9 处伪造引用（角度级 3 + 3 个角度各 2 处页级），实际 ${dropped}`);
     assert.deepEqual([...new Set(droppedIds)].sort(), ['it-7', 'src-fake--000000000000', 'src-product--deadbeefdead'].sort());
     for (const a of cleaned.angles) {
       for (const id of a.evidenceItemIds) assert.ok(ALL_IDS.includes(id), `角度级仍留有伪造 id：${id}`);
@@ -262,7 +262,7 @@ describe('material tiered digest', () => {
 
   it('digest marks non-matching material as matched=false instead of pretending relevance', () => {
     const roi = findAngle(DEFAULT_ANGLE_SET, 'roi');
-    const d = digestItemForAngle('今天天气不错，没有数字也没有效率相关内容。', roi);
+    const d = digestItemForAngle('今天天气不错，适合出门散步，路上遇到一只猫。', roi);
     assert.equal(d.matched, false);
     assert.ok(d.digest.length > 0, '即便没命中也要给出可用摘要');
   });

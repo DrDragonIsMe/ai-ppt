@@ -394,9 +394,6 @@ async function runCli() {
         total: summary.total,
       });
     }
-    emitter.done({ ...summary });
-    emitter.done({ ...summary });
-    emitter.done({ ...summary });
     if (summary.doneCount === 0 && summary.failedCount > 0) process.exitCode = 1;
   } catch (err) {
     if (record) {
