@@ -62,6 +62,19 @@ const URL_PATH_BLACKLIST = [
   /^\/(404|403|401|not-found|access-denied|access-forbidden|error)\/?$/i,
 ];
 
+// 站点根、/about 等“浅层营销/页脚页”常见路径。单独命中不丢，只作为 brand-slogan 标题的辅助信号。
+const SHALLOW_MARKETING_PATHS = [
+  // 注意：不列 '/'。根路径可能是合法知识库/博客首页，应交给「正文厚度」判断，避免误杀。
+  /^\/about\/?$/i,
+  /^\/company\/?$/i,
+  /^\/careers?\/?$/i,
+  /^\/jobs?\/?$/i,
+  /^\/contact(-us)?\/?$/i,
+  /^\/press\/?$/i,
+  /^\/newsroom\/?$/i,
+  /^\/our-(story|mission|values)\/?$/i,
+];
+
 function hasWhitelist(title) {
   const t = String(title || '').toLowerCase();
   if (WHITELIST_ASC_RE.test(t)) return true;
@@ -83,6 +96,21 @@ function isBlacklistedUrlPath(origin) {
   return URL_PATH_BLACKLIST.some((re) => re.test(p));
 }
 
+function isShallowMarketingPath(origin) {
+  let pathname;
+  try {
+    pathname = new URL(origin).pathname;
+  } catch {
+    return false;
+  }
+  const p = String(pathname || '').toLowerCase();
+  return SHALLOW_MARKETING_PATHS.some((re) => re.test(p));
+}
+
+function effectiveBodyLength(body) {
+  return String(body || '').replace(/\s/g, '').length;
+}
+
 function isLoginOnlyBody(body) {
   const b = String(body || '').toLowerCase();
   const wordCount = b.trim().split(/\s+/).filter(Boolean).length;
@@ -95,18 +123,21 @@ function isLoginOnlyBody(body) {
  * 判定一页是否属于低相关页（登录墙、法务、404/受限、通用营销页）。
  * 先过知识库/文档白名单；白名单保护下的页面不会被黑名单误杀。
  */
-function isBrandSloganTitle(title) {
+function isBrandSloganPage(entry) {
   // 品牌口号型标题：常见形如 "GitHub · Change is constant"。
-  // 由于前面已经过白名单保护（"Acme Docs · Home" 等会被保留），
-  // 这里只抓「单一中间点分隔符且没有任何知识库/文档词」的标题，避免误伤合法帮助中心。
-  return /^[^·]+·[^·]+$/.test(title);
+  // 标题里的单个间隔符只是弱信号，必须与「站点根 / about 等浅层营销路径」
+  // 或「正文几乎无实质内容」联合作用，不得单独成立，避免误杀
+  // "Team · Our people" / "博客 · 产品团队" 这类有实质内容的知识库/博客页。
+  const title = String(entry.title || '');
+  if (!/^[^·]+·[^·]+$/.test(title)) return false;
+  return isShallowMarketingPath(entry.origin) || effectiveBodyLength(entry.body) < 200;
 }
 
 export function isLowRelevancePage(entry) {
   const title = String(entry.title || '');
   if (hasWhitelist(title)) return false;
   if (isBlacklistedTitle(title) || isBlacklistedUrlPath(entry.origin)) return true;
-  if (isBrandSloganTitle(title)) return true;
+  if (isBrandSloganPage(entry)) return true;
   if (isLoginOnlyBody(entry.body)) return true;
   return false;
 }

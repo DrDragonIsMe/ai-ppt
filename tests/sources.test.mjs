@@ -562,12 +562,84 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.ok(Array.isArray(row.lowRelevanceSamples));
   });
 
-  it('isLowRelevancePage unit: login/marketing skipped, docs kept', () => {
-    assert.equal(isLowRelevancePage({ title: 'Sign in to GitHub · GitHub', body: 'Sign in', origin: 'http://x/login' }), true);
-    assert.equal(isLowRelevancePage({ title: 'GitHub · Change is constant', body: 'Change is constant', origin: 'http://x/marketing' }), true);
-    assert.equal(isLowRelevancePage({ title: 'Getting Started Guide · Acme Docs', body: 'deploy widget', origin: 'http://x/docs/guide' }), false);
-    assert.equal(isLowRelevancePage({ title: 'About · Acme Docs', body: 'architecture', origin: 'http://x/about-docs' }), false);
-    assert.equal(isLowRelevancePage({ title: 'Privacy Policy', body: 'privacy', origin: 'http://x/privacy' }), true);
+  it('P1-2: 根页返回 200 登录墙导致 0 入库时，必须保留既有语料、不得物理删除', async () => {
+    freshEnv('site-lowrel-preserve');
+    const ENTRY = 'http://site.test/';
+    let round = 1;
+    const fetchStub = async (url) => {
+      if (url === ENTRY) {
+        if (round === 1) {
+          return {
+            html: '<title>Knowledge Home</title><body><a href="/a.html">A</a><a href="/b.html">B</a></body>',
+            finalUrl: ENTRY,
+          };
+        }
+        // 第 2 轮：根页变成 200 登录墙，被低相关过滤跳过，且不再暴露子页链接
+        return {
+          html: '<title>Sign in to Acme</title><body>Sign in to Acme. Username Password Forgot password?</body>',
+          finalUrl: ENTRY,
+        };
+      }
+      if (round === 1) {
+        return { html: `<title>${url}</title><article>useful content about ${url}</article>`, finalUrl: url };
+      }
+      throw new Error('第 2 轮不应再抓取子页');
+    };
+    const source = upsertSource({ type: 'site', name: 'P', target: ENTRY, options: { depth: 1, maxPages: 10 } }).source;
+
+    const r1 = await refreshSource(source.id, { fetchPage: fetchStub, allowPrivateNetwork: true });
+    assert.equal(r1.itemCount, 3, '首轮应入库 3 条');
+
+    round = 2;
+    const events = [];
+    const r2 = await refreshSource(source.id, { fetchPage: fetchStub, allowPrivateNetwork: true, onEvent: (e) => events.push(e) });
+
+    assert.equal(r2.itemCount, 3, '第 2 轮必须保留既有 3 条，不得因 0 入库被清空');
+    assert.equal(r2.removed, 0, '不得物理删除任何既有素材');
+    assert.equal(r2.preserved, true, '必须触发整源归零保命');
+    assert.equal(r2.lowRelevanceSkipped, 1, '应报告 1 个低相关页被跳过');
+    assert.ok(events.some((e) => e.step === 'preserve'), '应发出 preserve 事件');
+    assert.ok(events.some((e) => e.step === 'low-relevance-skipped'), '应发出 low-relevance-skipped 事件');
+
+    const m = readManifest(source.id);
+    assert.equal(m.preserved, true);
+    assert.equal(m.items.length, 3);
+    const itemsDir = path.join(process.env.AI_PPT_SOURCE_CACHE_ROOT, source.id, 'items');
+    assert.equal(fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length, 3, '磁盘 items 文件一条不少');
+  });
+
+  it('isLowRelevancePage 24-case adversarial table (B080800-P1-1/P2-1)', () => {
+    const longBody = 'This page contains substantial documentation content that explains features, usage, and best practices. '.repeat(10);
+    const shortBody = 'Short marketing slogan text.';
+    const e = (title, origin, body) => ({ title, origin, body });
+
+    // 必须丢弃（真垃圾）
+    assert.equal(isLowRelevancePage(e('Sign in to GitHub · GitHub', 'https://github.com/login', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('GitHub · Change is constant', 'https://github.com/about', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('登录', 'https://kb.example.com/login', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('Log in to your account', 'https://app.example.com/sso', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('Terms of Service', 'https://example.com/legal/terms', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('404 Not Found', 'https://example.com/nope', shortBody)), true);
+
+    // 必须保留（合法知识中心/内容页，误杀即 P1）
+    assert.equal(isLowRelevancePage(e('知识中心', 'https://help.example.com/', longBody)), false);
+    assert.equal(isLowRelevancePage(e('帮助中心', 'https://help.example.com/help', longBody)), false);
+    assert.equal(isLowRelevancePage(e('如何重置密码', 'https://help.example.com/articles/reset-password', longBody)), false);
+    assert.equal(isLowRelevancePage(e('产品文档 · v2', 'https://docs.example.com/v2', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Getting Started', 'https://docs.example.com/getting-started', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Quickstart · Acme API', 'https://acme.dev/quickstart', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Authentication', 'https://docs.example.com/auth', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Login API Reference', 'https://docs.example.com/api/login', longBody)), false);
+    assert.equal(isLowRelevancePage(e('常见问题 FAQ', 'https://help.example.com/faq', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Release Notes · March 2026', 'https://example.com/changelog', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Team · Our people', 'https://example.com/team', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Pricing & Plans', 'https://example.com/pricing', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Sign in with SSO — Admin Guide', 'https://docs.example.com/admin/sso', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Onboarding checklist', 'https://help.example.com/onboarding', longBody)), false);
+    assert.equal(isLowRelevancePage(e('博客 · 产品团队', 'https://example.com/blog', longBody)), false);
+    assert.equal(isLowRelevancePage(e('产品更新', 'https://example.com/updates', longBody)), false);
+    assert.equal(isLowRelevancePage(e('新员工 · 培训资料', 'https://kb.example.com/staff', longBody)), false);
+    assert.equal(isLowRelevancePage(e('三人行 · 技术笔记', 'https://blog.example.com/', longBody)), false);
   });
 });
 
