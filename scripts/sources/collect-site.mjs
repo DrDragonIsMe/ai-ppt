@@ -36,6 +36,8 @@ const WHITELIST_CN = [
   '版本', '更新', '升级', '迁移', '集成', '插件', '模块', '扩展', '功能', '命令', '参数', '协议',
   '格式', '规范', '安全', '认证', '授权', '权限', '角色', '缓存', '性能', '优化', '数据库', '查询',
   '数据', '模型', '架构', '设计', '工作流', '流程',
+  // B091100：配合 isBrandSloganPage 放宽到「多段式 · 标题」，补全知识中心类高频词，避免误杀。
+  '知识', '中心', '学院', '资料', '知识库',
 ];
 
 function escapeRegExp(s) {
@@ -124,12 +126,13 @@ function isLoginOnlyBody(body) {
  * 先过知识库/文档白名单；白名单保护下的页面不会被黑名单误杀。
  */
 function isBrandSloganPage(entry) {
-  // 品牌口号型标题：常见形如 "GitHub · Change is constant"。
-  // 标题里的单个间隔符只是弱信号，必须与「站点根 / about 等浅层营销路径」
-  // 或「正文几乎无实质内容」联合作用，不得单独成立，避免误杀
-  // "Team · Our people" / "博客 · 产品团队" 这类有实质内容的知识库/博客页。
+  // 品牌口号型标题：真实页面普遍是 "页面 · 栏目 · 站点名" 的多段式（如 GitHub 首页）。
+  // 只要标题里存在至少一个间隔号且首尾段非空即为弱信号，
+  // 必须与「about/company/careers 等浅层营销路径」或「正文几乎无实质内容」联合作用，
+  // 不得单独成立，避免误杀 "Team · Our people" / "博客 · 产品团队" 这类有实质内容的知识库/博客页。
+  // 设计边界：站点根首页（/）且正文厚实的不在本过滤器目标范围内，禁止为追一条首页噪声把 / 加回浅层清单。
   const title = String(entry.title || '');
-  if (!/^[^·]+·[^·]+$/.test(title)) return false;
+  if (!/^[^·]+(?:·[^·]+)+$/.test(title)) return false;
   return isShallowMarketingPath(entry.origin) || effectiveBodyLength(entry.body) < 200;
 }
 

@@ -476,7 +476,7 @@ describe('site source low-relevance page filter (B080800)', () => {
       }
       if (u === '/marketing') {
         res.writeHead(200, { 'content-type': 'text/html' });
-        return res.end(HTML('GitHub · Change is constant',
+        return res.end(HTML('GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub',
           'Change is constant. Build the future. Join us. Careers Press Contact.'));
       }
       if (u === '/docs/guide') {
@@ -531,7 +531,7 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(r.itemCount, 5, `关闭过滤后应入库 5 条，实得 ${r.itemCount}`);
     assert.equal(r.lowRelevanceSkipped, 0);
     assert.ok(titles.includes('Sign in to GitHub · GitHub'));
-    assert.ok(titles.includes('GitHub · Change is constant'));
+    assert.ok(titles.includes('GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub'));
   });
 
   it('registry normalizes and persists skipLowRelevanceCheck', () => {
@@ -610,14 +610,18 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length, 3, '磁盘 items 文件一条不少');
   });
 
-  it('isLowRelevancePage 24-case adversarial table (B080800-P1-1/P2-1)', () => {
+  it('isLowRelevancePage adversarial table (B080800-P1-1/P2-1/B091100)', () => {
     const longBody = 'This page contains substantial documentation content that explains features, usage, and best practices. '.repeat(10);
     const shortBody = 'Short marketing slogan text.';
     const e = (title, origin, body) => ({ title, origin, body });
+    const realGitHubTitle = 'GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub';
 
     // 必须丢弃（真垃圾）
     assert.equal(isLowRelevancePage(e('Sign in to GitHub · GitHub', 'https://github.com/login', shortBody)), true);
-    assert.equal(isLowRelevancePage(e('GitHub · Change is constant', 'https://github.com/about', shortBody)), true);
+    // B091100：多段式品牌口号标题 + /about 等浅层路径，即使正文厚实也 DROP（放宽正则的真实收益）。
+    assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/about', longBody)), true);
+    // 多段式品牌口号 + 薄正文，在任意路径下都 DROP。
+    assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/', shortBody)), true);
     assert.equal(isLowRelevancePage(e('登录', 'https://kb.example.com/login', shortBody)), true);
     assert.equal(isLowRelevancePage(e('Log in to your account', 'https://app.example.com/sso', shortBody)), true);
     assert.equal(isLowRelevancePage(e('Terms of Service', 'https://example.com/legal/terms', shortBody)), true);
@@ -642,6 +646,10 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(isLowRelevancePage(e('产品更新', 'https://example.com/updates', longBody)), false);
     assert.equal(isLowRelevancePage(e('新员工 · 培训资料', 'https://kb.example.com/staff', longBody)), false);
     assert.equal(isLowRelevancePage(e('三人行 · 技术笔记', 'https://blog.example.com/', longBody)), false);
+    // B091100：多段式中文知识中心标题，即使正文很薄也因 WHITELIST_CN 补词而 KEEP。
+    assert.equal(isLowRelevancePage(e('知识中心 · Acme', 'https://acme.com/kb', shortBody)), false);
+    // B091100 设计边界：正文厚实的站点根首页不在本过滤器目标范围内，不得加 / 回浅层清单。
+    assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/', longBody)), false);
   });
 });
 
