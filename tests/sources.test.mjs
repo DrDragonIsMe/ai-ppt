@@ -1221,3 +1221,73 @@ describe('P2-D url collector production branch respects maxBytesPerItem (net pat
     }
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// P2-G confirmed-gone(404/410/ENOENT) 正常清理、未确认失败(5xx/429/…) stale 保命
+//     —— 走真实 net.fetchPage（仅 allowPrivateNetwork，不注入 ctx.fetchPage），锁死同一判定式两侧分叉
+// ---------------------------------------------------------------------------
+describe('P2-G confirmed-gone prunes, transient failure preserves stale (real net path)', () => {
+  let server, port;
+  let round = 1;
+  const PAGE = (t) => `<!doctype html><html><head><title>${t}</title></head><body><article>${t} body</article></body></html>`;
+  before(async () => {
+    server = http.createServer((req, res) => {
+      const u = req.url.split('?')[0];
+      const origin = `http://127.0.0.1:${port}`;
+      if (u === '/') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(`<!doctype html><html><head><title>Home</title></head><body>`
+          + `<a href="/a.html">A</a><a href="/b.html">B</a><a href="/c.html">C</a>`
+          + `<a href="${origin}/gone.html">G</a><a href="${origin}/err.html">E</a></body></html>`);
+      }
+      if (u === '/a.html' || u === '/b.html' || u === '/c.html') {
+        res.writeHead(200, { 'content-type': 'text/html' }); return res.end(PAGE(u));
+      }
+      if (u === '/gone.html') {
+        if (round === 1) { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(PAGE('/gone.html')); }
+        res.writeHead(404, { 'content-type': 'text/html' }); return res.end('gone');   // 上游确认删除
+      }
+      if (u === '/err.html') {
+        if (round === 1) { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(PAGE('/err.html')); }
+        res.writeHead(503, { 'content-type': 'text/html' }); return res.end('temp');   // 瞬时不可用
+      }
+      res.writeHead(404); res.end('nope');
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    port = server.address().port;
+  });
+  after(() => new Promise((r) => server.close(r)));
+
+  it('次轮 404 条目被正常清理(removed、非 stale)、503 条目 stale 保命——同一条判定式两侧分叉', async () => {
+    freshEnv('p2g');
+    const GONE = `http://127.0.0.1:${port}/gone.html`;
+    const ERR = `http://127.0.0.1:${port}/err.html`;
+    round = 1;
+    const source = upsertSource({ type: 'site', name: 'G', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 10 } }).source;
+    const r1 = await refreshSource(source.id, { allowPrivateNetwork: true });
+    assert.equal(r1.itemCount, 6, 'entry+a+b+c+gone+err 首轮全入库');
+    assert.equal(r1.errors, 0);
+
+    round = 2;
+    const events = [];
+    const r2 = await refreshSource(source.id, { allowPrivateNetwork: true, onEvent: (e) => events.push(e) });
+
+    assert.equal(r2.errors, 2);
+    assert.equal(r2.removed, 1, '404 是 confirmed-gone → 正常清理一条');
+    assert.equal(r2.staleCount, 1, '503 是未确认失败 → stale 保命一条');
+    assert.equal(r2.itemCount, 5, 'entry+a+b+c 成功 + err(stale) = 5；gone 已删除');
+
+    const m = readManifest(source.id);
+    assert.ok(!m.items.some((i) => i.origin === GONE), 'gone 条目应已从 manifest 删除');
+    const errItem = m.items.find((i) => i.origin === ERR);
+    assert.ok(errItem, 'err 条目应仍在 manifest');
+    assert.equal(errItem.stale, true, 'err 条目应标 stale');
+    assert.ok(events.some((e) => e.step === 'degraded'));
+
+    // 磁盘：gone 的 .md 被物理删除，err 的 .md 仍在（stale 保命不删）
+    const itemsDir = path.join(process.env.AI_PPT_SOURCE_CACHE_ROOT, source.id, 'items');
+    assert.ok(!fs.existsSync(path.join(itemsDir, `${makeItemId(source.id, GONE)}.md`)), 'gone 的 item 文件应已删除');
+    assert.ok(fs.existsSync(path.join(itemsDir, `${makeItemId(source.id, ERR)}.md`)), 'err 的 item 文件应保留');
+  });
+});

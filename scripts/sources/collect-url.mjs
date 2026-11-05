@@ -49,7 +49,7 @@ export async function* collectUrl(source, ctx = {}) {
       tags: [...tags],
     };
   } catch (err) {
-    yield { kind: 'error', origin: url, error: err.message };
+    yield { kind: 'error', origin: url, error: err.message, httpStatus: err.httpStatus, code: err.code };
   }
 }
 

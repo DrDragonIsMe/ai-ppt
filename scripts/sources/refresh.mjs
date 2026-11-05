@@ -30,6 +30,13 @@ function dispatch(source) {
   }
 }
 
+// P2-G：判定一条采集错误是否属于「上游确认删除」——HTTP 404/410，或文件系统 ENOENT。
+// 这类 origin 应正常 prune（缓存要能减）；其余 5xx / 401 / 403 / 429 / 超时 / 网络错误 / 瞬时不可读(如 EACCES)
+// 都视为「未确认失败」，按 origin 保命标 stale——绝不能用「拿不到」冒充「不存在」把已上线内容误删。
+function isConfirmedGone(entry) {
+  return entry.httpStatus === 404 || entry.httpStatus === 410 || entry.code === 'ENOENT';
+}
+
 /**
  * 抓取并落盘一个源。
  * @param {object|string} sourceOrId 源对象或源 id
@@ -58,6 +65,8 @@ export async function refreshSource(sourceOrId, opts = {}) {
   const newIds = new Set();
   const errors = [];
   const erroredOrigins = new Set(); // P1-A：本轮明确抓取/抽取失败的 origin 集合，用于部分失败时按 origin 保命
+  const confirmedGoneOrigins = new Set(); // P2-G：本轮上游确认删除（404/410/ENOENT）的 origin → 正常 prune、绝不 stale
+  let confirmedGoneCount = 0; // P2-G：确认删除的错误数——不计入降级阈值（它们恰恰证明上游真的没了）
   let added = 0; let updated = 0; let unchanged = 0;
   let truncation = null; // { collected, dropped, total, cap }
   let policySkip = null; // P2-E：{ skipped, samples[] }——被禁入/敏感清单跳过的条目（可观测）
@@ -73,7 +82,14 @@ export async function refreshSource(sourceOrId, opts = {}) {
   for await (const entry of collector(source, ctx)) {
     if (entry.kind === 'error') {
       errors.push({ origin: entry.origin || null, error: entry.error || 'unknown error' });
-      if (entry.origin) erroredOrigins.add(entry.origin); // P1-A：记录失败 origin，部分失败时按 origin 保命
+      if (isConfirmedGone(entry)) {
+        // P2-G：上游确认删除 → 记入 confirmedGone（正常 prune），不进 erroredOrigins（否则会被永久 stale 保命）。
+        if (entry.origin) confirmedGoneOrigins.add(entry.origin);
+        confirmedGoneCount++;
+      } else if (entry.origin) {
+        // P1-A：未确认失败（5xx/401/403/429/超时/网络/瞬时不可读）→ 按 origin 保命。
+        erroredOrigins.add(entry.origin);
+      }
       onEvent({ step: 'fetch-error', message: `抓取失败：${entry.origin || ''}`, detail: { origin: entry.origin, error: entry.error } });
       continue;
     }
@@ -167,11 +183,14 @@ export async function refreshSource(sourceOrId, opts = {}) {
   //  dir 源本地枚举不会"部分失败"（单文件损坏是 error 条目、按 origin 保命即可），语义天然正确。
   const prevItems = prev.items || [];
   const prevItemCount = prevItems.length;
-  const totalFailure = newItems.length === 0 && prevItemCount > 0 && errors.length > 0;
+  // 降级阈值只统计「未确认失败」：confirmed-gone（404/410/ENOENT）恰恰证明上游真没了，
+  // 不该把它们计入 errors 而把整库推向保守保命。
+  const uncertainErrors = errors.length - confirmedGoneCount;
+  const totalFailure = newItems.length === 0 && prevItemCount > 0 && uncertainErrors > 0;
   const overallDegraded = !totalFailure
     && prevItemCount > 0
-    && errors.length > 0
-    && errors.length / prevItemCount > 0.5;
+    && uncertainErrors > 0
+    && uncertainErrors / prevItemCount > 0.5;
   const pruneBlocked = totalFailure; // 保留既有变量名与 'preserve' 语义
 
   let removed = 0;
@@ -180,20 +199,27 @@ export async function refreshSource(sourceOrId, opts = {}) {
   if (pruneBlocked) {
     onEvent({
       step: 'preserve',
-      message: `素材源「${source.name}」本轮采集失败（0 入库 / ${errors.length} 错误），已跳过清理并保留既有 ${prevItemCount} 条素材`,
-      detail: { keptItems: prevItemCount, errors: errors.length },
+      message: `素材源「${source.name}」本轮采集失败（0 入库 / ${uncertainErrors} 未确认错误），已跳过清理并保留既有 ${prevItemCount} 条素材`,
+      detail: { keptItems: prevItemCount, errors: uncertainErrors },
     });
   } else {
     const itemsDir = sourceItemsDir(sourceId);
     for (const old of prevItems) {
       if (newIds.has(old.id)) continue; // 本轮已重新收录，正常
-      const errored = old.origin != null && erroredOrigins.has(old.origin);
+      const o = old.origin;
+      // P2-G：本轮上游确认删除（404/410/ENOENT）→ 正常清理，即便整体降级也不 stale（缓存要能减）。
+      if (o != null && confirmedGoneOrigins.has(o)) {
+        try { fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true }); removed++; } catch { /* 可能已不在 */ }
+        continue;
+      }
+      // P1-A：本轮明确失败（origin 命中）或整体降级（兜底 origin 对不上的边角）→ 标 stale 保命，绝不 rm。
+      const errored = o != null && erroredOrigins.has(o);
       if (errored || overallDegraded) {
-        // 本轮该条目抓取失败（或整体降级）——不是"上游删了它"，保命不删，标 stale。
         staleKeptItems.push({ ...old, stale: true });
         stalePreserved++;
         continue;
       }
+      // 其余 = 上游确认消失（本轮没抓到、也没报错）→ 正常清理。
       try {
         fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true });
         removed++;
@@ -203,7 +229,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
       onEvent({
         step: 'degraded',
         message: `素材源「${source.name}」本轮部分抓取失败：已保留 ${stalePreserved} 条未能确认的上游素材（标记 stale，未删除），另有 ${removed} 条确认消失被清理`,
-        detail: { keptStale: stalePreserved, removed, errors: errors.length, overallDegraded },
+        detail: { keptStale: stalePreserved, removed, errors: uncertainErrors, overallDegraded },
       });
     }
   }

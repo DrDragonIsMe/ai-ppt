@@ -80,7 +80,7 @@ export async function* collectVault(source, ctx = {}) {
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (err) {
-      yield { kind: 'error', origin: dir, error: `读取失败 ${dir}: ${err.message}` };
+      yield { kind: 'error', origin: dir, error: `读取失败 ${dir}: ${err.message}`, code: err.code };
       continue;
     }
     for (const ent of entries) {
@@ -102,7 +102,7 @@ export async function* collectVault(source, ctx = {}) {
       try {
         raw = fs.readFileSync(abs, 'utf8');
       } catch (err) {
-        yield { kind: 'error', origin: rel, error: `读取失败 ${rel}: ${err.message}` };
+        yield { kind: 'error', origin: rel, error: `读取失败 ${rel}: ${err.message}`, code: err.code };
         continue;
       }
       const { frontMatter, content } = parseFrontMatter(raw);

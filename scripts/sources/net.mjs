@@ -136,7 +136,11 @@ export async function fetchPage(url, opts = {}) {
       const next = new URL(location, parsed.href).href;
       return fetchPage(next, { allowPrivateNetwork, maxBytes, timeoutMs, fetchImpl, redirectsLeft: redirectsLeft - 1, deadlineAt: deadline });
     }
-    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const e = new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+      e.httpStatus = res.status; // P2-G：上层据此区分 confirmed-gone(404/410) 与未确认失败(5xx/401/403/429/超时/网络)
+      throw e;
+    }
 
     const { text: html, truncated } = await readCapped(res, maxBytes, { deadlineAt: deadline, timeoutMs });
     return { html, truncated, finalUrl: parsed.href, status: res.status, contentType: res.headers.get('content-type') || '' };

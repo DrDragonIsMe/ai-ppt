@@ -76,7 +76,7 @@ export async function* collectDir(source, ctx = {}) {
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (err) {
-      yield { kind: 'error', origin: dir, error: `读取目录失败 ${dir}: ${err.message}` };
+      yield { kind: 'error', origin: dir, error: `读取目录失败 ${dir}: ${err.message}`, code: err.code };
       continue;
     }
     for (const ent of entries) {
@@ -146,7 +146,7 @@ export async function* collectDir(source, ctx = {}) {
         };
         ctx.onProgress?.(`采集 ${rel}`, { index: collected });
       } catch (err) {
-        yield { kind: 'error', origin: abs, error: `抽取失败 ${rel}: ${err.message}` };
+        yield { kind: 'error', origin: abs, error: `抽取失败 ${rel}: ${err.message}`, code: err.code };
       }
     }
   }

@@ -42,7 +42,7 @@ export async function* collectSite(source, ctx = {}) {
     try {
       page = await fetchFn(url, netOpts);
     } catch (err) {
-      yield { kind: 'error', origin: url, error: err.message };
+      yield { kind: 'error', origin: url, error: err.message, httpStatus: err.httpStatus, code: err.code };
       continue;
     }
 
