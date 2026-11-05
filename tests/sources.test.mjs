@@ -991,6 +991,41 @@ describe('P1-A partial-failure refresh keeps errored origins as stale', () => {
     assert.equal(r2.degraded, false);
     assert.equal(r2.itemCount, 1);
   });
+
+  it('P1-A′ 低比例部分失败：entry+10 子页、次轮仅 1 条 429 → 由 erroredOrigins 逐条保命（errors/prev=0.09 远低于 0.5，不走兜底）', async () => {
+    freshEnv('p1a-low');
+    const ENTRY = 'http://site.test/';
+    const FAILED = 'http://site.test/p3.html';
+    let round = 1;
+    const links = Array.from({ length: 10 }, (_, i) => `<a href="/p${i + 1}.html">P${i + 1}</a>`).join('');
+    const fetchStub = async (url) => {
+      if (url === ENTRY) return { html: `<title>Home</title>${links}`, finalUrl: ENTRY };
+      // 次轮只有 p3 失败（429，非 confirmed-gone），其余照常成功
+      if (round === 2 && url === FAILED) throw new Error('429 Too Many Requests');
+      return { html: `<title>${url}</title><article>body</article>`, finalUrl: url };
+    };
+    const source = upsertSource({ type: 'site', name: 'Low', target: ENTRY, options: { depth: 1, maxPages: 20 } }).source;
+
+    const r1 = await refreshSource(source.id, { fetchPage: fetchStub });
+    assert.equal(r1.itemCount, 11, '首轮 entry + 10 子页全入库');
+    assert.equal(r1.errors, 0);
+
+    round = 2;
+    const events = [];
+    const r2 = await refreshSource(source.id, { fetchPage: fetchStub, onEvent: (e) => events.push(e) });
+
+    assert.equal(r2.errors, 1);
+    assert.equal(r2.staleCount, 1, '低比例失败须由 erroredOrigins 逐条保命，而非阈值兜底');
+    assert.equal(r2.removed, 0);
+    assert.equal(r2.itemCount, 11);
+    assert.ok(events.some((e) => e.step === 'degraded'));
+    // 锁死"阈值没参与"：被标 stale 的必须恰好是失败那一条 origin
+    const stale = readManifest(source.id).items.filter((i) => i.stale === true);
+    assert.equal(stale.length, 1);
+    assert.ok(stale.every((i) => i.origin === FAILED), `唯一 stale 项应为失败 origin，实得 ${stale.map((i) => i.origin)}`);
+    // 兜底确未触发（否则删掉 erroredOrigins.add 也不会红）——1/11 明确低于阈值
+    assert.equal(r2.degraded, true, 'degraded 由 per-origin 保命驱动');
+  });
 });
 
 // ---------------------------------------------------------------------------
