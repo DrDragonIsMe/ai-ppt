@@ -298,7 +298,8 @@ async function deleteSource(id) {
 // ============================================================
 const refreshEventSources = new Map(); // sourceId -> EventSource
 const refreshClearTimers = new Map();  // sourceId -> done 后清理状态的定时器句柄
-const REFRESH_WATCHDOG_MS = 4 * 60 * 1000; // SSE 无终止事件兜底（P2-4）
+const refreshIdleCancels = new Map();  // sourceId -> 撤销本流 idle 看门狗（被替换/结束时调用）
+const REFRESH_WATCHDOG_MS = 4 * 60 * 1000; // SSE 连续零事件兜底（P2-4 / r2 P1-1：idle 语义）
 
 function clearRefreshTimer(id) {
     const t = refreshClearTimers.get(id);
@@ -308,7 +309,12 @@ function clearRefreshTimer(id) {
 // 供子 tab / 侧边栏切换时显式回收已结束的刷新流（P2-4）
 export function reapFinishedRefreshStreams() {
     for (const [id, es] of refreshEventSources) {
-        if (!es || es.readyState === EventSource.CLOSED) { es?.close?.(); refreshEventSources.delete(id); }
+        if (!es || es.readyState === EventSource.CLOSED) {
+            es?.close?.();
+            refreshEventSources.delete(id);
+            refreshIdleCancels.get(id)?.();
+            refreshIdleCancels.delete(id);
+        }
     }
 }
 
@@ -330,17 +336,26 @@ async function refreshSource(id) {
 
 function subscribeRefresh(id) {
     clearRefreshTimer(id);
+    refreshIdleCancels.get(id)?.(); // 撤销被本流替换掉的旧流看门狗（idle 语义下该路径可达）
     refreshEventSources.get(id)?.close();
     const es = new EventSource(`/api/sources/${encodeURIComponent(id)}/refresh/events`);
     refreshEventSources.set(id, es);
     let done = false;
-    const watchdog = setTimeout(() => {
-        if (!done) { done = true; finish('error', t('刷新超时（无进度回报），请重试')); }
-    }, REFRESH_WATCHDOG_MS);
+    const fire = () => {
+        if (done || refreshEventSources.get(id) !== es) return; // 已终止或已被新连接替换
+        done = true;
+        finish('error', t('刷新超时（无进度回报），请重试'));
+    };
+    // idle 型看门狗：每条事件重置计时，只有连续 REFRESH_WATCHDOG_MS 收不到任何事件才判超时
+    const arm = () => setTimeout(fire, REFRESH_WATCHDOG_MS);
+    let watchdog = arm();
+    const cancel = () => clearTimeout(watchdog);
+    refreshIdleCancels.set(id, cancel);
     const finish = (status, message) => {
         if (done && status !== 'error') return;
         done = true;
-        clearTimeout(watchdog);
+        cancel();
+        if (refreshIdleCancels.get(id) === cancel) refreshIdleCancels.delete(id);
         es.close();
         if (refreshEventSources.get(id) === es) refreshEventSources.delete(id); // 身份校验：不误删更新的连接（P2-2）
         const stateObj = { status, message };
@@ -364,6 +379,7 @@ function subscribeRefresh(id) {
         }
     };
     es.onmessage = (ev) => {
+        clearTimeout(watchdog); watchdog = arm(); // 活着就续期：事件到达即重置 idle 计时
         let event; try { event = JSON.parse(ev.data); } catch { event = { type: 'progress', message: ev.data }; }
         const message = event.message || event.step || '';
         if (event.type === 'progress') {

@@ -39,8 +39,8 @@ function relativeTime(iso) {
 // ============================================================
 // 离开视图时显式回收已终止的 SSE 句柄（正常终止路径已 close，这里兜底清引用；P2-4）
 function reapFinishedStreams() {
-    if (outlineEs && outlineEs.readyState === EventSource.CLOSED) { outlineEs.close?.(); outlineEs = null; }
-    if (batchEs && batchEs.readyState === EventSource.CLOSED) { batchEs.close?.(); batchEs = null; }
+    if (outlineEs && outlineEs.readyState === EventSource.CLOSED) { outlineEs.close?.(); outlineEs = null; outlineIdleCancel?.(); outlineIdleCancel = null; }
+    if (batchEs && batchEs.readyState === EventSource.CLOSED) { batchEs.close?.(); batchEs = null; batchIdleCancel?.(); batchIdleCancel = null; }
     reapFinishedRefreshStreams();
 }
 
@@ -101,6 +101,7 @@ function renderSourceChips() {
 }
 
 let outlineEs = null;
+let outlineIdleCancel = null; // 当前大纲流的 idle 看门狗撤销句柄
 
 export async function generateOutline() {
     if (S.marketing.generating) return;
@@ -130,18 +131,28 @@ export async function generateOutline() {
         finishOutlineGen(t('大纲生成启动失败：{msg}', { msg: errText(err) }), true);
         return;
     }
+    outlineIdleCancel?.(); // 撤销被本流替换掉的旧流看门狗（idle 语义下该路径可达）
     outlineEs?.close();
     const es = new EventSource('/api/marketing/outline/events');
     outlineEs = es;
     let settled = false;
-    const watchdog = setTimeout(() => {
-        if (settled) return;
+    let watchdog = null;
+    const cancel = () => clearTimeout(watchdog);
+    const release = () => { if (outlineIdleCancel === cancel) outlineIdleCancel = null; };
+    const fire = () => {
+        if (settled || outlineEs !== es) return; // 已终止或已被新流替换
         settled = true;
+        cancel(); release();
         es.close(); if (outlineEs === es) outlineEs = null;
         finishOutlineGen(t('大纲生成超时（长时间无进度回报），请稍后在列表中确认结果'), true);
-    }, OUTLINE_WATCHDOG_MS);
-    const settle = () => { if (settled) return false; settled = true; clearTimeout(watchdog); return true; };
+    };
+    // idle 型看门狗：每条事件重置计时，只有连续 OUTLINE_WATCHDOG_MS 收不到任何事件才判超时
+    const arm = () => setTimeout(fire, OUTLINE_WATCHDOG_MS);
+    watchdog = arm();
+    outlineIdleCancel = cancel;
+    const settle = () => { if (settled) return false; settled = true; cancel(); release(); return true; };
     es.onmessage = (ev) => {
+        clearTimeout(watchdog); watchdog = arm(); // 活着就续期：事件到达即重置 idle 计时
         let event; try { event = JSON.parse(ev.data); } catch { event = { type: 'progress', message: ev.data }; }
         const message = event.message || event.step || '';
         if (event.type === 'progress') {
@@ -387,6 +398,7 @@ async function saveOutline() {
 // 批量生成
 // ============================================================
 let batchEs = null;
+let batchIdleCancel = null; // 当前批量流的 idle 看门狗撤销句柄
 
 async function startBatch() {
     const o = syncOutlineFromDom();
@@ -409,18 +421,25 @@ async function startBatch() {
 }
 
 function attachBatchEvents() {
+    batchIdleCancel?.(); // 撤销被本流替换掉的旧流看门狗（idle 语义下该路径可达）
     batchEs?.close();
     const es = new EventSource('/api/marketing/batch/events');
     batchEs = es;
     let batchSettled = false;
-    const watchdog = setTimeout(() => {
-        if (!batchSettled && batchEs === es) {
-            finishBatch(t('批量生成超时（长时间无进度回报），请到作品列表确认结果'), true);
-        }
-    }, BATCH_WATCHDOG_MS);
+    let watchdog = null;
+    const cancel = () => clearTimeout(watchdog);
+    const release = () => { if (batchIdleCancel === cancel) batchIdleCancel = null; };
+    const fire = () => {
+        if (batchSettled || batchEs !== es) return; // 已终止或已被新流替换
+        finishBatch(t('批量生成超时（长时间无进度回报），请到作品列表确认结果'), true);
+    };
+    // idle 型看门狗：每条事件重置计时，只有连续 BATCH_WATCHDOG_MS 收不到任何事件才判超时
+    const arm = () => setTimeout(fire, BATCH_WATCHDOG_MS);
+    watchdog = arm();
+    batchIdleCancel = cancel;
     const finishBatch = (message, isError) => {
         batchSettled = true;
-        clearTimeout(watchdog);
+        cancel(); release();
         es.close(); if (batchEs === es) batchEs = null;
         if (S.marketing.batch) {
             S.marketing.batch.finished = true;
@@ -434,19 +453,23 @@ function attachBatchEvents() {
         else if (message) showToast(message);
     };
     es.onmessage = (ev) => {
+        clearTimeout(watchdog); watchdog = arm(); // 活着就续期：事件到达即重置 idle 计时
         let event; try { event = JSON.parse(ev.data); } catch { event = { type: 'log', message: ev.data }; }
         if (!S.marketing.batch) return;
         const b = S.marketing.batch;
         if (event.type === 'deck') {
             const idx = Number(event.index);
+            const byIndex = Number.isFinite(idx);
+            const name = event.deckName || '';
+            const existing = b.rows.findIndex((r) => (byIndex ? r.index === idx : r.deckName === name));
             const row = {
-                deckName: event.deckName || `#${isNaN(idx) ? b.rows.length + 1 : idx + 1}`,
-                index: Number.isFinite(idx) ? idx : b.rows.length,
+                deckName: name || `#${byIndex ? idx + 1 : b.rows.length + 1}`,
+                // 命中已有行时沿用它自身的序号：否则同一条 running→done 会被按 rows.length 重新编号
+                index: byIndex ? idx : (existing >= 0 ? b.rows[existing].index : b.rows.length),
                 total: Number(event.total) || b.total,
                 status: event.status || 'running',
                 message: event.message || '',
             };
-            const existing = b.rows.findIndex((r) => (Number.isFinite(idx) ? r.index === row.index : r.deckName === row.deckName));
             if (existing >= 0) b.rows[existing] = row;
             else b.rows.push(row);
             b.total = row.total || b.total;
@@ -465,7 +488,7 @@ function attachBatchEvents() {
         if (batchEs !== es) return; // 已正常结束或已被新流替换
         batchEs = null;
         es.close();
-        clearTimeout(watchdog); batchSettled = true;
+        cancel(); release(); batchSettled = true;
         if (S.marketing.batch && !S.marketing.batch.finished) {
             finishBatch(t('批量生成进度连接中断（后端可能未就绪），请到作品列表确认结果'), true);
         }
