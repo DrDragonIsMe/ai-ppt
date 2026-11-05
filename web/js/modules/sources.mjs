@@ -299,6 +299,7 @@ async function deleteSource(id) {
 const refreshEventSources = new Map(); // sourceId -> EventSource
 const refreshClearTimers = new Map();  // sourceId -> done 后清理状态的定时器句柄
 const refreshIdleCancels = new Map();  // sourceId -> 撤销本流 idle 看门狗（被替换/结束时调用）
+const refreshGens = new Map();         // sourceId -> 当前流代次（reap 不清，仅终态清）
 const REFRESH_WATCHDOG_MS = 4 * 60 * 1000; // SSE 连续零事件兜底（P2-4 / r2 P1-1：idle 语义）
 
 function clearRefreshTimer(id) {
@@ -312,8 +313,6 @@ export function reapFinishedRefreshStreams() {
         if (!es || es.readyState === EventSource.CLOSED) {
             es?.close?.();
             refreshEventSources.delete(id);
-            refreshIdleCancels.get(id)?.();
-            refreshIdleCancels.delete(id);
         }
     }
 }
@@ -340,9 +339,11 @@ function subscribeRefresh(id) {
     refreshEventSources.get(id)?.close();
     const es = new EventSource(`/api/sources/${encodeURIComponent(id)}/refresh/events`);
     refreshEventSources.set(id, es);
+    const gen = (refreshGens.get(id) || 0) + 1;
+    refreshGens.set(id, gen); // 本连接代次：之后任何新连接都会作废它
     let done = false;
     const fire = () => {
-        if (done || refreshEventSources.get(id) !== es) return; // 已终止或已被新连接替换
+        if (done || refreshGens.get(id) !== gen) return; // 已终止或已被新连接替换
         done = true;
         finish('error', t('刷新超时（无进度回报），请重试'));
     };
@@ -358,6 +359,7 @@ function subscribeRefresh(id) {
         if (refreshIdleCancels.get(id) === cancel) refreshIdleCancels.delete(id);
         es.close();
         if (refreshEventSources.get(id) === es) refreshEventSources.delete(id); // 身份校验：不误删更新的连接（P2-2）
+        if (refreshGens.get(id) === gen) refreshGens.delete(id); // 终态清记账（reap 不清，保证兜底仍在）
         const stateObj = { status, message };
         S.sources.refresh[id] = stateObj;
         if (status === 'done') {

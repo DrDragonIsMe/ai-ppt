@@ -39,8 +39,8 @@ function relativeTime(iso) {
 // ============================================================
 // 离开视图时显式回收已终止的 SSE 句柄（正常终止路径已 close，这里兜底清引用；P2-4）
 function reapFinishedStreams() {
-    if (outlineEs && outlineEs.readyState === EventSource.CLOSED) { outlineEs.close?.(); outlineEs = null; outlineIdleCancel?.(); outlineIdleCancel = null; }
-    if (batchEs && batchEs.readyState === EventSource.CLOSED) { batchEs.close?.(); batchEs = null; batchIdleCancel?.(); batchIdleCancel = null; }
+    if (outlineEs && outlineEs.readyState === EventSource.CLOSED) { outlineEs.close?.(); outlineEs = null; }
+    if (batchEs && batchEs.readyState === EventSource.CLOSED) { batchEs.close?.(); batchEs = null; }
     reapFinishedRefreshStreams();
 }
 
@@ -102,6 +102,7 @@ function renderSourceChips() {
 
 let outlineEs = null;
 let outlineIdleCancel = null; // 当前大纲流的 idle 看门狗撤销句柄
+let outlineGen = 0;           // 流代次：建新流 ++ 作废旧流看门狗；reap 不 ++（回收不得剥夺兜底）
 
 export async function generateOutline() {
     if (S.marketing.generating) return;
@@ -135,12 +136,13 @@ export async function generateOutline() {
     outlineEs?.close();
     const es = new EventSource('/api/marketing/outline/events');
     outlineEs = es;
+    const gen = ++outlineGen; // 本流代次：之后任何新流都会作废它
     let settled = false;
     let watchdog = null;
     const cancel = () => clearTimeout(watchdog);
     const release = () => { if (outlineIdleCancel === cancel) outlineIdleCancel = null; };
     const fire = () => {
-        if (settled || outlineEs !== es) return; // 已终止或已被新流替换
+        if (settled || gen !== outlineGen) return; // 已终止或已被新一轮流替换
         settled = true;
         cancel(); release();
         es.close(); if (outlineEs === es) outlineEs = null;
@@ -399,6 +401,7 @@ async function saveOutline() {
 // ============================================================
 let batchEs = null;
 let batchIdleCancel = null; // 当前批量流的 idle 看门狗撤销句柄
+let batchGen = 0;           // 流代次：建新流 ++ 作废旧流看门狗；reap 不 ++（回收不得剥夺兜底）
 
 async function startBatch() {
     const o = syncOutlineFromDom();
@@ -425,12 +428,13 @@ function attachBatchEvents() {
     batchEs?.close();
     const es = new EventSource('/api/marketing/batch/events');
     batchEs = es;
+    const gen = ++batchGen; // 本流代次：之后任何新流都会作废它
     let batchSettled = false;
     let watchdog = null;
     const cancel = () => clearTimeout(watchdog);
     const release = () => { if (batchIdleCancel === cancel) batchIdleCancel = null; };
     const fire = () => {
-        if (batchSettled || batchEs !== es) return; // 已终止或已被新流替换
+        if (batchSettled || gen !== batchGen) return; // 已终止或已被新一轮流替换
         finishBatch(t('批量生成超时（长时间无进度回报），请到作品列表确认结果'), true);
     };
     // idle 型看门狗：每条事件重置计时，只有连续 BATCH_WATCHDOG_MS 收不到任何事件才判超时
