@@ -1291,3 +1291,71 @@ describe('P2-G confirmed-gone prunes, transient failure preserves stale (real ne
     assert.ok(fs.existsSync(path.join(itemsDir, `${makeItemId(source.id, ERR)}.md`)), 'err 的 item 文件应保留');
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// P2-F dir/vault 目录级错误的 origin 对不上问题：失败目录前缀 → 子树保命；
+//      与 P2-G 的 ENOENT 分类划清"暂时不可读(保命)" vs "目录真被删(正常清理)"。
+// ---------------------------------------------------------------------------
+describe('P2-F dir directory-level failure: transient unreadable preserves subtree', () => {
+  function buildDirSrc(label) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), label + '-'));
+    for (let i = 1; i <= 10; i++) fs.writeFileSync(path.join(dir, `t${i}.md`), `# T${i}\nbody`);
+    const sub = path.join(dir, 'sub');
+    fs.mkdirSync(sub);
+    for (let j = 1; j <= 3; j++) fs.writeFileSync(path.join(sub, `s${j}.md`), `# S${j}\nbody`);
+    return { dir, sub };
+  }
+
+  it('次轮子目录 chmod 000（EACCES 非 ENOENT）→ 该子树 3 条 stale 保命不删，顶层 10 条正常，degraded 事件发出', async (t) => {
+    freshEnv('p2f');
+    const { dir, sub } = buildDirSrc('p2f-eacces');
+    const source = mkDirSource({ type: 'dir', name: 'F', target: dir }).source;
+    const r1 = await refreshSource(source.id);
+    assert.equal(r1.itemCount, 13, '首轮 10 顶层 + 3 子树全入库');
+
+    fs.chmodSync(sub, 0o000);
+    // 环境守卫：若本进程是 root，DAC 不生效、readdir 仍成功 → 无法触发目录级错误，显式 skip（而非假绿）。
+    try { fs.readdirSync(sub); t.skip('readdir on chmod 000 still succeeds (running as root?) — cannot exercise EACCES path'); return; }
+    catch { /* 期望：抛 EACCES，继续 */ }
+
+    try {
+      const events = [];
+      const r2 = await refreshSource(source.id, { onEvent: (e) => events.push(e) });
+      assert.equal(r2.errors, 1, '子目录 readdir 失败记 1 条错误');
+      assert.equal(r2.removed, 0, 'P2-F：目录级失败 origin(目录) 对不上条目(文件)，但前缀保命 → 一条不删');
+      assert.equal(r2.staleCount, 3, '该子树 3 条应 stale 保命');
+      assert.equal(r2.itemCount, 13, '13 条一条不少（10 重抓 + 3 stale）');
+      assert.ok(events.some((e) => e.step === 'degraded'), '目录级失败也必须发 degraded 事件，不得只剩通用 fetch-error');
+
+      const m = readManifest(source.id);
+      const stale = m.items.filter((i) => i.stale === true);
+      assert.equal(stale.length, 3);
+      const pre = sub + path.sep;
+      assert.ok(stale.every((i) => String(i.origin).startsWith(pre)), '被保命的必须恰是失败子树下的条目');
+      assert.ok(m.items.filter((i) => !String(i.origin).startsWith(pre)).every((i) => i.stale !== true), '顶层条目不应被标 stale');
+
+      const itemsDir = path.join(process.env.AI_PPT_SOURCE_CACHE_ROOT, source.id, 'items');
+      assert.equal(fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length, 13, '磁盘 .md 不得减少');
+    } finally {
+      fs.chmodSync(sub, 0o755); // 恢复权限，否则临时目录无法清理
+    }
+  });
+
+  it('对照：子目录被真删除 → 子树 3 条正常清理(removed=3、非 stale)，与"暂时不可读保命"分叉', async () => {
+    freshEnv('p2f-del');
+    const { dir, sub } = buildDirSrc('p2f-del');
+    const source = mkDirSource({ type: 'dir', name: 'FD', target: dir }).source;
+    const r1 = await refreshSource(source.id);
+    assert.equal(r1.itemCount, 13);
+
+    fs.rmSync(sub, { recursive: true, force: true }); // 上游确认删除整个子目录（无 readdir 错误：目录直接不见）
+    const r2 = await refreshSource(source.id);
+    assert.equal(r2.errors, 0, '整目录删除不产生抓取错误');
+    assert.equal(r2.removed, 3, '子树 3 条按确认消失正常清理');
+    assert.equal(r2.staleCount, 0, '真删除不得被 stale 保命');
+    assert.equal(r2.itemCount, 10);
+    const pre = sub + path.sep;
+    assert.ok(!readManifest(source.id).items.some((i) => String(i.origin).startsWith(pre)), '已删子树不应留在 manifest');
+  });
+});

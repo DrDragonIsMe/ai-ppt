@@ -67,6 +67,13 @@ export async function refreshSource(sourceOrId, opts = {}) {
   const erroredOrigins = new Set(); // P1-A：本轮明确抓取/抽取失败的 origin 集合，用于部分失败时按 origin 保命
   const confirmedGoneOrigins = new Set(); // P2-G：本轮上游确认删除（404/410/ENOENT）的 origin → 正常 prune、绝不 stale
   let confirmedGoneCount = 0; // P2-G：确认删除的错误数——不计入降级阈值（它们恰恰证明上游真的没了）
+  // P2-F：dir/vault 的目录级错误，其 origin 是被卡住的**目录**本身，而条目 origin 是该目录下的**文件绝对路径**——
+  // 单靠精确 origin 匹配必然对不上、把整棵子树当"上游确认删除"物理删光（评审活体复现 13→10、无任何保命信号）。
+  // 故除精确 origin 外，再记录"失败/已删目录前缀"，让该目录下的既有子树条目命中同一判定：瞬时不可读(EACCES…)→子树保命；
+  // 目录真被删(ENOENT=confirmed-gone)→子树正常清理。
+  const isDirVault = source.type === 'dir' || source.type === 'vault';
+  const erroredPrefixes = new Set();
+  const confirmedGonePrefixes = new Set();
   let added = 0; let updated = 0; let unchanged = 0;
   let truncation = null; // { collected, dropped, total, cap }
   let policySkip = null; // P2-E：{ skipped, samples[] }——被禁入/敏感清单跳过的条目（可观测）
@@ -84,11 +91,15 @@ export async function refreshSource(sourceOrId, opts = {}) {
       errors.push({ origin: entry.origin || null, error: entry.error || 'unknown error' });
       if (isConfirmedGone(entry)) {
         // P2-G：上游确认删除 → 记入 confirmedGone（正常 prune），不进 erroredOrigins（否则会被永久 stale 保命）。
-        if (entry.origin) confirmedGoneOrigins.add(entry.origin);
+        if (entry.origin) {
+          confirmedGoneOrigins.add(entry.origin);
+          if (isDirVault) confirmedGonePrefixes.add(entry.origin + path.sep); // P2-F：目录被删 → 该子树一并正常清理
+        }
         confirmedGoneCount++;
       } else if (entry.origin) {
         // P1-A：未确认失败（5xx/401/403/429/超时/网络/瞬时不可读）→ 按 origin 保命。
         erroredOrigins.add(entry.origin);
+        if (isDirVault) erroredPrefixes.add(entry.origin + path.sep); // P2-F：目录暂时不可读 → 该子树条目一并保命
       }
       onEvent({ step: 'fetch-error', message: `抓取失败：${entry.origin || ''}`, detail: { origin: entry.origin, error: entry.error } });
       continue;
@@ -204,17 +215,21 @@ export async function refreshSource(sourceOrId, opts = {}) {
     });
   } else {
     const itemsDir = sourceItemsDir(sourceId);
+    const erroredPre = isDirVault ? [...erroredPrefixes] : []; // P2-F：dir/vault 失败目录前缀
+    const gonePre = isDirVault ? [...confirmedGonePrefixes] : []; // P2-F：dir/vault 已删目录前缀
     for (const old of prevItems) {
       if (newIds.has(old.id)) continue; // 本轮已重新收录，正常
       const o = old.origin;
-      // P2-G：本轮上游确认删除（404/410/ENOENT）→ 正常清理，即便整体降级也不 stale（缓存要能减）。
-      if (o != null && confirmedGoneOrigins.has(o)) {
+      const oStr = String(o || '');
+      // P2-G：本轮上游确认删除（404/410/ENOENT，含其目录前缀 P2-F）→ 正常清理，即便整体降级也不 stale（缓存要能减）。
+      const gone = (o != null && confirmedGoneOrigins.has(o)) || gonePre.some((pre) => oStr.startsWith(pre));
+      if (gone) {
         try { fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true }); removed++; } catch { /* 可能已不在 */ }
         continue;
       }
-      // P1-A：本轮明确失败（origin 命中）或整体降级（兜底 origin 对不上的边角）→ 标 stale 保命，绝不 rm。
-      const errored = o != null && erroredOrigins.has(o);
-      if (errored || overallDegraded) {
+      // P1-A/P2-F：本轮明确失败（origin 命中，或 dir/vault 子树落在失败目录前缀下）或整体降级 → 标 stale 保命，绝不 rm。
+      const covered = (o != null && erroredOrigins.has(o)) || erroredPre.some((pre) => oStr.startsWith(pre));
+      if (covered || overallDegraded) {
         staleKeptItems.push({ ...old, stale: true });
         stalePreserved++;
         continue;
