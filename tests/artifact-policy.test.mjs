@@ -15,8 +15,12 @@ function git(args, cwd = repoRoot) {
   return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
 }
 
+// -z：NUL 分隔取真实未转义路径。默认 LF 形态下 git 会把非 ASCII 路径 C-style 转义成
+// "…\344\270\255…"（本仓 26 个 CJK 路径）；JS 侧正则（如扩展名、目录前缀匹配）对着
+// 带首尾双引号的字面量全部失配，喂给 git 命令则依赖 check-ignore 未文档化的 stdin
+// unquote 行为。统一走 -z，护栏对任何 git 版本语义确定。
 function trackedFiles() {
-  return git(['ls-files']).split('\n').filter(Boolean);
+  return git(['ls-files', '-z']).split('\0').filter(Boolean);
 }
 
 // 仓库根零引用杂物：screenshot-main.png（文档截图残留）、lark-auth-qr.png（塔的 worktree
@@ -110,23 +114,40 @@ test('artifact policy: .gitignore ignores a node_modules symlink (isolated repo)
 // (g) 类级护栏：任何当前被跟踪的路径都不得命中 ignore 规则。
 // 一次性照出「收紧规则静默命中已跟踪内容」这一整类 bug（如未锚定的 marketing/ 误伤 docs/marketing/）。
 // --no-index 必须带：否则 check-ignore 会因「文件在索引中」直接跳过，永不报忽略。
-// check-ignore -v 对「最后命中 negation（!pattern）」的路径也会打印，但那些路径并未被忽略，需滤掉。
+// 输入用 -z + NUL（真实路径直达，不依赖 git 对转义输入的 stdin unquote）；
+// check-ignore --no-index -v 对「最后命中 negation（!pattern）」的路径也会打印，但那些
+// 路径并未被忽略，按 pattern 是否以 ! 开头滤掉。
 test('artifact policy: no tracked path matches an ignore rule', () => {
+  const paths = trackedFiles();
+  // 承重自检：本断言的输入若退化（解析错误 → 空集/纯 ASCII 集），必须立刻变红而不是静默空跑。
+  assert.ok(
+    paths.length > 100,
+    `tracked 路径数仅 ${paths.length}，远低于全仓规模（~230）——路径解析可能出错，本断言正在空跑`,
+  );
+  assert.ok(
+    paths.some((p) => /[^\x00-\x7F]/.test(p)),
+    '核查样本不含任何非 ASCII 路径——quotePath 转义重新混入，本断言对中文文件名失明',
+  );
+
   let out = '';
   try {
     out = execFileSync(
       'git',
-      ['-C', repoRoot, 'check-ignore', '--no-index', '-v', '--stdin'],
-      { encoding: 'utf8', input: `${trackedFiles().join('\n')}\n` },
+      ['-C', repoRoot, 'check-ignore', '--no-index', '-v', '--stdin', '-z'],
+      { encoding: 'utf8', input: `${paths.join('\0')}\0` },
     );
   } catch (err) {
     if (err.status === 1) return; // 没有任何路径命中 ignore 规则——正是期望状态
     throw err;
   }
-  const violations = out.split('\n').filter(Boolean).filter((line) => {
-    const rule = line.split('\t')[0].split(':').slice(2).join(':');
-    return !rule.startsWith('!');
-  });
+  // -v 配 -z：每条记录 4 个 NUL 分隔字段 source \0 line \0 pattern \0 pathname
+  const fields = out.split('\0').filter((s) => s !== '');
+  assert.equal(fields.length % 4, 0, `check-ignore -v -z 输出结构异常：${JSON.stringify(out.slice(0, 200))}`);
+  const violations = [];
+  for (let i = 0; i + 3 < fields.length; i += 4) {
+    const [source, line, pattern, pathname] = fields.slice(i, i + 4);
+    if (!pattern.startsWith('!')) violations.push(`${source}:${line}:${pattern}\t${pathname}`);
+  }
   assert.deepEqual(
     violations,
     [],
