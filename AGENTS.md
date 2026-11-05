@@ -43,7 +43,10 @@ ai-ppt/
    - 可调 `options`：`include`（glob 数组）、`maxPages`（1–500，默认 30）、`maxBytesPerItem`（1KB–10MB，默认 512KB）、`depth`（0–5，默认 1，仅 site）、`label`、`anyOfTags`。`dir` 默认仅收文本类（`DEFAULT_DIR_INCLUDE`），`vault` 仅 `**/*.md`。
    - HTTP 端点（`routes/sources.mjs`）：`GET/POST /api/sources`、`PUT/DELETE /api/sources/:id`、`POST /api/sources/:id/refresh`、`GET /api/sources/:id/refresh/events`、`GET /api/sources/:id/items`、`GET /api/sources/items`、`POST /api/sources/preview`。错误枚举 `{400,403,404,409,500}`，其中 403 为外部目录授权撤回；全局刷新并发上限 2 → 429。
    - 安全红线：`dir`/`vault` target 必须解析为真实目录（系统按 `realpath` 重跑归属与敏感清单检查，不建议以符号链接作为 target）；词法路径与真实路径均不得穿越禁入目录段 `.git` / `.backup` / `.snapshots` / `node_modules`；敏感位置/文件名拒绝清单（`.ssh` / `.aws` / `.docker` / `.config` / `keychain`、`/etc`、`/var/root`、`.env*`、`*.pem` / `*.key`、SSH 私钥、`credentials*`、`.ai-ppt-config.json`、`.ai-ppt-tasks.json` 等）一律拒收；只收文本类条目，视频/大素材不会进入素材库。
-   - 越 ROOT 外部目录源双闸：`AI_PPT_ALLOW_EXTERNAL_SOURCES=1` 环境变量 + 请求体 `acknowledgeExternalPath:true`；刷新时还会重查授权，关掉 env 后存量外部源同步 403。确认标记只在目标确为越界外部目录时才持久化，内部源不“免费铸造”；PUT 改 `target`/`type` 时不继承旧标记。
+   - 越 ROOT 外部目录源双闸：**授权闸**（配置文件优先、env 三段式强制覆盖）+ 请求体 `acknowledgeExternalPath:true`。授权读 `.ai-ppt-config.json` 的 `sourcesConfig.allowExternalPaths`（设置面板勾选，默认 false，每次调用即时 `readGlobalConfig()` 无缓存）；`AI_PPT_ALLOW_EXTERNAL_SOURCES` 显式真值强制开、显式 `0|false|no` 强制关、未设或空才看配置文件。刷新时还会重查授权，撤回后存量外部源同步 403。确认标记只在目标确为越界外部目录时才持久化，内部源不“免费铸造”；PUT 改 `target`/`type` 时不继承旧标记。
+   - 低相关页过滤（site/url 源，`scripts/sources/collect-site.mjs` 的 `isLowRelevancePage`）：入库前按「强信号标题（登录/法务封闭词干 + `404|403`+纯栏目名的封闭准入表）→ 白名单短路 → 标题/URL 黑名单 → 品牌口号 → 登录墙正文」顺序判定，丢弃登录墙、404 栏目页、口号式营销页；丢弃数经 `lowRelevanceSkipped`/`lowRelevanceSamples` 透出（manifest、`refreshSource` summary、NDJSON `low-relevance-skipped` 事件、`GET /api/sources`）。`options.skipLowRelevanceCheck:true` 可整源关闭。**设计边界**：正文厚实的站点首页/营销页不拦（品牌口号规则要求「口号式标题 且（浅层路径 或 正文<200）」），表外栏目别名（如 `404 视频学院`）不拦——宁可多收一条噪声也不误杀知识。
+   - 根级不可读响亮失败：`dir`/`vault` 采集器根目录不可读时 reject 500，该轮不写 manifest、磁盘条目一条不少（不得把「这次没读到」当「上游没了」）。
+   - prune 熔断（B091300）：`refresh.mjs` 先分类后执行；「本轮没抓到也没报错」的兜底清理数 / 既有语料数 超阈值（`sourcesConfig.pruneGuardRatio`，默认 0.2）时**一条不删**、全部转 stale 保留，发 `prune-blocked` 事件并在 manifest/summary/`GET /api/sources` 透出 `pruneGuardBlocked`/`pruneGuardCandidates`/`pruneGuardRatio`/`pruneGuardThreshold`/`pruneGuardSamples`。上游确认消失（404/410/文件级 ENOENT）不受熔断影响；`sourcesConfig.pruneGuard:false` 回到旧语义，非法阈值回落默认不抛错。
    - 可观测性：`maxPages` 截断、部分失败保命（`degraded`/`staleCount`）、上游确认消失清理（`pruned`/`prunedUnconfirmed`）、安全清单跳过（`policySkipped`）均通过 SSE 事件与 `GET /api/sources` 返回给前端，不静默。
 
 3c. **营销大纲与批量生成**：从多源素材库取材 → 生成营销大纲 → 按角度批量生成独立 deck。
@@ -115,4 +118,5 @@ ai-ppt/
 
 ## 测试
 
-- `npm test` → `node --test tests/*.test.mjs`（当前基线 335 pass / 0 fail / 101 suites）；`npm run test:smoke` → `node scripts/test-smoke.mjs`。
+- `npm test` → `node --test tests/*.test.mjs`（当前基线 364 pass / 0 fail / 106 suites）；`npm run test:smoke` → `node scripts/test-smoke.mjs`。
+- **测试隔离红线**：全局配置路径可被 `AI_PPT_CONFIG_PATH` 重定向（`scripts/global-config.mjs`，每次调用即时求值），测试一律用 `freshEnv()` 分配的临时路径；**禁止**任何测试用 `process.cwd()` 定位仓库根真实的 `.ai-ppt-config.json`（曾在 beforeEach 里 unlink 掉用户配置）。两条守卫用例钉住：写配置后仓库根文件字节不变、静态扫描禁止该写法。同理，「未触碰某 gitignored 文件」的验收证据不得用 `git status --porcelain <path>`（对缺失文件也返回空），要用 `stat`/内容哈希。

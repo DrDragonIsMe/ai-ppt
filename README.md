@@ -3,7 +3,7 @@
 [![version](https://img.shields.io/badge/version-2.9.0-blue)](https://github.com/DrDragonIsMe/ai-ppt)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![tests](https://img.shields.io/badge/tests-335%20passed-brightgreen)](tests)
+[![tests](https://img.shields.io/badge/tests-364%20passed-brightgreen)](tests)
 [![在线演示](https://img.shields.io/badge/demo-%E5%9C%A8%E7%BA%BF%E6%BC%94%E7%A4%BA-teal)](https://drdragonisme.github.io/ai-ppt/)
 
 **[English](README.en.md)** | 中文 | **[在线演示](https://drdragonisme.github.io/ai-ppt/)**（需开启 GitHub Pages，见下文）
@@ -269,7 +269,9 @@ npm run backup
      -H 'Content-Type: application/json' \
      -d '{"type":"site","name":"官网","target":"https://example.com","options":{"depth":1}}'
    ```
-   - 源类型：`dir | url | site | vault`；外部目录源需同时设置 `AI_PPT_ALLOW_EXTERNAL_SOURCES=1` 并在请求中带 `acknowledgeExternalPath:true`。
+   - 源类型：`dir | url | site | vault`；外部目录源需授权（设置面板勾选「允许仓库外的目录源」，即 `sourcesConfig.allowExternalPaths`，默认关；环境变量 `AI_PPT_ALLOW_EXTERNAL_SOURCES` 可强制开/关，未设时才看配置文件）并在请求中带 `acknowledgeExternalPath:true`。
+   - 低相关页过滤：site/url 源入库前丢弃登录墙、404 栏目页、口号式营销页，丢弃数见 `lowRelevanceSkipped`；`options.skipLowRelevanceCheck:true` 可关闭。正文厚实的站点首页/营销页属有意不拦。
+   - prune 熔断：本轮未再采到的素材占比超 `sourcesConfig.pruneGuardRatio`（默认 20%）时一条不删、标 stale 保留并发出 `prune-blocked` 告警；`sourcesConfig.pruneGuard:false` 关闭。
    - 可调参数：`maxPages`（默认 30）、`maxBytesPerItem`（默认 512KB）、`depth`（仅 site，默认 1）、`include`、`label`、`anyOfTags`。
 
 2. **刷新抓取**：
@@ -404,7 +406,7 @@ npx ai-ppt-skills
 - **营销大纲**：内置 `marketing-standard` 六角度集；逐角度 LLM 产出契约形状大纲，无 LLM 走确定性兜底；`evidenceItemIds` 防编造校验剔除不存在素材库的引用。
 - **批量生成**：按大纲角度串行生成独立 deck，`ai-ppt.json.sourceSelection.kind='outline'` 双向绑定；全局单批次 409 去重、可取消、自动 lint + 封面截图。
 - **产物策略**：`export/`、`cover.png`、`marketing/`、`vault/.meta/source-cache/`、`references/`、视频文件不入 git；`demo/` 与 `web/icons/` 为 GitHub Pages/PWA 有意保留。
-- **文档**：AGENTS.md 新增素材库/营销/产物约定；README 中英新增工作流章节；测试入口统一为 `node --test tests/*.test.mjs`（335 pass / 101 suites）。
+- **文档**：AGENTS.md 新增素材库/营销/产物约定；README 中英新增工作流章节；测试入口统一为 `node --test tests/*.test.mjs`（364 pass / 106 suites）。
 
 ### v2.6.0 — 易用性修复与信息架构收拢（2026-07）
 

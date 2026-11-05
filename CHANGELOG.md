@@ -4,14 +4,17 @@
 
 ## v2.9.0 — 素材库 → 营销大纲 → 批量 PPT（2026-11）
 
-> 本版本为发布目标版本；`package.json` 的 `version` 与 `web/sw.js` 的 `CACHE_VERSION` 由塔在发布时统一对齐。
+> `package.json` 的 `version` 与 `web/sw.js` 的 `CACHE_VERSION` 均已对齐 2.9.0。
 
 ### 多数据源素材库
 
 - 四种源类型 `dir / url / site / vault`（`scripts/sources/registry.mjs` 的 `SOURCE_TYPES`）。注册表 `sources.json`（已 gitignore），抓取缓存 `vault/.meta/source-cache/<sourceId>/`（`manifest.json` + `items/<itemId>.md`，已 gitignore）。
 - 增量刷新：同一 origin 的 itemId 稳定（`<sourceId>--<12位sha256hex>`），hash 未变的条目不重写，上游消失的条目在整批成功后清理（`scripts/sources/refresh.mjs`）。
 - 默认参数物化：`maxPages=30`、`maxBytesPerItem=512KB`、`depth=1`（site），`dir` 默认仅收文本类，`vault` 仅 `**/*.md`。`maxPages` 截断、部分失败 stale 保命、安全清单跳过均通过 SSE 事件与 `GET /api/sources` 可观测。
-- 安全红线：禁入目录段 `.git/.backup/.snapshots/node_modules`；敏感位置/文件名拒绝清单（`.ssh/.aws/.docker/.config`、keychain、`/etc`、`/var/root`、`.env*`、`*.pem/key`、credentials、`.ai-ppt-config.json`、`.ai-ppt-tasks.json` 等）；词法路径与 `realpath` 双重检查，仅文本类条目入库。越 ROOT 外部目录需 `AI_PPT_ALLOW_EXTERNAL_SOURCES=1` + `acknowledgeExternalPath:true`，刷新时授权重查。
+- 安全红线：禁入目录段 `.git/.backup/.snapshots/node_modules`；敏感位置/文件名拒绝清单（`.ssh/.aws/.docker/.config`、keychain、`/etc`、`/var/root`、`.env*`、`*.pem/key`、credentials、`.ai-ppt-config.json`、`.ai-ppt-tasks.json` 等）；词法路径与 `realpath` 双重检查，仅文本类条目入库。越 ROOT 外部目录授权改为**配置文件优先**（`sourcesConfig.allowExternalPaths`，默认 false）+ `AI_PPT_ALLOW_EXTERNAL_SOURCES` 三段式强制覆盖（显式真值强制开 / 显式 `0|false|no` 强制关 / 未设看配置文件），另需 `acknowledgeExternalPath:true`，刷新时授权重查。dir/vault 根级不可读时响亮 reject 500，不写 manifest、不动磁盘条目。
+- 低相关页过滤（M17/M20/M21）：site/url 源入库前丢弃登录墙、404 栏目页、口号式营销页；判定顺序为「强信号标题（登录/法务封闭词干 + `404|403`+纯栏目名封闭准入表）→ 白名单短路 → 标题/URL 黑名单 → 品牌口号 → 登录墙正文」。`lowRelevanceSkipped`/`lowRelevanceSamples` 全链路透出，`options.skipLowRelevanceCheck` 可关闭。设计边界：正文厚实的站点首页/营销页与表外栏目别名不拦。
+- prune 熔断（B091300）：兜底清理比例超 `sourcesConfig.pruneGuardRatio`（默认 0.2）时一条不删、转 stale 并告警 `prune-blocked`；confirmed-gone 不受影响；`sourcesConfig.pruneGuard:false` 关闭。
+- 测试隔离修复：`AI_PPT_CONFIG_PATH` 可重定向全局配置路径；此前 M19 测试用 `process.cwd()` 定位并在 beforeEach 删除该文件，导致在仓库根跑 `npm test` 会删掉真实全局配置，已修并加两条守卫用例。
 - HTTP 端点：`GET/POST /api/sources`、`PUT/DELETE /api/sources/:id`、`POST /api/sources/:id/refresh`、`GET /api/sources/:id/refresh/events`、`GET /api/sources/:id/items`、`GET /api/sources/items`、`POST /api/sources/preview`；错误枚举 `{400,403,404,409,500}`，全局并发上限 2 → 429。
 
 ### 营销大纲与批量生成
@@ -27,7 +30,7 @@
 - 明确不入 git：生成物目录 `export/`、`cover.png`、`marketing/`、`vault/.meta/source-cache/`、`references/`、`sources.json`、`.ai-ppt-tasks.json`、`.ai-ppt-config.json`，以及所有视频文件 `*.mp4 / *.mov / *.m4v / *.webm / *.avi`。`projects/*` 整体由 `.gitignore` 排除。
 - 有意保留的例外：`demo/` 封面是 GitHub Pages 部署源；`web/icons/` 是 PWA 源资源。
 - 回归护栏：`tests/artifact-policy.test.mjs` 7 条断言覆盖视频、生成物目录、Pages/PWA 图标、node_modules 软链、已跟踪路径不被 ignore 规则命中等。
-- `AGENTS.md` 新增「多数据源素材库」「营销大纲与批量生成」「产物与素材入库策略」三条核心约定；`README.md` / `README.en.md` 新增工作流章节、刷新目录结构图、新增 `/ppt-sources` 与 `/ppt-marketing` skill；测试入口统一为 `node --test tests/*.test.mjs`（当前基线 335 pass / 0 fail / 101 suites）。
+- `AGENTS.md` 新增「多数据源素材库」「营销大纲与批量生成」「产物与素材入库策略」三条核心约定；`README.md` / `README.en.md` 新增工作流章节、刷新目录结构图、新增 `/ppt-sources` 与 `/ppt-marketing` skill；测试入口统一为 `node --test tests/*.test.mjs`（当前基线 364 pass / 0 fail / 106 suites）。
 
 ## v2.8.1 — Web UI i18n（2026-07）
 

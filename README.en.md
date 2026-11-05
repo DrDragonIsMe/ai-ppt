@@ -3,7 +3,7 @@
 [![version](https://img.shields.io/badge/version-2.9.0-blue)](https://github.com/DrDragonIsMe/ai-ppt)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![tests](https://img.shields.io/badge/tests-335%20passed-brightgreen)](tests)
+[![tests](https://img.shields.io/badge/tests-364%20passed-brightgreen)](tests)
 [![Live demo](https://img.shields.io/badge/demo-live%20demo-teal)](https://drdragonisme.github.io/ai-ppt/)
 
 [中文](README.md) | **English** | **[Live demo](https://drdragonisme.github.io/ai-ppt/)** (requires GitHub Pages, see below)
@@ -271,7 +271,9 @@ The full workflow for turning multi-source information into a set of angle-speci
      -H 'Content-Type: application/json' \
      -d '{"type":"site","name":"Website","target":"https://example.com","options":{"depth":1}}'
    ```
-   - Source types: `dir | url | site | vault`. External directories require `AI_PPT_ALLOW_EXTERNAL_SOURCES=1` **and** `acknowledgeExternalPath:true` in the request.
+   - Source types: `dir | url | site | vault`. External directories need authorization (Settings → allow directories outside the repo, i.e. `sourcesConfig.allowExternalPaths`, off by default; `AI_PPT_ALLOW_EXTERNAL_SOURCES` force-enables/disables it, and the config file is only consulted when the env var is unset) plus `acknowledgeExternalPath:true` in the request.
+   - Low-relevance filtering: site/url sources drop login walls, 404 section pages and slogan-only marketing pages before ingestion; see `lowRelevanceSkipped`. Disable per source with `options.skipLowRelevanceCheck:true`. Content-rich site homepages / marketing pages are intentionally kept.
+   - Prune circuit breaker: when items not re-collected this round exceed `sourcesConfig.pruneGuardRatio` (default 20%) of the existing corpus, nothing is deleted — items are kept as `stale` and a `prune-blocked` warning is emitted. Set `sourcesConfig.pruneGuard:false` to restore the old behavior.
    - Tunable options: `maxPages` (default 30), `maxBytesPerItem` (default 512KB), `depth` (site only, default 1), `include`, `label`, `anyOfTags`.
 
 2. **Refresh sources**:
@@ -406,7 +408,7 @@ npx ai-ppt-skills
 - **Marketing outlines**: built-in `marketing-standard` six-angle set; per-angle LLM output in a strict contract shape, deterministic fallback when no LLM; anti-fabrication validation drops references to non-existent item IDs.
 - **Batch generation**: serial per-angle deck generation, `ai-ppt.json.sourceSelection.kind='outline'` binding; global single-batch 409 deduplication, cancellation, auto design-lint and cover capture.
 - **Artifact policy**: `export/`, `cover.png`, `marketing/`, `vault/.meta/source-cache/`, `references/`, and video files are excluded from git; `demo/` and `web/icons/` are intentionally kept for GitHub Pages / PWA.
-- **Docs**: AGENTS.md adds source/marketing/artifact conventions; READMEs add the new workflow chapter; test entry unified to `node --test tests/*.test.mjs` (335 pass / 101 suites).
+- **Docs**: AGENTS.md adds source/marketing/artifact conventions; READMEs add the new workflow chapter; test entry unified to `node --test tests/*.test.mjs` (364 pass / 106 suites).
 
 ### v2.6.0 — Usability fixes & information-architecture consolidation (2026-07)
 
