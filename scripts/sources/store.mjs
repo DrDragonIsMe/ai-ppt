@@ -57,8 +57,14 @@ export function writeManifest(sourceId, manifest) {
     fetchedAt: manifest.fetchedAt || new Date().toISOString(),
     fingerprint: manifest.fingerprint || '',
     items: Array.isArray(manifest.items) ? manifest.items : [],
-    // P1-4：采集整体失败时保留既有语料的可观测标记（不静默）
-    ...(manifest.preserved ? { preserved: true, preserveReason: manifest.preserveReason || 'collection-failed' } : {}),
+    // P1-4：采集整体失败时保留既有语料的可观测标记（不静默）。
+    // P1-①：preserved 允许携带具体原因值 'all-confirmed-gone'（上游本轮全部报告已消失但整源归零，仍保命），
+    // 其余情况为布尔 true（采集失败）。既有键 preserved 不改名不删除。
+    ...(manifest.preserved ? { preserved: manifest.preserved, preserveReason: manifest.preserveReason || 'collection-failed' } : {}),
+    // P1-①.3：prune 侧清理可观测（加性字段，既有键不动）
+    ...(Number.isFinite(manifest.pruned) ? { pruned: manifest.pruned } : {}),
+    ...(Number.isFinite(manifest.prunedConfirmedGone) ? { prunedConfirmedGone: manifest.prunedConfirmedGone } : {}),
+    ...(Number.isFinite(manifest.prunedUnconfirmed) ? { prunedUnconfirmed: manifest.prunedUnconfirmed } : {}),
     // P1-A：部分失败按 origin 保命后的降级标记（加性字段，供 GET /api/sources 与前端徽标使用）
     ...(manifest.degraded ? { degraded: true, staleCount: manifest.staleCount || 0 } : {}),
     // P2-E：命中禁入/敏感清单跳过的条目数与样本（加性字段，形状对齐 droppedCount 徽标）

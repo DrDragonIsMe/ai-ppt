@@ -197,21 +197,35 @@ export async function refreshSource(sourceOrId, opts = {}) {
   // 降级阈值只统计「未确认失败」：confirmed-gone（404/410/ENOENT）恰恰证明上游真没了，
   // 不该把它们计入 errors 而把整库推向保守保命。
   const uncertainErrors = errors.length - confirmedGoneCount;
-  const totalFailure = newItems.length === 0 && prevItemCount > 0 && uncertainErrors > 0;
+  // P1-①（r5 回归修复）：整源归零闸门必须只看「本轮有没有错误」，绝不能只看「未确认错误」。
+  // 反例：site 源入口页单独 404（本轮 1 条 confirmed-gone 错误、0 入库），10 条子页本轮根本没被抓过、
+  // 上游对它们没有任何"已删除"表态——若用 uncertainErrors>0 判定，闸门被免检放行，子页会落进 prune 末尾
+  // "本轮没抓到也没报错 → 正常清理"兜底分支被物理删光（评审实测 prev=11 → removed=11）。
+  // 因此"部分轮次逐条确认消失 → 该清"（走 1D：有成功入库、不进此闸门）与"整源 0 入库 → 保命"必须分开。
+  const totalFailure = newItems.length === 0 && prevItemCount > 0 && errors.length > 0;
   const overallDegraded = !totalFailure
     && prevItemCount > 0
     && uncertainErrors > 0
     && uncertainErrors / prevItemCount > 0.5;
   const pruneBlocked = totalFailure; // 保留既有变量名与 'preserve' 语义
+  // P1-①.2：整源归零但本轮所有错误都是 confirmed-gone（上游对全部条目报告已消失，常见于入口页改版/404）——
+  // 仍保命，但要与"抓取全失败(5xx/网络)"区分开，可观测地记 'all-confirmed-gone'。
+  const allConfirmedGone = pruneBlocked && errors.length > 0 && errors.length === confirmedGoneCount;
 
   let removed = 0;
+  let removedConfirmedGone = 0; // P1-①.3：因上游确认删除（404/410/ENOENT 或前缀命中）而清理的条数
+  let removedUnconfirmed = 0;   // P1-①.3：兜底分支清理（本轮没抓到也没报错，视为上游确认消失）的条数
   let stalePreserved = 0;
   const staleKeptItems = [];
   if (pruneBlocked) {
     onEvent({
       step: 'preserve',
-      message: `素材源「${source.name}」本轮采集失败（0 入库 / ${uncertainErrors} 未确认错误），已跳过清理并保留既有 ${prevItemCount} 条素材`,
-      detail: { keptItems: prevItemCount, errors: uncertainErrors },
+      message: allConfirmedGone
+        ? `素材源「${source.name}」上游本轮对全部 ${errors.length} 条抓取报告已消失（404/410/ENOENT），但 0 入库——已保留既有 ${prevItemCount} 条素材未清理（绝不用"整源归零"冒充"全部删除"；确需清理请显式重建源）`
+        : `素材源「${source.name}」本轮采集失败（0 入库 / ${uncertainErrors} 未确认错误），已跳过清理并保留既有 ${prevItemCount} 条素材`,
+      detail: allConfirmedGone
+        ? { keptItems: prevItemCount, errors: errors.length, confirmedGone: confirmedGoneCount, reason: 'all-confirmed-gone' }
+        : { keptItems: prevItemCount, errors: uncertainErrors },
     });
   } else {
     const itemsDir = sourceItemsDir(sourceId);
@@ -224,7 +238,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
       // P2-G：本轮上游确认删除（404/410/ENOENT，含其目录前缀 P2-F）→ 正常清理，即便整体降级也不 stale（缓存要能减）。
       const gone = (o != null && confirmedGoneOrigins.has(o)) || gonePre.some((pre) => oStr.startsWith(pre));
       if (gone) {
-        try { fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true }); removed++; } catch { /* 可能已不在 */ }
+        try { fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true }); removed++; removedConfirmedGone++; } catch { /* 可能已不在 */ }
         continue;
       }
       // P1-A/P2-F：本轮明确失败（origin 命中，或 dir/vault 子树落在失败目录前缀下）或整体降级 → 标 stale 保命，绝不 rm。
@@ -238,7 +252,17 @@ export async function refreshSource(sourceOrId, opts = {}) {
       try {
         fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true });
         removed++;
+        removedUnconfirmed++;
       } catch { /* 文件可能已不在 */ }
+    }
+    // P1-①.3：prune 侧可观测性——只要发生清理就广播 'pruned'，让"语料被清理"在 SSE 流可见，
+    // 并区分"上游确认删除"与"本轮没抓到"两类，杜绝静默清空。
+    if (removed > 0) {
+      onEvent({
+        step: 'pruned',
+        message: `素材源「${source.name}」清理 ${removed} 条未再收录的素材（上游确认消失 ${removedConfirmedGone}，本轮未抓到兜底清理 ${removedUnconfirmed}）`,
+        detail: { removed, confirmedGone: removedConfirmedGone, unconfirmed: removedUnconfirmed },
+      });
     }
     if (stalePreserved > 0) {
       onEvent({
@@ -261,7 +285,9 @@ export async function refreshSource(sourceOrId, opts = {}) {
     fetchedAt,
     fingerprint,
     items: outItems,
-    ...(pruneBlocked ? { preserved: true, preserveReason: 'collection-failed' } : {}),
+    ...(pruneBlocked ? { preserved: allConfirmedGone ? 'all-confirmed-gone' : true, preserveReason: allConfirmedGone ? 'all-confirmed-gone' : 'collection-failed' } : {}),
+    // P1-①.3：prune 侧可观测（加性字段，既有键不动）
+    ...(removed > 0 ? { pruned: removed, prunedConfirmedGone: removedConfirmedGone, prunedUnconfirmed: removedUnconfirmed } : {}),
     // P1-A：部分失败保命的可观测标记（加性字段）
     ...(degraded ? { degraded: true, staleCount: stalePreserved } : {}),
     // P2-E：命中禁入/敏感清单被跳过的条目数（加性字段，形状对齐 droppedCount 徽标）
@@ -283,6 +309,10 @@ export async function refreshSource(sourceOrId, opts = {}) {
     updated,
     unchanged,
     removed,
+    // P1-①.3：清理可观测（加性字段，removed/preserved 原键不改名不删除）
+    pruned: removed,
+    prunedConfirmedGone: removedConfirmedGone,
+    prunedUnconfirmed: removedUnconfirmed,
     errors: errors.length,
     errorList: errors,
     fingerprint,

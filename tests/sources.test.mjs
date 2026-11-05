@@ -1028,6 +1028,88 @@ describe('P1-A partial-failure refresh keeps errored origins as stale', () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// P1-①（r5 回归）：整源归零闸门必须重看「本轮有无错误」，不能只看「未确认错误」。
+// 成对锁死两种形状，防止来回摆：
+//   1A 仅入口页 404（子页本轮根本没抓过）→ 必须保命 removed=0（旧闸门被 uncertainErrors=0 免检 → 清零，即回归）。
+//   1D 入口成功 + 子页全 404（每子页本轮都真被抓到并确认消失）→ 必须逐条清理 removed=10（P2-G 语义要能减）。
+// ---------------------------------------------------------------------------
+describe('P1-① entry-only confirmed-gone must NOT wipe corpus (r5 regression)', () => {
+  it('1A：site 源次轮仅入口页 404 → removed=0 / preserved / itemCount 不变，且广播 all-confirmed-gone preserve', async () => {
+    freshEnv('p1-1a');
+    const ENTRY = 'http://site.test/';
+    const httpErr = (msg, status) => { const e = new Error(msg); e.httpStatus = status; return e; };
+    const links = Array.from({ length: 10 }, (_, i) => `<a href="/p${i + 1}.html">P${i + 1}</a>`).join('');
+    let round = 1;
+    const fetchStub = async (url) => {
+      if (url === ENTRY) {
+        if (round === 2) throw httpErr('404 Not Found', 404); // 入口页改版/404
+        return { html: `<title>Home</title>${links}`, finalUrl: ENTRY };
+      }
+      return { html: `<title>${url}</title><article>body</article>`, finalUrl: url };
+    };
+    const source = upsertSource({ type: 'site', name: 'E', target: ENTRY, options: { depth: 1, maxPages: 20 } }).source;
+
+    const r1 = await refreshSource(source.id, { fetchPage: fetchStub });
+    assert.equal(r1.itemCount, 11, '首轮 entry + 10 子页全入库');
+
+    round = 2;
+    const events = [];
+    const r2 = await refreshSource(source.id, { fetchPage: fetchStub, onEvent: (e) => events.push(e) });
+
+    assert.equal(r2.errors, 1, '仅入口页 404 → 1 条错误，子页本轮根本没被抓');
+    assert.equal(r2.removed, 0, 'P1-①：整源归零 + 全 confirmed-gone 仍须保命，绝不清空（回归点）');
+    assert.equal(r2.itemCount, 11, '11 条一条不少');
+    assert.equal(r2.preserved, true, 'summary.preserved=true（整源归零闸门触发）');
+    assert.ok(events.some((e) => e.step === 'preserve'), '必须广播 preserve 事件');
+
+    const m = readManifest(source.id);
+    assert.equal(m.preserved, 'all-confirmed-gone', 'manifest.preserved 记为 all-confirmed-gone 以便区分普通采集失败');
+    // 关键：10 条子页本轮根本没被抓过（只有入口 404），prev 原样保留，一条不能少。
+    const subCount = m.items.filter((i) => /\/p\d+\.html$/.test(String(i.origin))).length;
+    assert.equal(subCount, 10, '10 条未被抓取的子页必须整批保命，不因入口 404 被兜底删除（回归点）');
+    // 磁盘 11 个 .md 一个不少
+    const itemsDir = path.join(process.env.AI_PPT_SOURCE_CACHE_ROOT, source.id, 'items');
+    assert.equal(fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length, 11, '磁盘 .md 不得被清空');
+  });
+
+  it('1D：site 源次轮入口成功 + 10 子页全 404 → 逐条确认消失、正常清理 removed=10', async () => {
+    freshEnv('p1-1d');
+    const ENTRY = 'http://site.test/';
+    const httpErr = (msg, status) => { const e = new Error(msg); e.httpStatus = status; return e; };
+    const links = Array.from({ length: 10 }, (_, i) => `<a href="/p${i + 1}.html">P${i + 1}</a>`).join('');
+    let round = 1;
+    const fetchStub = async (url) => {
+      if (url === ENTRY) return { html: `<title>Home</title>${links}`, finalUrl: ENTRY };
+      if (round === 2) throw httpErr('404 Not Found', 404); // 每个子页本轮都真被抓到并确认 404
+      return { html: `<title>${url}</title><article>body</article>`, finalUrl: url };
+    };
+    const source = upsertSource({ type: 'site', name: 'D', target: ENTRY, options: { depth: 1, maxPages: 20 } }).source;
+
+    const r1 = await refreshSource(source.id, { fetchPage: fetchStub });
+    assert.equal(r1.itemCount, 11);
+
+    round = 2;
+    const events = [];
+    const r2 = await refreshSource(source.id, { fetchPage: fetchStub, onEvent: (e) => events.push(e) });
+
+    assert.equal(r2.errors, 10, '入口成功 + 10 子页各 1 条 404');
+    assert.equal(r2.preserved, false, '有成功入库（入口）→ 不触发整源归零闸门');
+    assert.equal(r2.removed, 10, 'P2-G：子页本轮逐条被抓并确认 404 → 正常清理（缓存要能减）');
+    assert.equal(r2.staleCount, 0, '全为 confirmed-gone，不应有 stale 保命');
+    assert.equal(r2.itemCount, 1, '仅入口页重抓成功');
+    // 清理可观测：pruned 事件 + 分类计数
+    const pruned = events.find((e) => e.step === 'pruned');
+    assert.ok(pruned, 'removed>0 必须广播 pruned 事件');
+    assert.equal(pruned.detail.removed, 10);
+    assert.equal(pruned.detail.confirmedGone, 10, '全部经 confirmedGoneOrigins 精确命中清理');
+    assert.equal(pruned.detail.unconfirmed, 0);
+    assert.equal(r2.prunedConfirmedGone, 10);
+    assert.equal(r2.prunedUnconfirmed, 0);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // P2-C ack 只在确为外部时持久化；PUT 改 target/type 不继承 ack；env 关对存量源撤回
 // ---------------------------------------------------------------------------
