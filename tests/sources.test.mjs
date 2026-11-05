@@ -1481,6 +1481,39 @@ describe('P2-F dir directory-level failure: transient unreadable preserves subtr
       fs.readdirSync = realReaddir;
     }
   });
+
+  it('P2-③ vault 孪生用例：子目录瞬时 EACCES → 子树 stale 保命（证明相对前缀命中，非 dir-only 假绿）', async (t) => {
+    freshEnv('p2v-eacces');
+    const vroot = fs.mkdtempSync(path.join(os.tmpdir(), 'p2v-'));
+    for (let i = 1; i <= 10; i++) fs.writeFileSync(path.join(vroot, `t${i}.md`), `# T${i}\nbody`);
+    const sub = path.join(vroot, 'sub');
+    fs.mkdirSync(sub);
+    for (let j = 1; j <= 3; j++) fs.writeFileSync(path.join(sub, `s${j}.md`), `# S${j}\nbody`);
+    const source = upsertSource({ type: 'vault', name: 'V', target: '' }).source;
+    const r1 = await refreshSource(source.id, { vaultRoot: vroot });
+    assert.equal(r1.itemCount, 13, '首轮 10 顶层 + 3 子树全入库');
+
+    fs.chmodSync(sub, 0o000);
+    try { fs.readdirSync(sub); t.skip('readdir on chmod 000 still succeeds (running as root?) — cannot exercise EACCES path'); return; }
+    catch { /* 期望 EACCES */ }
+
+    try {
+      const events = [];
+      const r2 = await refreshSource(source.id, { vaultRoot: vroot, onEvent: (e) => events.push(e) });
+      assert.equal(r2.errors, 1, '子目录 readdir EACCES 记 1 条目录级错误');
+      assert.equal(r2.removed, 0, 'P2-③：vault 目录级失败必须前缀保命，一条不删（若 collect-vault 仍 yield 绝对 dir → 这里被清零）');
+      assert.equal(r2.staleCount, 3, '该子树 3 条 stale 保命');
+      assert.equal(r2.itemCount, 13, '13 条一条不少');
+      assert.ok(events.some((e) => e.step === 'degraded'), 'vault 目录级失败必须发 degraded');
+      const m = readManifest(source.id);
+      const stale = m.items.filter((i) => i.stale === true);
+      assert.equal(stale.length, 3);
+      // vault 条目 origin 是相对路径 sub/s0.md（非绝对），前缀命中依赖 ③ 的相对 yield。
+      assert.ok(stale.every((i) => /^sub[\\/]/.test(String(i.origin))), `被保命的必须是相对子树 origin，实得 ${stale.map((i) => i.origin)}`);
+    } finally {
+      fs.chmodSync(sub, 0o755);
+    }
+  });
 });
 
 

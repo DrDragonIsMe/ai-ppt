@@ -80,7 +80,12 @@ export async function* collectVault(source, ctx = {}) {
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (err) {
-      yield { kind: 'error', origin: dir, error: `读取失败 ${dir}: ${err.message}`, code: err.code };
+      // isDirectoryLevel：读目录失败 ≠ 目录下笔记已删除——P2-② 据此判为未确认失败、子树 stale 保命。
+      // P2-③：origin 用与条目同源（path.relative(vaultRoot, dir)）的相对形式——原先是绝对 dir，
+      // 而 refresh 侧条目 origin 是 rel（形如 sub/s0.md），erroredPrefixes 前缀（dir + sep）永不命中相对 origin，
+      // 导致 vault 源目录级失败退回 r3 判 P2-F 的原始缺陷（实测 removed=3/stale=0）。改相对后前缀语义自然成立。
+      const relDir = path.relative(vaultRoot, dir);
+      yield { kind: 'error', origin: relDir, error: `读取失败 ${dir}: ${err.message}`, code: err.code, isDirectoryLevel: true };
       continue;
     }
     for (const ent of entries) {
