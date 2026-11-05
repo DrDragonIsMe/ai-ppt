@@ -11,8 +11,13 @@ import { fetchPage, extractFromHtml, extractLinks, guessTitle } from './net.mjs'
 // 目标：在入库前丢掉登录墙、法务页、404/访问受限、以及通用页脚营销页。
 // 原则：优先用标题匹配，正文仅在“整页基本只剩登录表单”这种极强信号时才用；
 // 用知识库/文档常见关键词做白名单，宁可漏杀也不误伤合法知识中心页面。
-// 优先级：登录墙/法务/404 强信号整标题命中先于白名单（见 STRONG_SIGNAL_TITLES），
-// 其余顺序不变——白名单短路 → 标题/URL 黑名单 → 品牌口号 → 登录墙正文。
+// 优先级：登录墙/法务/404 强信号（词干整标题全等 + 错误码前缀规则）命中先于白名单
+// （见 STRONG_SIGNAL_TITLES / isErrorCodeTitleSubject），其余顺序不变——白名单短路 →
+// 标题/URL 黑名单 → 品牌口号 → 登录墙正文。
+// 「· 分隔」的剥段边界（B091200 r1）：强信号判定前会把标题尾部的「· 站点名」段剥掉，
+// 但只剥**看起来像站点名**的尾段——尾段含文档/栏名词（指南/文档/docs/guide/reference 等，
+// 判据即 hasWhitelist 词表）时一律不剥，改用整标题查表。否则 `登录 · 接入指南`、
+// `Sign in · Developer Docs` 这类合法文档页会被剥成词干 `登录`/`sign in` 而误杀。
 // ---------------------------------------------------------------------------
 
 const WHITELIST_ASC = [
@@ -43,18 +48,23 @@ const WHITELIST_CN = [
 ];
 
 // ---------------------------------------------------------------------------
-// 强信号整标题优先判定（B091200）
+// 强信号整标题优先判定（B091200 / B091200 r1）
 // 登录墙 / 法务 / 404-受限 三类强信号必须先于 hasWhitelist 短路：WHITELIST_CN 里的
 // 通用词（知识/中心/学院/资料/知识库）会把「标题主体本身就是登录墙或 404」的页面
 // 误救成 KEEP（实测例证：`登录中心`、`404 资料中心`）。这类页面入库正是低相关过滤
 // 要拦的东西，所以强信号判定优先级高于白名单，命中即 DROP，白名单无权保护。
-// 硬约束：只允许整标题命中（归一化后的主体 == 词干），不许子串命中。归一化 =
-// trim + 小写 + 剥掉尾部「· 站点名」后缀段（取第一个 · 之前的主体）+ 去标点。
+// 硬约束：词干表只允许整标题命中（归一化后的主体 == 词干），不许子串命中。归一化 =
+// trim + 小写 + 去标点；「· 站点名」尾段仅在它看起来是站点名时才剥（见 strongTitleSubject）。
 // 为何必须整标题命中：`Login API Reference`、`Sign in with SSO — Admin Guide` 等
 // 合法文档页标题里含 login/sign in 字样，但主体不是登录墙；一旦改成子串命中
 // （includes）就会把这类文档页误杀成 DROP。词干只收录「整个标题就是该强信号」的
-// 惯用形态（如 `登录中心`/`登录入口`/`404 资料中心`），语义歧义的词（如「认证中心」
-// 可指证书认证中心）一律不收。
+// 惯用形态（如 `登录中心`/`登录入口`），语义歧义的词（如「认证中心」可指证书认证中心）
+// 一律不收。
+// 例外——错误码开放集（B091200 r1）：`404 + 任意栏目名` 是开放模板而非封闭命名，
+// 光靠词干表只能拦住逐个枚举的实例（`404 帮助中心`/`404 产品资料` 会被 WHITELIST_CN
+// 在到达标题黑名单前救走）。故对「主体以 HTTP 错误码开头」加前缀规则，并配三道负保护
+// （文档名词 / 数量单位 / 非独立词元）把 `404 Error Handling Guide`、`404 万条数据` 这类
+// 合法标题放回去。
 // ---------------------------------------------------------------------------
 const STRONG_LOGIN_TITLES = [
   // 中文门户/电商登录页惯用整标题（与「登录」相关的独立页面）
@@ -71,10 +81,9 @@ const STRONG_LEGAL_TITLES = [
 ];
 
 const STRONG_RESTRICTED_TITLES = [
-  // 404 词干含「404 + 站点栏目名」的实测形态：`404 资料中心` 是真实 404 页标题，
-  // 主体恰好由白名单词（资料/中心）组成，只有整标题词干才能拦下且不误伤
-  // `404 Error Handling Guide` 这类含 404 字样但带文档词的合法页。
-  '404', '404 资料中心', 'page not found', 'not found', 'access denied', 'access forbidden',
+  // 整标题就是错误码/受限提示的封闭惯用形态。「404 + 任意栏目名」这类开放模板不在这里
+  // 枚举（逐条硬编码换个栏目名就漏），由下面 isErrorCodeTitleSubject 的前缀规则泛化。
+  '404', 'page not found', 'not found', 'access denied', 'access forbidden',
   'forbidden', 'unauthorized', 'unauthorised', '403 forbidden', '503 service unavailable', 'error page',
   '页面不存在', '找不到页面', '访问被拒绝', '无权访问', '未授权', '禁止访问', '无法访问',
 ];
@@ -85,18 +94,64 @@ const STRONG_SIGNAL_TITLES = new Set([
   ...STRONG_RESTRICTED_TITLES,
 ]);
 
-function normalizeStrongTitle(title) {
-  return String(title || '')
-    .trim()
-    .split('·')[0] // 剥掉尾部「· 站点名」后缀段（取第一个 · 之前的主体）
+// 错误码前缀规则（B091200 r1）：`404 帮助中心`/`404 产品资料` 的主体恰好由白名单词
+// （帮助/中心/资料）组成，会被 hasWhitelist 在到达标题黑名单 \b404\b 之前救走，而
+// 「404 + 栏目名」又是真实 404 页的通用模板，逐条枚举字面量必然漏。故在强信号层加
+// 前缀规则：归一化主体以 HTTP 错误码**独立词元**开头（后面紧跟空格或到此结束）即命中。
+// 三道负保护，防止把合法内容打成错误页：
+//   1. 主体除错误码外含文档名词（指南/文档/手册/docs/guide/reference…）→ 是讲错误码的
+//      文档页（`404 Error Handling Guide`），不算强信号。注意：资料/中心/知识/学院/帮助
+//      这类通用栏目名**不在**此列，否则本规则形同虚设。
+//   2. 错误码后紧跟数量/量词（万/亿/强/条…）→ 是「500 强」「404 万用户」这类数量表述，
+//      不是错误码页。
+//   3. 错误码必须是独立词元（`^404\b` 之外还要求后接空白或结尾）→ `4040 端口` 不命中。
+const ERROR_CODE_TOKEN_RE = /^(400|401|403|404|405|408|429|500|502|503|504)(?:\s+([\s\S]*))?$/;
+const ERROR_CODE_DOC_GUARD_CN = ['指南', '文档', '手册', '教程', '说明', '参考', '接口', '规范', '排查', '解决', '错误码', '状态码'];
+const ERROR_CODE_DOC_GUARD_EN = [
+  'guide', 'guides', 'reference', 'references', 'manual', 'manuals', 'handbook', 'documentation', 'doc',
+  'docs', 'tutorial', 'tutorials', 'faq', 'spec', 'specs', 'specification', 'troubleshooting', 'api', 'sdk',
+];
+const ERROR_CODE_DOC_GUARD_EN_RE = new RegExp(`\\b(${ERROR_CODE_DOC_GUARD_EN.join('|')})\\b`, 'i');
+const ERROR_CODE_QUANTITY_UNITS = ['万', '亿', '千', '百', '余', '多', '强', '个', '条', '次', '人', '元', '家', '款', '位', '倍'];
+
+function isErrorCodeTitleSubject(subject) {
+  const m = ERROR_CODE_TOKEN_RE.exec(subject);
+  if (!m) return false;
+  const rest = String(m[2] || '').trim();
+  if (!rest) return true; // 整标题就是 `404` / `503`
+  if (ERROR_CODE_QUANTITY_UNITS.some((u) => rest.startsWith(u))) return false;
+  if (ERROR_CODE_DOC_GUARD_CN.some((w) => rest.includes(w))) return false;
+  if (ERROR_CODE_DOC_GUARD_EN_RE.test(rest)) return false;
+  return true;
+}
+
+function normalizeStrongTitle(text) {
+  return String(text || '')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s_]/gu, '') // 去标点，保留字母/数字/下划线/空白（含 CJK）
     .replace(/\s+/g, ' ')
     .trim();
 }
 
+// 强信号查表的候选主体（B091200 r1）：整标题永远是一个候选；「· 站点名」尾段**仅当它
+// 看起来是站点名时**才额外剥掉当作主体——尾段命中白名单词表（指南/文档/docs/guide/
+// reference/知识/中心…）说明它是栏目名而不是站点名，剥掉会把 `登录 · 接入指南`、
+// `Sign in · Developer Docs`、`隐私政策 · 数据安全说明` 这类合法页的主体削成强信号词干
+// 而误杀（实测 main→r0 的三例 KEEP→DROP 回归）。
+function strongTitleSubjects(title) {
+  const raw = String(title || '').trim();
+  const subjects = [normalizeStrongTitle(raw)];
+  const idx = raw.indexOf('·');
+  if (idx > 0 && !hasWhitelist(raw.slice(idx + 1))) {
+    subjects.push(normalizeStrongTitle(raw.slice(0, idx)));
+  }
+  return subjects;
+}
+
 function isStrongSignalTitle(title) {
-  return STRONG_SIGNAL_TITLES.has(normalizeStrongTitle(title));
+  return strongTitleSubjects(title).some(
+    (subject) => STRONG_SIGNAL_TITLES.has(subject) || isErrorCodeTitleSubject(subject),
+  );
 }
 
 function escapeRegExp(s) {
@@ -193,11 +248,15 @@ function isBrandSloganPage(entry) {
 
 /**
  * 判定一页是否属于低相关页（登录墙、法务、404/受限、通用营销页）。
- * 优先级设计（B091200）：
- *   1. 登录墙 / 法务 / 404-受限 强信号**整标题**命中 → 直接 DROP（先于白名单，
- *      白名单无权保护——`登录中心`/`404 资料中心` 正是被 WHITELIST_CN 误救的
- *      登录墙与 404 页）。仅限整标题命中：`Login API Reference`、`Sign in with
- *      SSO — Admin Guide` 只含登录字样作子串，必须仍 KEEP。
+ * 优先级设计（B091200 / B091200 r1）：
+ *   1. 登录墙 / 法务 / 404-受限 强信号命中 → 直接 DROP（先于白名单，白名单无权保护
+ *      ——`登录中心`/`404 帮助中心` 正是被 WHITELIST_CN 误救的登录墙与 404 页）。
+ *      两种命中方式，都不允许普通子串命中：
+ *        a. 归一化主体（整标题，或尾段看起来是站点名时剥掉尾段后的主体）与词干表
+ *           **全等**——`Login API Reference`、`Sign in with SSO — Admin Guide` 只含
+ *           登录字样作子串，必须仍 KEEP。
+ *        b. 主体以 HTTP 错误码独立词元开头的前缀规则（泛化「404 + 任意栏目名」开放集），
+ *           带文档名词/数量单位/非独立词元三道负保护，详见 isErrorCodeTitleSubject。
  *   2. 知识库/文档白名单命中 → KEEP（白名单保护下的页面不会被黑名单误杀）。
  *   3. 标题黑名单 / URL 路径黑名单 → DROP。
  *   4. 品牌口号型标题（多段式 · 标题 + 浅层营销路径/薄正文）→ DROP。

@@ -631,6 +631,11 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(isLowRelevancePage(e('登录中心', 'https://portal.example.com/login', longBody)), true);
     assert.equal(isLowRelevancePage(e('登录入口', 'https://kb.example.com/login', longBody)), true);
     assert.equal(isLowRelevancePage(e('404 资料中心', 'https://example.com/docs/resource', longBody)), true);
+    // B091200 r1：「错误码 + 任意栏目名」是开放集，由错误码前缀规则泛化拦住，不靠字面量枚举。
+    // 栏目名（帮助/中心/资料/知识）不构成文档名词负保护，正文再厚也 DROP。
+    assert.equal(isLowRelevancePage(e('404 帮助中心', 'https://example.com/docs/help', longBody)), true);
+    assert.equal(isLowRelevancePage(e('404 产品资料', 'https://example.com/docs/product', longBody)), true);
+    assert.equal(isLowRelevancePage(e('403 知识库', 'https://example.com/docs/kb', longBody)), true);
 
     // 必须保留（合法知识中心/内容页，误杀即 P1）
     assert.equal(isLowRelevancePage(e('知识中心', 'https://help.example.com/', longBody)), false);
@@ -655,6 +660,15 @@ describe('site source low-relevance page filter (B080800)', () => {
     assert.equal(isLowRelevancePage(e('知识中心 · Acme', 'https://acme.com/kb', shortBody)), false);
     // B091200：同「· 站点名」后缀段结构的合法中心页，剥离后缀后主体不是强信号词干 → 仍 KEEP。
     assert.equal(isLowRelevancePage(e('帮助中心 · 产品', 'https://help.example.com/product', longBody)), false);
+    // B091200 r1（错误码前缀规则的文档名词负保护）：`404/404 万…` 除错误码外含 guide/参考/
+    // 手册类文档名词或数量单位时是合法文档页，不得被前缀规则打死。
+    assert.equal(isLowRelevancePage(e('404 Error Handling Guide', 'https://docs.example.com/errors/404', longBody)), false);
+    assert.equal(isLowRelevancePage(e('404 万条数据的治理实践', 'https://blog.example.com/data', longBody)), false);
+    // B091200 r1（尾段剥离边界）：`·` 后是栏目/文档名（指南/docs/说明）而非站点名时不得剥离，
+    // 否则主体恰为 `登录`/`sign in`/`隐私政策` 词干，合法页会被强信号层误杀（r0 的三例回归）。
+    assert.equal(isLowRelevancePage(e('登录 · 接入指南', 'https://docs.example.com/guide/login', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Sign in · Developer Docs', 'https://docs.example.com/dev', longBody)), false);
+    assert.equal(isLowRelevancePage(e('隐私政策 · 数据安全说明', 'https://example.com/privacy', longBody)), false);
     // B091100 设计边界：正文厚实的站点根首页不在本过滤器目标范围内，不得加 / 回浅层清单。
     assert.equal(isLowRelevancePage(e(realGitHubTitle, 'https://github.com/', longBody)), false);
   });
