@@ -51,6 +51,7 @@ export default function sourcesRoutes(deps) {
           const data = loadSources();
           const sources = data.sources.map((s) => {
             const m = readManifest(s.id);
+            const task = taskRegistry.get(`ndjson:source-refresh:${s.id}`);
             return {
               ...s,
               itemCount: m ? m.items.length : 0,
@@ -69,6 +70,8 @@ export default function sourcesRoutes(deps) {
               ...(m && m.preserved ? { preserved: true, preserveReason: m.preserveReason || 'collection-failed' } : {}),
               // pruned 仅在有清理时出现；透出总量 + 兜底清理数（confirmedGone 可由 pruned - prunedUnconfirmed 推出，不重复占键）。
               ...(m && Number.isFinite(m.pruned) ? { pruned: m.pruned, prunedUnconfirmed: m.prunedUnconfirmed || 0 } : {}),
+              // F050500-A：refresh 任务终态持久可观测（读 taskRegistry，不新建存储）
+              ...(task ? { lastRefreshStatus: task.status, lastRefreshError: task.error || null } : {}),
             };
           });
           send(res, 200, { version: data.version, sources });

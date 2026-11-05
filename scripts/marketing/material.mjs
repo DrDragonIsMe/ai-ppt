@@ -13,6 +13,19 @@ import { isSafeName } from '../config.mjs';
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** 超过这个天数的素材语料视为「陈旧」，进 warnings 但不静默剔除（内容可能依然有效）。 */
 export const STALE_CORPUS_AGE_DAYS = 30;
+/** 正文有效字符数低于此阈值视为占位/存根，排除出语料并如实上报。
+ *  理由：真实营销文章通常在 4000+ 有效字符；128 字符的 docs/marketing/README.md 存根
+ *  会被误当证据，产生「一整页只有目录名」的垃圾内容。取 200 作为保守闸口，
+ *  既远离真实文章分布，也高于常见的前言/标题页。 */
+export const PLACEHOLDER_EFFECTIVE_CHARS = 200;
+
+/** 计算正文有效字符数：去 Markdown、去空白、去常见标点后剩余字符长度。 */
+export function effectiveCharCount(text) {
+  const clean = stripMarkdown(String(text || ''))
+    .replace(/\s+/g, '')
+    .replace(/[，。！？、；：“”‘’（）【】《》`~!@#$%^&*()_\-+=[\]{}|;':"\\,.<>/?]/g, '');
+  return clean.length;
+}
 
 /** 句子切分：中英文句末标点 + 换行，保留分隔符便于回读原文顺序。 */
 function splitSentences(text) {
@@ -108,6 +121,9 @@ export function collectMaterial(opts = {}) {
   const readFn = opts.readItemFn || readItem;
   const manifestFn = opts.readManifestFn || readManifest;
   const includeStale = !!opts.includeStale;
+  const placeholderThreshold = Number.isFinite(opts.placeholderThreshold)
+    ? opts.placeholderThreshold
+    : PLACEHOLDER_EFFECTIVE_CHARS;
 
   const all = listFn({});
   const wanted = Array.isArray(opts.sourceIds) && opts.sourceIds.length ? opts.sourceIds : null;
@@ -122,6 +138,8 @@ export function collectMaterial(opts = {}) {
   const perSource = [];
   const items = [];
   let staleSkipped = 0;
+  let excludedPlaceholderCount = 0;
+  const excludedPlaceholderIds = [];
 
   for (const sid of sourceIds) {
     const manifest = manifestFn(sid);
@@ -133,10 +151,18 @@ export function collectMaterial(opts = {}) {
     warnings.push(...srcWarnings);
     let used = 0;
     let stale = 0;
+    let sourceExcludedPlaceholders = 0;
     for (const it of itemsOfSource) {
       if (it.stale && !includeStale) { stale++; staleSkipped++; continue; }
       const full = readFn(it.id) || {};
       const text = full.content || '';
+      const eff = effectiveCharCount(text);
+      if (eff < placeholderThreshold) {
+        excludedPlaceholderCount++;
+        sourceExcludedPlaceholders++;
+        excludedPlaceholderIds.push(it.id);
+        continue;
+      }
       items.push({
         itemId: it.id,
         sourceId: sid,
@@ -153,6 +179,7 @@ export function collectMaterial(opts = {}) {
       sourceId: sid,
       itemCount: used,
       staleSkipped: stale,
+      excludedPlaceholderCount: sourceExcludedPlaceholders,
       preserved: !!(manifest && manifest.preserved),
       preserveReason: (manifest && manifest.preserveReason) || null,
       degraded: !!(manifest && manifest.degraded),
@@ -168,6 +195,9 @@ export function collectMaterial(opts = {}) {
 
   const limited = Number.isFinite(opts.maxItems) && opts.maxItems > 0 ? items.slice(0, opts.maxItems) : items;
   const droppedByCap = items.length - limited.length;
+  if (excludedPlaceholderCount > 0) {
+    warnings.push(`${excludedPlaceholderCount} 条素材因正文有效字符数低于 ${placeholderThreshold} 被视为占位存根，已排除出语料（id：${excludedPlaceholderIds.slice(0, 5).join('、')}${excludedPlaceholderIds.length > 5 ? ' 等' : ''}）`);
+  }
   if (droppedByCap > 0) {
     warnings.push(`素材条目过多，本轮取材只用前 ${limited.length} 条（另有 ${droppedByCap} 条未参与），可缩小素材源范围后重跑`);
   }
@@ -179,6 +209,7 @@ export function collectMaterial(opts = {}) {
     stats: {
       itemCount: limited.length,
       staleSkipped,
+      excludedPlaceholderCount,
       includeStale,
       corpusChars: limited.reduce((n, it) => n + it.text.length, 0),
       droppedByCap,
