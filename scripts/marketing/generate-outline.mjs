@@ -87,17 +87,22 @@ export function extractJsonObject(text) {
  */
 export function normalizeAngleSlides(raw, { idMap, slideCount }) {
   const slides = Array.isArray(raw?.slides) ? raw.slides : [];
-  const resolveIds = (list) => (Array.isArray(list) ? list : []).map((v) => {
-    const token = String(v ?? '').trim().replace(/^\[|\]$/g, '');
-    if (!token) return null;
-    if (idMap.has(token)) return idMap.get(token);
-    const n = Number(token.replace(/^it-?/i, ''));
-    if (Number.isInteger(n) && n >= 0) {
-      const byIdx = idMap.get(`it-${n}`);
-      if (byIdx) return byIdx;
+  const resolveIds = (list) => {
+    const out = [];
+    for (const v of (Array.isArray(list) ? list : [])) {
+      const token = String(v ?? '').trim().replace(/^\[|\]$/g, '');
+      if (!token) continue;
+      let id = idMap.get(token) || null;
+      if (!id && /^\d+$/.test(token)) {
+        // 只有纯数字 token 才按下标还原；"it-7" 这类越界假引用必须原样透给防编造校验，
+        // 否则 Number('it-7'.replace(/^it-?/,'')) === 7 会让伪造引用换个写法就绕过闸门。
+        id = idMap.get(`it-${Number(token)}`) || null;
+      }
+      const resolved = id || token;
+      if (!out.includes(resolved)) out.push(resolved);
     }
-    return token; // 原样交给 enforceEvidenceIntegrity 判伪造
-  }).filter(Boolean);
+    return out;
+  };
 
   const out = slides.slice(0, SLIDES_PER_ANGLE_MAX).map((s) => ({
     heading: stripMarkdown(String(s?.heading || '')).slice(0, 60),
@@ -389,8 +394,12 @@ export async function generateOutline(opts = {}) {
     perSource: material.perSource,
     fallbackOnly: llmUsed === 0,
   };
+  emitter.done({ ...summary });
   return { outline, summary };
 }
+
+// 事件协议归属：终态 done 由库函数自己发（CLI 与路由内调用走同一条收尾路径）；
+// error 终态由调用方在 catch 里发，因为抛错点可能落在库函数任意位置。
 
 // ---- CLI ----
 
@@ -415,8 +424,7 @@ async function runCli() {
   const opts = parseArgs(process.argv.slice(2));
   emitter.progress('start', '开始生成营销大纲', { product: opts.product?.name || null });
   try {
-    const { summary } = await generateOutline(opts);
-    emitter.done({ ...summary });
+    await generateOutline(opts); // 终态 done 由 generateOutline 自己发
   } catch (err) {
     emitter.error(err.message || '大纲生成失败', { code: err.code || null });
     process.exitCode = 1;

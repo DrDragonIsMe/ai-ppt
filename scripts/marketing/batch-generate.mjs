@@ -153,7 +153,7 @@ export async function batchGenerate(opts = {}) {
   const doWriteDeck = deps.writeDeckIndexFn || writeDeckIndex;
   const cancelled = deps.shouldCancel || (() => isCancelled(opts.batchId));
 
-  const outline = deps.outline || getOutline(opts.outlineId);
+  const outline = opts.outline || deps.outline || getOutline(opts.outlineId);
   if (!outline) {
     const err = new Error(`大纲不存在：${opts.outlineId}`);
     err.code = 'OUTLINE_NOT_FOUND';
@@ -340,7 +340,10 @@ export async function batchGenerate(opts = {}) {
     rows,
     deckNames: rows.map((r) => r.deckName),
     projectDirs: rows.filter((r) => r.status === 'done').map((r) => `projects/${r.deckName}`),
+    // 预览入口：已生成 deck 的可直接打开路径（M11 进度表用 rows[].deckName + 这个前缀拼链接）
+    previewBase: '/projects/',
   };
+  emitter.done({ ...summary });
   return { outline, summary };
 }
 
@@ -391,6 +394,8 @@ async function runCli() {
         total: summary.total,
       });
     }
+    emitter.done({ ...summary });
+    emitter.done({ ...summary });
     emitter.done({ ...summary });
     if (summary.doneCount === 0 && summary.failedCount > 0) process.exitCode = 1;
   } catch (err) {
