@@ -1167,4 +1167,22 @@ describe('P2-D url collector production branch respects maxBytesPerItem (net pat
       globalThis.fetch = origFetch;
     }
   });
+
+  it('生产默认路径经 net.fetchPage：仅注入 globalThis.fetch（不 mock 守卫），私有/回环 target 被 SSRF 拒绝且传输层从未被调用', async () => {
+    freshEnv('p2d-ssrf');
+    let fetchCalls = 0;
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async () => { fetchCalls++; return new Response('<html><body>should-not-reach</body></html>', { status: 200, headers: { 'content-type': 'text/html' } }); };
+    try {
+      // 不带 allowPrivateNetwork：真实生产分支。net.fetchPage 的 SSRF 守卫应在建立传输前就拒绝回环地址。
+      const source = upsertSource({ type: 'url', name: 'Loop', target: 'http://127.0.0.1:9/x' }).source;
+      const r = await refreshSource(source.id);
+      assert.equal(r.itemCount, 0, '回环地址不得入库');
+      assert.ok(r.errors >= 1, '生产分支应因 SSRF 守卫产生错误');
+      assert.match(r.errorList[0].error, /private|internal|refus/i, `错误应来自 SSRF 守卫，实得：${r.errorList[0].error}`);
+      assert.equal(fetchCalls, 0, 'SSRF 守卫须在调用传输层 fetch 之前拦截（若为 0 说明守卫在生产路径真实生效，非被注入绕过）');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
 });

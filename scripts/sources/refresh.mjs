@@ -9,7 +9,7 @@ import {
   readManifest, writeManifest, writeItem, makeItemId, sha256,
 } from './store.mjs';
 import { sourceItemsDir } from './paths.mjs';
-import { getSource, validateSource, markFetched, requireFiniteOption } from './registry.mjs';
+import { getSource, validateSource, markFetched, requireFiniteOption, assertDirSourceAuthorized } from './registry.mjs';
 import { capByBytes } from './text-extract.mjs';
 import { collectDir } from './collect-dir.mjs';
 import { collectUrl } from './collect-url.mjs';
@@ -45,6 +45,9 @@ export async function refreshSource(sourceOrId, opts = {}) {
     throw err;
   }
   const sourceId = source.id;
+  // P2-C ii：撤回授权——dir 源在 refresh 入口按当前 env 重查 ROOT 归属（含符号链接解析）。
+  // 关掉 AI_PPT_ALLOW_EXTERNAL_SOURCES 后，已存在的外部目录源也会被拒（此前只挡新建/编辑）。
+  assertDirSourceAuthorized(source);
   const maxBytesPerItem = requireFiniteOption(source, 'maxBytesPerItem');
 
   const collector = dispatch(source);
@@ -54,8 +57,10 @@ export async function refreshSource(sourceOrId, opts = {}) {
   const newItems = [];
   const newIds = new Set();
   const errors = [];
+  const erroredOrigins = new Set(); // P1-A：本轮明确抓取/抽取失败的 origin 集合，用于部分失败时按 origin 保命
   let added = 0; let updated = 0; let unchanged = 0;
   let truncation = null; // { collected, dropped, total, cap }
+  let policySkip = null; // P2-E：{ skipped, samples[] }——被禁入/敏感清单跳过的条目（可观测）
 
   const ctx = {
     fetchPage: opts.fetchPage,
@@ -68,7 +73,21 @@ export async function refreshSource(sourceOrId, opts = {}) {
   for await (const entry of collector(source, ctx)) {
     if (entry.kind === 'error') {
       errors.push({ origin: entry.origin || null, error: entry.error || 'unknown error' });
+      if (entry.origin) erroredOrigins.add(entry.origin); // P1-A：记录失败 origin，部分失败时按 origin 保命
       onEvent({ step: 'fetch-error', message: `抓取失败：${entry.origin || ''}`, detail: { origin: entry.origin, error: entry.error } });
+      continue;
+    }
+    // P2-E：采集器因命中禁入/敏感清单跳过条目 → 显式上报，绝不静默吃掉（与 maxPages 截断同一套形状）。
+    if (entry.kind === 'policy') {
+      policySkip = {
+        skipped: entry.skipped | 0,
+        samples: Array.isArray(entry.samples) ? entry.samples.slice(0, 10) : [],
+      };
+      onEvent({
+        step: 'policy-skipped',
+        message: `素材源「${source.name}」有 ${entry.skipped} 个文件/目录命中禁入或敏感清单被跳过（未入库）`,
+        detail: { policySkipped: entry.skipped, samples: policySkip.samples },
+      });
       continue;
     }
     // 采集器在因 maxPages 截断时补发 summary：转为明确告警事件 + 记入 manifest，供前端徽标提示
@@ -139,41 +158,75 @@ export async function refreshSource(sourceOrId, opts = {}) {
     });
   }
 
-  // P1-4 成功性闸门：本轮零入库且存在抓取/抽取错误 → 判定为「采集整体失败」（上游 503 / DNS 抖动 /
-  // 维护窗口等），跳过 prune、保留既有 items，避免一次失败静默销毁已入库语料；并把该事实显式上报。
-  const prevItemCount = (prev.items || []).length;
-  const pruneBlocked = newItems.length === 0 && prevItemCount > 0 && errors.length > 0;
+  // 成功性闸门（P1-4 全失败 + P1-A 部分失败）：
+  //  A) 整体失败：本轮 0 入库且既有语料存在且有错误 → 完全跳过 prune，保留全部 prev，发 'preserve' 事件（既有语义）。
+  //  B) 部分失败：本轮成功若干 + 失败若干。prev 里本轮"没出现"的条目，只有当它**本轮明确失败**
+  //     （origin ∈ erroredOrigins）或**整体降级**（errors 占比 > 0.5，兜底 origin 对不上的边角）时才保命，
+  //     打 stale 标记保留、绝不 rm；其余才是真消失，正常清理。修的是"成功 1 条就让闸门整体失效、
+  //     把 30 条因 503/限流失败的子页物理删光"（评审活体复现 31→1）。
+  //  dir 源本地枚举不会"部分失败"（单文件损坏是 error 条目、按 origin 保命即可），语义天然正确。
+  const prevItems = prev.items || [];
+  const prevItemCount = prevItems.length;
+  const totalFailure = newItems.length === 0 && prevItemCount > 0 && errors.length > 0;
+  const overallDegraded = !totalFailure
+    && prevItemCount > 0
+    && errors.length > 0
+    && errors.length / prevItemCount > 0.5;
+  const pruneBlocked = totalFailure; // 保留既有变量名与 'preserve' 语义
 
   let removed = 0;
-  if (!pruneBlocked) {
-    // 上游消失的条目：正常批次下清理物理文件（errors 只影响对应条目，不阻断清理）
-    const itemsDir = sourceItemsDir(sourceId);
-    for (const old of prev.items || []) {
-      if (!newIds.has(old.id)) {
-        try {
-          fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true });
-          removed++;
-        } catch { /* 文件可能已不在 */ }
-      }
-    }
-  } else {
+  let stalePreserved = 0;
+  const staleKeptItems = [];
+  if (pruneBlocked) {
     onEvent({
       step: 'preserve',
       message: `素材源「${source.name}」本轮采集失败（0 入库 / ${errors.length} 错误），已跳过清理并保留既有 ${prevItemCount} 条素材`,
       detail: { keptItems: prevItemCount, errors: errors.length },
     });
+  } else {
+    const itemsDir = sourceItemsDir(sourceId);
+    for (const old of prevItems) {
+      if (newIds.has(old.id)) continue; // 本轮已重新收录，正常
+      const errored = old.origin != null && erroredOrigins.has(old.origin);
+      if (errored || overallDegraded) {
+        // 本轮该条目抓取失败（或整体降级）——不是"上游删了它"，保命不删，标 stale。
+        staleKeptItems.push({ ...old, stale: true });
+        stalePreserved++;
+        continue;
+      }
+      try {
+        fs.rmSync(path.join(itemsDir, `${old.id}.md`), { force: true });
+        removed++;
+      } catch { /* 文件可能已不在 */ }
+    }
+    if (stalePreserved > 0) {
+      onEvent({
+        step: 'degraded',
+        message: `素材源「${source.name}」本轮部分抓取失败：已保留 ${stalePreserved} 条未能确认的上游素材（标记 stale，未删除），另有 ${removed} 条确认消失被清理`,
+        detail: { keptStale: stalePreserved, removed, errors: errors.length, overallDegraded },
+      });
+    }
   }
 
-  const collectedFingerprint = sha256(newItems.map((i) => `${i.id}:${i.hash}`).sort().join('\n'));
-  const fingerprint = pruneBlocked ? (prev.fingerprint || '') : collectedFingerprint;
-  const outItems = pruneBlocked ? (prev.items || []) : newItems;
+  // 全失败保留 prev 原样（含其旧 stale）；部分失败则 newItems + 本轮保命的 stale 条目。
+  const outItems = pruneBlocked ? prevItems : [...newItems, ...staleKeptItems];
+  const fingerprint = pruneBlocked
+    ? (prev.fingerprint || '')
+    : sha256(outItems.map((i) => `${i.id}:${i.stale ? 'S' : ''}${i.hash}`).sort().join('\n'));
   const fetchedAt = new Date().toISOString();
+  const degraded = stalePreserved > 0;
   writeManifest(sourceId, {
     sourceId,
     fetchedAt,
     fingerprint,
     items: outItems,
     ...(pruneBlocked ? { preserved: true, preserveReason: 'collection-failed' } : {}),
+    // P1-A：部分失败保命的可观测标记（加性字段）
+    ...(degraded ? { degraded: true, staleCount: stalePreserved } : {}),
+    // P2-E：命中禁入/敏感清单被跳过的条目数（加性字段，形状对齐 droppedCount 徽标）
+    ...(policySkip && policySkip.skipped > 0
+      ? { policySkipped: policySkip.skipped, policySamples: policySkip.samples }
+      : {}),
     ...(truncation && truncation.dropped > 0
       ? { truncated: true, droppedCount: truncation.dropped, totalCandidates: truncation.total, maxPages: truncation.cap }
       : {}),
@@ -195,6 +248,10 @@ export async function refreshSource(sourceOrId, opts = {}) {
     itemCount: outItems.length,
     truncated: !!(truncation && truncation.dropped > 0),
     preserved: pruneBlocked,
+    // P1-A / P2-E 可观测（加性字段，不动既有键）
+    degraded,
+    staleCount: stalePreserved,
+    policySkipped: policySkip ? policySkip.skipped : 0,
     droppedCount: truncation ? truncation.dropped : 0,
     totalCandidates: truncation ? truncation.total : outItems.length,
     lastFetchedAt: fetchedAt,
