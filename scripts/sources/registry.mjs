@@ -141,6 +141,16 @@ function normalizeOptions(type, rawOptions) {
     }
     out.anyOfTags = opts.anyOfTags.map((t) => t.trim()).filter(Boolean);
   }
+  // 布尔型 option 单独登记，不混入数值型 OPTION_RANGES（B080800）。
+  // skipLowRelevanceCheck=true 表示关闭 site 源的低相关页过滤，用于避免误杀特殊内网知识中心。
+  if (opts.skipLowRelevanceCheck !== undefined) {
+    if (typeof opts.skipLowRelevanceCheck !== 'boolean') {
+      throw new SourceError('options.skipLowRelevanceCheck 必须是布尔值');
+    }
+    out.skipLowRelevanceCheck = opts.skipLowRelevanceCheck;
+  } else {
+    out.skipLowRelevanceCheck = false;
+  }
   return out;
 }
 

@@ -62,6 +62,9 @@ export default function sourcesRoutes(deps) {
               // P2-E：命中禁入/敏感清单跳过的条目数（加性透出，前端可提示「另有 N 个文件因安全清单未纳入」）
               policySkipped: m && Number.isFinite(m.policySkipped) ? m.policySkipped : 0,
               ...(m && Number.isFinite(m.policySkipped) ? { policySamples: Array.isArray(m.policySamples) ? m.policySamples : [] } : {}),
+              // B080800：低相关页过滤丢弃数（加性透出）
+              lowRelevanceSkipped: m && Number.isFinite(m.lowRelevanceSkipped) ? m.lowRelevanceSkipped : 0,
+              ...(m && Number.isFinite(m.lowRelevanceSkipped) ? { lowRelevanceSamples: Array.isArray(m.lowRelevanceSamples) ? m.lowRelevanceSamples : [] } : {}),
               // P1-A：部分抓取失败按 origin 保命的降级标记（加性透出）
               ...(m && m.degraded ? { degraded: true, staleCount: m.staleCount || 0 } : {}),
               // P2-A：整源保命/清理信号贯通到 API（前几轮 truncated 同口径）。

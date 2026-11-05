@@ -8,7 +8,8 @@ import path from 'node:path';
 import {
   readManifest, writeManifest, writeItem, makeItemId, sha256,
 } from './store.mjs';
-import { sourceItemsDir } from './paths.mjs';
+import { sourceItemsDir, sourceManifestPath } from './paths.mjs';
+import { writeJsonAtomic } from '../fs-utils.mjs';
 import { getSource, validateSource, markFetched, requireFiniteOption, assertDirSourceAuthorized } from './registry.mjs';
 import { capByBytes } from './text-extract.mjs';
 import { collectDir } from './collect-dir.mjs';
@@ -86,6 +87,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
   let added = 0; let updated = 0; let unchanged = 0;
   let truncation = null; // { collected, dropped, total, cap }
   let policySkip = null; // P2-E：{ skipped, samples[] }——被禁入/敏感清单跳过的条目（可观测）
+  let lowRelevanceSkip = null; // B080800：{ skipped, samples[] }——被 collect-site 低相关过滤丢掉的页
 
   const ctx = {
     fetchPage: opts.fetchPage,
@@ -125,7 +127,7 @@ export async function refreshSource(sourceOrId, opts = {}) {
       });
       continue;
     }
-    // 采集器在因 maxPages 截断时补发 summary：转为明确告警事件 + 记入 manifest，供前端徽标提示
+    // 采集器在因 maxPages 截断 / 低相关过滤时补发 summary：转为明确告警事件 + 记入 manifest，供前端徽标提示
     if (entry.kind === 'summary') {
       truncation = {
         collected: entry.collected | 0,
@@ -133,11 +135,24 @@ export async function refreshSource(sourceOrId, opts = {}) {
         total: entry.total | 0,
         cap: Number.isFinite(entry.cap) ? entry.cap : null,
       };
-      onEvent({
-        step: 'truncated',
-        message: `素材源「${source.name}」被 maxPages 截断：共 ${entry.total} 个候选，仅入库 ${entry.collected} 个，丢弃 ${entry.dropped} 个（上限 maxPages=${entry.cap}）`,
-        detail: truncation,
-      });
+      if (truncation.dropped > 0) {
+        onEvent({
+          step: 'truncated',
+          message: `素材源「${source.name}」被 maxPages 截断：共 ${entry.total} 个候选，仅入库 ${entry.collected} 个，丢弃 ${entry.dropped} 个（上限 maxPages=${entry.cap}）`,
+          detail: truncation,
+        });
+      }
+      if (Number.isFinite(entry.lowRelevanceSkipped) && entry.lowRelevanceSkipped > 0) {
+        lowRelevanceSkip = {
+          skipped: entry.lowRelevanceSkipped | 0,
+          samples: Array.isArray(entry.lowRelevanceSamples) ? entry.lowRelevanceSamples.slice(0, 10) : [],
+        };
+        onEvent({
+          step: 'low-relevance-skipped',
+          message: `素材源「${source.name}」跳过 ${entry.lowRelevanceSkipped} 个低相关页（登录墙/法务/404/营销页），未入库`,
+          detail: { lowRelevanceSkipped: lowRelevanceSkip.skipped, samples: lowRelevanceSkip.samples },
+        });
+      }
       continue;
     }
     const id = makeItemId(sourceId, entry.originKey);
@@ -194,7 +209,9 @@ export async function refreshSource(sourceOrId, opts = {}) {
   }
 
   // 成功性闸门（P1-4 全失败 + P1-A 部分失败）：
-  //  A) 整体失败：本轮 0 入库且既有语料存在且有错误 → 完全跳过 prune，保留全部 prev，发 'preserve' 事件（既有语义）。
+  //  A) 整体失败：本轮 0 入库且既有语料存在，且有错误 / 或有低相关页被过滤 → 完全跳过 prune，保留全部 prev，发 'preserve' 事件（既有语义）。
+  //     P1-2（B080800 返修）：site 源根页变成 200 登录墙被低相关过滤跳过时，既不产 error 也不入队子页，
+  //     会造出「0 入库 / 0 错误」的新路径；必须把它与 errors>0 同等视为保命条件，否则会把既有语料物理删光。
   //  B) 部分失败：本轮成功若干 + 失败若干。prev 里本轮"没出现"的条目，只有当它**本轮明确失败**
   //     （origin ∈ erroredOrigins）或**整体降级**（errors 占比 > 0.5，兜底 origin 对不上的边角）时才保命，
   //     打 stale 标记保留、绝不 rm；其余才是真消失，正常清理。修的是"成功 1 条就让闸门整体失效、
@@ -205,12 +222,14 @@ export async function refreshSource(sourceOrId, opts = {}) {
   // 降级阈值只统计「未确认失败」：confirmed-gone（404/410/ENOENT）恰恰证明上游真没了，
   // 不该把它们计入 errors 而把整库推向保守保命。
   const uncertainErrors = errors.length - confirmedGoneCount;
+  const lowRelevanceSkippedCount = lowRelevanceSkip ? lowRelevanceSkip.skipped : 0;
   // P1-①（r5 回归修复）：整源归零闸门必须只看「本轮有没有错误」，绝不能只看「未确认错误」。
   // 反例：site 源入口页单独 404（本轮 1 条 confirmed-gone 错误、0 入库），10 条子页本轮根本没被抓过、
   // 上游对它们没有任何"已删除"表态——若用 uncertainErrors>0 判定，闸门被免检放行，子页会落进 prune 末尾
   // "本轮没抓到也没报错 → 正常清理"兜底分支被物理删光（评审实测 prev=11 → removed=11）。
   // 因此"部分轮次逐条确认消失 → 该清"（走 1D：有成功入库、不进此闸门）与"整源 0 入库 → 保命"必须分开。
-  const totalFailure = newItems.length === 0 && prevItemCount > 0 && errors.length > 0;
+  // B080800-P1-2：低相关过滤导致 0 入库时，同样要把既有语料完整保命。
+  const totalFailure = newItems.length === 0 && prevItemCount > 0 && (errors.length > 0 || lowRelevanceSkippedCount > 0);
   const overallDegraded = !totalFailure
     && prevItemCount > 0
     && uncertainErrors > 0
@@ -226,15 +245,19 @@ export async function refreshSource(sourceOrId, opts = {}) {
   let stalePreserved = 0;
   const staleKeptItems = [];
   if (pruneBlocked) {
-    onEvent({
-      step: 'preserve',
-      message: allConfirmedGone
-        ? `素材源「${source.name}」上游本轮对全部 ${errors.length} 条抓取报告已消失（404/410/ENOENT），但 0 入库——已保留既有 ${prevItemCount} 条素材未清理（绝不用"整源归零"冒充"全部删除"；确需清理请显式重建源）`
-        : `素材源「${source.name}」本轮采集失败（0 入库 / ${uncertainErrors} 未确认错误），已跳过清理并保留既有 ${prevItemCount} 条素材`,
-      detail: allConfirmedGone
-        ? { keptItems: prevItemCount, errors: errors.length, confirmedGone: confirmedGoneCount, reason: 'all-confirmed-gone' }
-        : { keptItems: prevItemCount, errors: uncertainErrors },
-    });
+    let preserveMessage;
+    let preserveDetail;
+    if (allConfirmedGone) {
+      preserveMessage = `素材源「${source.name}」上游本轮对全部 ${errors.length} 条抓取报告已消失（404/410/ENOENT），但 0 入库——已保留既有 ${prevItemCount} 条素材未清理（绝不用"整源归零"冒充"全部删除"；确需清理请显式重建源）`;
+      preserveDetail = { keptItems: prevItemCount, errors: errors.length, confirmedGone: confirmedGoneCount, reason: 'all-confirmed-gone' };
+    } else if (errors.length === 0 && lowRelevanceSkippedCount > 0) {
+      preserveMessage = `素材源「${source.name}」本轮采集全部被低相关过滤跳过（0 入库 / ${lowRelevanceSkippedCount} 个低相关页），已跳过清理并保留既有 ${prevItemCount} 条素材`;
+      preserveDetail = { keptItems: prevItemCount, lowRelevanceSkipped: lowRelevanceSkippedCount, reason: 'collection-failed' };
+    } else {
+      preserveMessage = `素材源「${source.name}」本轮采集失败（0 入库 / ${uncertainErrors} 未确认错误），已跳过清理并保留既有 ${prevItemCount} 条素材`;
+      preserveDetail = { keptItems: prevItemCount, errors: uncertainErrors };
+    }
+    onEvent({ step: 'preserve', message: preserveMessage, detail: preserveDetail });
   } else {
     const itemsDir = sourceItemsDir(sourceId);
     const erroredPre = isDirVault ? [...erroredPrefixes] : []; // P2-F/②：dir/vault 失败目录前缀 → 子树 stale 保命
@@ -302,11 +325,25 @@ export async function refreshSource(sourceOrId, opts = {}) {
     ...(policySkip && policySkip.skipped > 0
       ? { policySkipped: policySkip.skipped, policySamples: policySkip.samples }
       : {}),
+    // B080800：低相关页过滤丢弃数（加性字段，与 policySkipped 同口径）
+    ...(lowRelevanceSkip && lowRelevanceSkip.skipped > 0
+      ? { lowRelevanceSkipped: lowRelevanceSkip.skipped, lowRelevanceSamples: lowRelevanceSkip.samples }
+      : {}),
     ...(truncation && truncation.dropped > 0
       ? { truncated: true, droppedCount: truncation.dropped, totalCandidates: truncation.total, maxPages: truncation.cap }
       : {}),
     ...(errors.length ? { errors } : {}),
   });
+  // B080800：store.mjs 的 writeManifest 只持久化已知字段，低相关过滤的可观测字段需要显式补丁写入。
+  if (lowRelevanceSkip && lowRelevanceSkip.skipped > 0) {
+    const patched = readManifest(sourceId);
+    if (patched) {
+      patched.lowRelevanceSkipped = lowRelevanceSkip.skipped;
+      patched.lowRelevanceSamples = lowRelevanceSkip.samples;
+      writeJsonAtomic(sourceManifestPath(sourceId), patched);
+    }
+  }
+
   markFetched(sourceId, fetchedAt);
 
   const summary = {
@@ -331,6 +368,8 @@ export async function refreshSource(sourceOrId, opts = {}) {
     degraded,
     staleCount: stalePreserved,
     policySkipped: policySkip ? policySkip.skipped : 0,
+    // B080800：低相关页过滤丢弃数（加性字段）
+    lowRelevanceSkipped: lowRelevanceSkip ? lowRelevanceSkip.skipped : 0,
     droppedCount: truncation ? truncation.dropped : 0,
     totalCandidates: truncation ? truncation.total : outItems.length,
     lastFetchedAt: fetchedAt,

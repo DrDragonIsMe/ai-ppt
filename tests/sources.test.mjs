@@ -20,7 +20,7 @@ import {
 } from '../scripts/sources/store.mjs';
 import { refreshSource, previewSource } from '../scripts/sources/refresh.mjs';
 import { collectDir } from '../scripts/sources/collect-dir.mjs';
-import { collectSite } from '../scripts/sources/collect-site.mjs';
+import { collectSite, isLowRelevancePage } from '../scripts/sources/collect-site.mjs';
 import { fetchPage } from '../scripts/sources/net.mjs';
 import { capByBytes, classifyExt } from '../scripts/sources/text-extract.mjs';
 import { isWithinRoot, isSensitivePath, hasSensitiveSegment } from '../scripts/sources/paths.mjs';
@@ -445,6 +445,201 @@ describe('url & site collectors (local http server)', () => {
     assert.match(p.title, /Page B/);
     assert.match(p.content, /beta page body/);
     assert.equal(listItems({}).length, 0); // 未落盘
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B080800 site crawler low-relevance page filter
+// ---------------------------------------------------------------------------
+describe('site source low-relevance page filter (B080800)', () => {
+  let server, port;
+  const HTML = (title, body, links = '') =>
+    `<!doctype html><html><head><title>${title}</title></head><body>${links}<article><h1>${title}</h1><p>${body}</p></article></body></html>`;
+
+  before(async () => {
+    server = http.createServer((req, res) => {
+      const u = req.url.split('?')[0];
+      if (u === '/') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('Home', 'welcome',
+          '<a href="/login">Login</a>' +
+          '<a href="/marketing">Marketing</a>' +
+          '<a href="/docs/guide">Guide</a>' +
+          '<a href="/about-docs">About Docs</a>'));
+      }
+      if (u === '/login') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('Sign in to GitHub · GitHub',
+          'Sign in to GitHub. Username Password Forgot password? Create an account.'));
+      }
+      if (u === '/marketing') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('GitHub · Change is constant',
+          'Change is constant. Build the future. Join us. Careers Press Contact.'));
+      }
+      if (u === '/docs/guide') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('Getting Started Guide · Acme Docs',
+          'This guide explains how to configure the widget and deploy it to production.'));
+      }
+      if (u === '/about-docs') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(HTML('About · Acme Docs',
+          'This article explains the design goals and architecture of the platform.'));
+      }
+      res.writeHead(404); res.end('nope');
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    port = server.address().port;
+  });
+  after(() => new Promise((r) => server.close(r)));
+
+  it('filters login wall and footer marketing pages, keeps knowledge-center pages', async () => {
+    freshEnv('site-lowrel');
+    const source = upsertSource({
+      type: 'site', name: 'LR', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 10 },
+    }).source;
+    const events = [];
+    const r = await refreshSource(source.id, { allowPrivateNetwork: true, onEvent: (e) => events.push(e) });
+
+    const titles = listItems({ sourceId: source.id }).map((i) => i.title).sort();
+    assert.deepEqual(titles, ['About · Acme Docs', 'Getting Started Guide · Acme Docs', 'Home']);
+    assert.equal(r.itemCount, 3, `应入库 3 条，实得 ${r.itemCount}`);
+    assert.equal(r.lowRelevanceSkipped, 2, `应跳过低相关页 2 条，实得 ${r.lowRelevanceSkipped}`);
+    assert.equal(r.droppedCount, 0);
+    assert.equal(r.totalCandidates, 5, `总候选应含 5 个已发现页面，实得 ${r.totalCandidates}`);
+
+    const m = readManifest(source.id);
+    assert.equal(m.lowRelevanceSkipped, 2);
+    assert.ok(Array.isArray(m.lowRelevanceSamples) && m.lowRelevanceSamples.length === 2);
+
+    const ev = events.find((e) => e.step === 'low-relevance-skipped');
+    assert.ok(ev, '应发出 low-relevance-skipped NDJSON 事件');
+    assert.equal(ev.detail.lowRelevanceSkipped, 2);
+  });
+
+  it('skipLowRelevanceCheck=true disables the filter', async () => {
+    freshEnv('site-lowrel-off');
+    const source = upsertSource({
+      type: 'site', name: 'LROff', target: `http://127.0.0.1:${port}/`,
+      options: { depth: 1, maxPages: 10, skipLowRelevanceCheck: true },
+    }).source;
+    const r = await refreshSource(source.id, { allowPrivateNetwork: true });
+    const titles = listItems({ sourceId: source.id }).map((i) => i.title).sort();
+    assert.equal(r.itemCount, 5, `关闭过滤后应入库 5 条，实得 ${r.itemCount}`);
+    assert.equal(r.lowRelevanceSkipped, 0);
+    assert.ok(titles.includes('Sign in to GitHub · GitHub'));
+    assert.ok(titles.includes('GitHub · Change is constant'));
+  });
+
+  it('registry normalizes and persists skipLowRelevanceCheck', () => {
+    freshEnv('site-opt');
+    const on = validateSource({
+      type: 'site', name: 'On', target: 'https://example.com', options: { skipLowRelevanceCheck: true },
+    });
+    assert.equal(on.options.skipLowRelevanceCheck, true);
+    const off = validateSource({ type: 'site', name: 'Off', target: 'https://example.com' });
+    assert.equal(off.options.skipLowRelevanceCheck, false);
+    assert.throws(
+      () => validateSource({
+        type: 'site', name: 'Bad', target: 'https://example.com', options: { skipLowRelevanceCheck: 'yes' },
+      }),
+      /skipLowRelevanceCheck/,
+    );
+  });
+
+  it('GET /api/sources surfaces lowRelevanceSkipped', async () => {
+    freshEnv('site-lowrel-api');
+    const ctx = makeRouteCtx();
+    const created = await call(ctx, 'POST', '/api/sources', {
+      body: { type: 'site', name: 'LRA', target: `http://127.0.0.1:${port}/`, options: { depth: 1, maxPages: 10 } },
+    });
+    const id = created.body.source.id;
+    await refreshSource(id, { allowPrivateNetwork: true });
+    const listed = await call(ctx, 'GET', '/api/sources');
+    const row = listed.body.sources.find((s) => s.id === id);
+    assert.equal(row.lowRelevanceSkipped, 2);
+    assert.ok(Array.isArray(row.lowRelevanceSamples));
+  });
+
+  it('P1-2: 根页返回 200 登录墙导致 0 入库时，必须保留既有语料、不得物理删除', async () => {
+    freshEnv('site-lowrel-preserve');
+    const ENTRY = 'http://site.test/';
+    let round = 1;
+    const fetchStub = async (url) => {
+      if (url === ENTRY) {
+        if (round === 1) {
+          return {
+            html: '<title>Knowledge Home</title><body><a href="/a.html">A</a><a href="/b.html">B</a></body>',
+            finalUrl: ENTRY,
+          };
+        }
+        // 第 2 轮：根页变成 200 登录墙，被低相关过滤跳过，且不再暴露子页链接
+        return {
+          html: '<title>Sign in to Acme</title><body>Sign in to Acme. Username Password Forgot password?</body>',
+          finalUrl: ENTRY,
+        };
+      }
+      if (round === 1) {
+        return { html: `<title>${url}</title><article>useful content about ${url}</article>`, finalUrl: url };
+      }
+      throw new Error('第 2 轮不应再抓取子页');
+    };
+    const source = upsertSource({ type: 'site', name: 'P', target: ENTRY, options: { depth: 1, maxPages: 10 } }).source;
+
+    const r1 = await refreshSource(source.id, { fetchPage: fetchStub, allowPrivateNetwork: true });
+    assert.equal(r1.itemCount, 3, '首轮应入库 3 条');
+
+    round = 2;
+    const events = [];
+    const r2 = await refreshSource(source.id, { fetchPage: fetchStub, allowPrivateNetwork: true, onEvent: (e) => events.push(e) });
+
+    assert.equal(r2.itemCount, 3, '第 2 轮必须保留既有 3 条，不得因 0 入库被清空');
+    assert.equal(r2.removed, 0, '不得物理删除任何既有素材');
+    assert.equal(r2.preserved, true, '必须触发整源归零保命');
+    assert.equal(r2.lowRelevanceSkipped, 1, '应报告 1 个低相关页被跳过');
+    assert.ok(events.some((e) => e.step === 'preserve'), '应发出 preserve 事件');
+    assert.ok(events.some((e) => e.step === 'low-relevance-skipped'), '应发出 low-relevance-skipped 事件');
+
+    const m = readManifest(source.id);
+    assert.equal(m.preserved, true);
+    assert.equal(m.items.length, 3);
+    const itemsDir = path.join(process.env.AI_PPT_SOURCE_CACHE_ROOT, source.id, 'items');
+    assert.equal(fs.readdirSync(itemsDir).filter((f) => f.endsWith('.md')).length, 3, '磁盘 items 文件一条不少');
+  });
+
+  it('isLowRelevancePage 24-case adversarial table (B080800-P1-1/P2-1)', () => {
+    const longBody = 'This page contains substantial documentation content that explains features, usage, and best practices. '.repeat(10);
+    const shortBody = 'Short marketing slogan text.';
+    const e = (title, origin, body) => ({ title, origin, body });
+
+    // 必须丢弃（真垃圾）
+    assert.equal(isLowRelevancePage(e('Sign in to GitHub · GitHub', 'https://github.com/login', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('GitHub · Change is constant', 'https://github.com/about', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('登录', 'https://kb.example.com/login', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('Log in to your account', 'https://app.example.com/sso', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('Terms of Service', 'https://example.com/legal/terms', shortBody)), true);
+    assert.equal(isLowRelevancePage(e('404 Not Found', 'https://example.com/nope', shortBody)), true);
+
+    // 必须保留（合法知识中心/内容页，误杀即 P1）
+    assert.equal(isLowRelevancePage(e('知识中心', 'https://help.example.com/', longBody)), false);
+    assert.equal(isLowRelevancePage(e('帮助中心', 'https://help.example.com/help', longBody)), false);
+    assert.equal(isLowRelevancePage(e('如何重置密码', 'https://help.example.com/articles/reset-password', longBody)), false);
+    assert.equal(isLowRelevancePage(e('产品文档 · v2', 'https://docs.example.com/v2', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Getting Started', 'https://docs.example.com/getting-started', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Quickstart · Acme API', 'https://acme.dev/quickstart', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Authentication', 'https://docs.example.com/auth', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Login API Reference', 'https://docs.example.com/api/login', longBody)), false);
+    assert.equal(isLowRelevancePage(e('常见问题 FAQ', 'https://help.example.com/faq', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Release Notes · March 2026', 'https://example.com/changelog', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Team · Our people', 'https://example.com/team', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Pricing & Plans', 'https://example.com/pricing', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Sign in with SSO — Admin Guide', 'https://docs.example.com/admin/sso', longBody)), false);
+    assert.equal(isLowRelevancePage(e('Onboarding checklist', 'https://help.example.com/onboarding', longBody)), false);
+    assert.equal(isLowRelevancePage(e('博客 · 产品团队', 'https://example.com/blog', longBody)), false);
+    assert.equal(isLowRelevancePage(e('产品更新', 'https://example.com/updates', longBody)), false);
+    assert.equal(isLowRelevancePage(e('新员工 · 培训资料', 'https://kb.example.com/staff', longBody)), false);
+    assert.equal(isLowRelevancePage(e('三人行 · 技术笔记', 'https://blog.example.com/', longBody)), false);
   });
 });
 
