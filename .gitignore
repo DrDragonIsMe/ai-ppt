@@ -1,7 +1,9 @@
 .DS_Store
 *.log
 /tmp/
-node_modules/
+# 不带尾斜杠：同时匹配目录与符号链接形式的 node_modules
+# （worktree 里常用 ln -s 指向共享安装，尾斜杠形式不匹配软链，会被 git add -A 误提交）
+node_modules
 .backup/
 .snapshots/
 projects/*
@@ -16,7 +18,8 @@ vault/.meta/
 published/
 test-output/
 
-# ---- 生成物与素材禁止入库（约定见 AGENTS.md「产物与素材入库策略」）----
+# ---- 生成物与素材禁止入库 ----
+# 依据：人类硬约束「不要把生成物加入git，视频不要加入git」；回归护栏 tests/artifact-policy.test.mjs
 # 参考素材库（外部拿来的 deck / 视频，体积大且非本仓库产物）
 references/
 # 素材源抓取缓存与清单（随时可由源重新抓取）
@@ -33,3 +36,13 @@ marketing/
 # 导出产物兜底（projects/* 已忽略，此处覆盖仓库根与任意层级）
 export/
 cover.png
+# 仓库根截图杂物（无任何代码/文档引用，已 untrack；防止 git add -A 再拍回来）
+screenshot-main.png
+
+# ---- 刻意保留跟踪的例外（回归护栏：tests/artifact-policy.test.mjs）----
+# demo/ 封面图：GitHub Pages 部署源（.github/workflows/pages.yml 直接上传 demo/），
+# 去掉会让线上演示 404；web/icons/：PWA 源资源。以下 negation 防御未来误加 *.png
+# 这类全局媒体规则时把这两处产物级资源静默排除。
+!demo/
+!demo/cover-*.png
+!web/icons/

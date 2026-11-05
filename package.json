@@ -21,7 +21,7 @@
     "search": "node scripts/search.mjs",
     "snapshot": "node scripts/snapshot.mjs",
     "chat-modify": "node scripts/chat-modify.mjs",
-    "test": "node --test tests/core.test.mjs",
+    "test": "node --test tests/*.test.mjs",
     "test:smoke": "node scripts/test-smoke.mjs"
   },
   "dependencies": {
