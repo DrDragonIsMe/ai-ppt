@@ -6065,6 +6065,15 @@ li.task-done,
   border-radius: 999px;
 }
 
+/* 素材被 maxPages 截断：「另有 N 条未入库」徽标（与 .source-tag 同族样式） */
+.source-trunc-badge {
+  font-size: 11px;
+  color: var(--teal);
+  background: rgba(13, 148, 136, 0.08);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
 .source-refresh-state {
   font-size: 12px;
   padding: 6px 10px;

@@ -108,16 +108,16 @@ export async function generateOutline() {
     if (S.marketing.generating) return;
     const sourceIds = [...(S.marketing.selectedSourceIds || [])];
     if (!sourceIds.length) { showToast(t('请先勾选至少一个素材源'), 'error'); return; }
-    const productName = document.getElementById('outline-input-product-name').value.trim();
+    const productName = document.getElementById('outline-input-product-name')?.value.trim();
     if (!productName) { showToast(t('请填写产品名'), 'error'); return; }
     const body = {
         sourceIds,
-        title: document.getElementById('outline-input-title').value.trim(),
-        angleSet: document.getElementById('outline-input-angle-set').value.trim() || 'standard',
+        title: document.getElementById('outline-input-title')?.value.trim(),
+        angleSet: document.getElementById('outline-input-angle-set')?.value.trim() || 'standard',
         product: {
             name: productName,
-            audience: document.getElementById('outline-input-audience').value.trim(),
-            tone: document.getElementById('outline-input-tone').value.trim(),
+            audience: document.getElementById('outline-input-audience')?.value.trim(),
+            tone: document.getElementById('outline-input-tone')?.value.trim(),
         },
     };
     const btn = document.getElementById('btn-generate-outline');
@@ -163,6 +163,8 @@ export async function generateOutline() {
             if (!settle()) return;
             es.close(); if (outlineEs === es) outlineEs = null;
             finishOutlineGen(t('大纲已生成'), false);
+            // M10 契约：大纲终态载荷带 llmReachable（LLM 可达性，false = 兜底模板生成），记入状态供后续 UI 消费
+            if (typeof event.llmReachable === 'boolean') S.marketing.outlineGenLlmReachable = event.llmReachable;
             loadOutlines();
             showToast(t('营销大纲生成完成'));
         } else if (event.type === 'error') {
@@ -380,6 +382,10 @@ function syncOutlineFromDom() {
     return o;
 }
 
+// PUT /api/marketing/outline/:id 是整份替换 angles（M10 契约事实：后端 updateOutline 见
+// `angles: Array.isArray(patch.angles) ? patch.angles : existing.angles`，传了就整体覆盖）。
+// syncOutlineFromDom 收集的是编辑器渲染的全部 angle-card（DOM 由 o.angles 全量渲染），
+// 因此这里回传的 o 始终携带完整 angles，绝不只发局部 diff —— 局部 patch 会把未编辑的角度整页删掉。
 async function saveOutline() {
     const o = syncOutlineFromDom();
     if (!o || o.id == null) return;
@@ -403,24 +409,37 @@ let batchEs = null;
 let batchIdleCancel = null; // 当前批量流的 idle 看门狗撤销句柄
 let batchGen = 0;           // 流代次：建新流 ++ 作废旧流看门狗；reap 不 ++（回收不得剥夺兜底）
 
+// O4：批次在途守卫 —— 启动中（POST 未回前）与在跑中都不允许再发起，连点两次不会把
+// 第一批的 rows/进度表从 UI 挤掉；后端 409 仍是最终防线（M10 已实现，本守卫只是本地早退）
+let batchStarting = false;
+
 async function startBatch() {
-    const o = syncOutlineFromDom();
-    if (!o || o.id == null) { showToast(t('请先打开一个大纲'), 'error'); return; }
-    const angleKeys = (S.marketing.selectedAngleKeys || []).filter((k) => (o.angles || []).some((a) => String(a.key) === k));
-    if (!angleKeys.length) { showToast(t('请至少勾选一个角度'), 'error'); return; }
-    // 勾选角度变更过标题/论点时先保存，保证后端按最新内容生成
-    try { await api('PUT', `/api/marketing/outline/${encodeURIComponent(o.id)}`, o); }
-    catch (err) { showToast(t('大纲保存失败：{msg}', { msg: errText(err) }), 'error'); return; }
-    const overwrite = !!document.getElementById('batch-input-overwrite')?.checked;
-    try {
-        await api('POST', '/api/marketing/batch', { outlineId: o.id, angleKeys, overwrite });
-    } catch (err) {
-        showToast(t('批量生成启动失败：{msg}', { msg: errText(err) }), 'error');
+    if (batchStarting || (S.marketing.batch && !S.marketing.batch.finished)) {
+        showToast(t('已有批次正在生成，请先等待完成'), 'error');
         return;
     }
-    S.marketing.batch = { outlineId: o.id, outlineTitle: o.title || String(o.id), total: angleKeys.length, rows: [], finished: false, cancelling: false };
-    _cb.switchSidebarTab?.('materials', 'batch');
-    attachBatchEvents();
+    batchStarting = true;
+    try {
+        const o = syncOutlineFromDom();
+        if (!o || o.id == null) { showToast(t('请先打开一个大纲'), 'error'); return; }
+        const angleKeys = (S.marketing.selectedAngleKeys || []).filter((k) => (o.angles || []).some((a) => String(a.key) === k));
+        if (!angleKeys.length) { showToast(t('请至少勾选一个角度'), 'error'); return; }
+        // 勾选角度变更过标题/论点时先保存，保证后端按最新内容生成（PUT 整份替换 angles，o 为完整大纲）
+        try { await api('PUT', `/api/marketing/outline/${encodeURIComponent(o.id)}`, o); }
+        catch (err) { showToast(t('大纲保存失败：{msg}', { msg: errText(err) }), 'error'); return; }
+        const overwrite = !!document.getElementById('batch-input-overwrite')?.checked;
+        try {
+            await api('POST', '/api/marketing/batch', { outlineId: o.id, angleKeys, overwrite });
+        } catch (err) {
+            showToast(t('批量生成启动失败：{msg}', { msg: errText(err) }), 'error');
+            return;
+        }
+        S.marketing.batch = { outlineId: o.id, outlineTitle: o.title || String(o.id), total: angleKeys.length, rows: [], finished: false, cancelling: false };
+        _cb.switchSidebarTab?.('materials', 'batch');
+        attachBatchEvents();
+    } finally {
+        batchStarting = false;
+    }
 }
 
 function attachBatchEvents() {
@@ -453,8 +472,13 @@ function attachBatchEvents() {
         renderBatch();
         loadBatchHistory();
         _cb.loadProjects?.(); // 新 deck 出现在作品列表
-        if (isError) showToast(message, 'error');
-        else if (message) showToast(message);
+        // O1：reap 后迟到的终态只弹给仍停留在批量面板的用户；两个 load 调用保留——
+        // 超时/后台完成时可能已产出半数 deck，数据仍须刷新
+        const batchPanelVisible = !document.getElementById('batch-panel')?.classList.contains('hidden');
+        if (batchPanelVisible) {
+            if (isError) showToast(message, 'error');
+            else if (message) showToast(message);
+        }
     };
     es.onmessage = (ev) => {
         clearTimeout(watchdog); watchdog = arm(); // 活着就续期：事件到达即重置 idle 计时
@@ -473,6 +497,8 @@ function attachBatchEvents() {
                 total: Number(event.total) || b.total,
                 status: event.status || 'running',
                 message: event.message || '',
+                // M10 契约：done 行的 previewUrl 由后端逐 deck 事件给出，打开预览时优先消费
+                previewUrl: event.previewUrl || null,
             };
             if (existing >= 0) b.rows[existing] = row;
             else b.rows.push(row);
@@ -482,6 +508,19 @@ function attachBatchEvents() {
             b.message = event.message || b.message || '';
             renderBatch();
         } else if (event.type === 'done') {
+            // M10 契约：终态载荷带 rows[].previewUrl + 顶层 previewBase + llmReachableFlag。
+            // 个别行若漏过 deck 事件（如重连后只收到终态），用后端终态行补齐预览入口；
+            // llmReachableFlag 记入批次状态供后续 UI 消费（本轮不做展示）
+            if (Array.isArray(event.rows)) {
+                const known = new Map(b.rows.map((r) => [r.deckName, r]));
+                for (const rr of event.rows) {
+                    if (!rr.previewUrl) continue;
+                    const existing = known.get(rr.deckName);
+                    if (existing) existing.previewUrl = rr.previewUrl;
+                }
+            }
+            if (typeof event.previewBase === 'string' && event.previewBase) b.previewBase = event.previewBase;
+            if (typeof event.llmReachableFlag === 'boolean') b.llmReachableFlag = event.llmReachableFlag;
             b.rows.forEach((r) => { if (String(r.status).toLowerCase() === 'running') r.status = 'done'; });
             finishBatch(t('批量生成完成'), false);
         } else if (event.type === 'error') {
@@ -533,11 +572,13 @@ function renderBatch() {
     active.classList.toggle('hidden', !b);
     hint.classList.toggle('hidden', !!b);
     if (!b) return;
-    document.getElementById('batch-active-title').textContent = b.finished && !b.error
+    const titleEl = document.getElementById('batch-active-title');
+    if (titleEl) titleEl.textContent = b.finished && !b.error
         ? t('批量生成完成') : b.error ? t('批量生成中断') : t('批量生成进行中');
     const doneCount = b.rows.filter((r) => ['done', 'success'].includes(String(r.status).toLowerCase())).length;
     const total = b.total || b.rows.length || 0;
-    document.getElementById('batch-progress-text').textContent = `${doneCount} / ${total}${b.message ? ' · ' + b.message : ''}`;
+    const progressEl = document.getElementById('batch-progress-text');
+    if (progressEl) progressEl.textContent = `${doneCount} / ${total}${b.message ? ' · ' + b.message : ''}`;
     const fill = document.getElementById('batch-progress-fill');
     if (fill) fill.style.width = total ? `${Math.round((doneCount / total) * 100)}%` : '0%';
     const cancelBtn = document.getElementById('btn-batch-cancel');
@@ -579,7 +620,11 @@ function batchRowHtml(r) {
 
 function openBatchDeck(deckName, mode) {
     if (mode === 'preview') {
-        window.open(`/projects/${encodeURIComponent(deckName)}/`, '_blank');
+        // 优先消费后端 previewUrl（rows[].previewUrl / 顶层 previewBase），缺失时回退自拼，保持向后兼容
+        const row = S.marketing.batch?.rows?.find((r) => r.deckName === deckName);
+        const url = row?.previewUrl
+            || `${S.marketing.batch?.previewBase || '/projects/'}${encodeURIComponent(deckName)}/`;
+        window.open(url, '_blank');
         return;
     }
     _cb.switchSidebarTab?.('projects');
