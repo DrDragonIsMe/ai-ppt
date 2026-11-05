@@ -16,6 +16,7 @@ import {
 } from './store.mjs';
 import { makeEmitter, withHeartbeat } from './events.mjs';
 import { buildModelOptions, stripMarkdown } from '../generation-common.mjs';
+import { llmReachable } from './llm.mjs';
 import { completeChat, getLastLlmError } from '../llm-adapter.mjs';
 
 const SLIDES_PER_ANGLE_DEFAULT = 5;
@@ -211,7 +212,10 @@ export async function generateOutline(opts = {}) {
   const assignment = assignMaterial(angles, material.items, { perAngleItems: Math.max(slideCount, 6) });
 
   const modelOptions = deps.modelOptions ?? buildModelOptions();
-  const llmAvailable = !!(modelOptions.apiKey || modelOptions.baseUrl || modelOptions.provider);
+  // 可达性用 llmReachable（真信号：远程必须有 key），再加"失败一次即短路"的探测位：
+  // 避免未配置 LLM 的用户为 6 个角度各等一次网络超时。原因仍如实上报，不谎称成功。
+  const llmProbed = { attempted: false, disabledAfterFailure: false };
+  let llmUsable = llmReachable(modelOptions, { explicitSkip: deps.skipLlm === true });
 
   const planPerAngle = new Map();
   let llmUsed = 0;
@@ -232,17 +236,21 @@ export async function generateOutline(opts = {}) {
       continue;
     }
 
-    if (!llmAvailable && !deps.forceLlm) {
+    if ((!llmUsable || llmProbed.disabledAfterFailure) && !deps.forceLlm) {
       planPerAngle.set(angle.key, {
         ...fallbackAnglePlan(angle, entries, slideCount),
         source: 'fallback',
         materialChars: built.materialChars,
       });
-      emitter.progress('angle', `角度 ${idx + 1}/${angles.length}「${angle.title}」：未配置 LLM，使用确定性兜底规划`,
-        { angleKey: angle.key, index: idx, total: angles.length, llm: false });
+      emitter.progress('angle',
+        llmProbed.disabledAfterFailure
+          ? `角度 ${idx + 1}/${angles.length}「${angle.title}」：前序 LLM 调用已失败（${llmReason || '未知原因'}），直接用确定性兜底，不再等待网络`
+          : `角度 ${idx + 1}/${angles.length}「${angle.title}」：未配置可用 LLM（远程无 API Key），使用确定性兜底规划`,
+        { angleKey: angle.key, index: idx, total: angles.length, llm: false, shortCircuited: true });
       continue;
     }
 
+    llmProbed.attempted = true;
     emitter.progress('angle', `角度 ${idx + 1}/${angles.length}「${angle.title}」调用 LLM`, {
       angleKey: angle.key, index: idx, total: angles.length, llm: true,
     });
@@ -277,11 +285,14 @@ export async function generateOutline(opts = {}) {
       } else {
         llmFailed++;
         llmReason = result ? 'LLM 返回内容无法解析为幻灯片 JSON' : `LLM 无响应（${getLastLlmError() || '未配置或全部 provider 失败'}）`;
+        // 只有"没打通"才短路后续角度；打通了但内容不合格（result 有值）属内容问题，后续角度仍值得再试
+        if (!result) llmProbed.disabledAfterFailure = true;
         emitter.progress('angle', `角度「${angle.title}」：${llmReason}，改用确定性兜底`, { angleKey: angle.key });
       }
     } catch (err) {
       llmFailed++;
       llmReason = err.message;
+      llmProbed.disabledAfterFailure = true;
       emitter.progress('angle', `角度「${angle.title}」：LLM 调用异常（${err.message}），改用确定性兜底`, { angleKey: angle.key });
     }
     if (!plan) {
@@ -347,7 +358,11 @@ export async function generateOutline(opts = {}) {
       includeStale: material.stats.includeStale,
       droppedEvidenceCount: integrity.dropped,
       perSource: material.perSource,
-      llm: { used: llmUsed, failed: llmFailed, available: llmAvailable || !!deps.forceLlm, reason: llmReason },
+      llm: {
+        used: llmUsed, failed: llmFailed,
+        reachable: llmUsable, attempted: llmProbed.attempted, shortCircuited: llmProbed.disabledAfterFailure,
+        reason: llmReason,
+      },
       thesisCollisions,
     },
   };
@@ -387,7 +402,9 @@ export async function generateOutline(opts = {}) {
     thesisCollisions,
     llmUsed,
     llmFailed,
-    llmAvailable,
+    llmReachable: llmUsable,
+    llmAttempted: llmProbed.attempted,
+    llmShortCircuited: llmProbed.disabledAfterFailure,
     llmReason,
     staleSkipped: material.stats.staleSkipped,
     warnings: outline.warnings,

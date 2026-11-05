@@ -28,6 +28,7 @@ import { getOutline, createBatchRecord, updateBatchRecord } from './store.mjs';
 import { marketingRoot } from './paths.mjs';
 import { findAngle } from './angles.mjs';
 import { makeEmitter, withHeartbeat } from './events.mjs';
+import { llmReachable } from './llm.mjs';
 
 const SLIDE_COUNT_DEFAULT = 8;
 const SLIDE_COUNT_MIN = 4;
@@ -176,7 +177,8 @@ export async function batchGenerate(opts = {}) {
   const theme = opts.theme || 'web-ui';
   const animation = opts.animation || 'slide';
   const modelOptions = deps.modelOptions ?? buildModelOptions();
-  const llmAvailable = !!(modelOptions.apiKey || modelOptions.baseUrl || modelOptions.provider);
+  // 可达性判定见 llm.mjs：buildModelOptions 的默认 baseUrl/provider 会让旧写法恒真，等于没开关
+  const llmUsable = llmReachable(modelOptions, { explicitSkip: deps.skipLlm === true });
 
   // index 稳定且从 0 连续（M11 前端以 index 作进度表主键）
   const rows = wanted.map((a, index) => ({
@@ -225,7 +227,7 @@ export async function batchGenerate(opts = {}) {
       const prompt = deckPrompt({ outline, angle, material: material.content, slideCount, existingCfg });
 
       let slidesHtml;
-      if (llmAvailable || deps.forceLlm) {
+      if (llmUsable || deps.forceLlm) {
         const { result } = await withHeartbeat(emitter, async () => doGenerate({
           prompt,
           modelOptions,
@@ -336,7 +338,7 @@ export async function batchGenerate(opts = {}) {
     failedCount: rows.filter((r) => r.status === 'error').length,
     cancelledCount: rows.filter((r) => r.status === 'cancelled').length,
     wasCancelled,
-    llmAvailable,
+    llmReachableFlag: llmUsable,
     rows,
     deckNames: rows.map((r) => r.deckName),
     projectDirs: rows.filter((r) => r.status === 'done').map((r) => `projects/${r.deckName}`),

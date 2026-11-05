@@ -20,6 +20,7 @@ import {
 import { generateOutline, extractJsonObject, normalizeAngleSlides, fallbackAnglePlan } from '../scripts/marketing/generate-outline.mjs';
 import { batchGenerate, loadAngleItems, buildDeckFallback, cancelFlagFor } from '../scripts/marketing/batch-generate.mjs';
 import { makeEmitter, withHeartbeat } from '../scripts/marketing/events.mjs';
+import { llmReachable } from '../scripts/marketing/llm.mjs';
 import marketingRoutes from '../routes/marketing.mjs';
 import { isSafeName, getProjectDir, readConfig, ROOT_DIR, PROJECTS_ROOT } from '../scripts/config.mjs';
 
@@ -541,6 +542,87 @@ describe('LLM output parsing helpers', () => {
     const plan = fallbackAnglePlan(angle, entries, 4);
     assert.ok(plan.slides.length >= 3);
     for (const s of plan.slides) for (const id of s.evidenceItemIds) assert.ok(ALL_IDS.includes(id));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LLM 可达性判定 + 失败短路
+// ---------------------------------------------------------------------------
+describe('llmReachable', () => {
+  it('remote endpoint without an apiKey is NOT reachable', () => {
+    // buildModelOptions() 无 key 时仍会给出默认 baseUrl/provider/model，
+    // 旧写法 !!（apiKey||baseUrl||provider）恒真 —— 这里锁住真实信号：远程必须有 key。
+    assert.equal(llmReachable({ baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3', model: 'x', provider: 'openai' }), false);
+    assert.equal(llmReachable({}), false);
+    assert.equal(llmReachable(null), false);
+    assert.equal(llmReachable({ apiKey: 'sk-test', baseUrl: 'https://api.example.com/v1' }), true);
+  });
+
+  it('local endpoints are reachable without a key', () => {
+    assert.equal(llmReachable({ baseUrl: 'http://localhost:1234/v1' }), true);
+    assert.equal(llmReachable({ baseUrl: 'http://127.0.0.1:11434/v1', provider: 'openai' }), true);
+    assert.equal(llmReachable({ baseUrl: 'http://0.0.0.0:1234/v1' }), true);
+    assert.equal(llmReachable({ provider: 'lmstudio' }), true);
+  });
+
+  it('an explicit skip overrides everything', () => {
+    assert.equal(llmReachable({ apiKey: 'sk-test' }, { explicitSkip: true }), false);
+    assert.equal(llmReachable({ baseUrl: 'http://localhost:1234/v1' }, { explicitSkip: true }), false);
+  });
+});
+
+describe('LLM failure short-circuit', () => {
+  it('once the LLM proves unreachable, later angles skip it instead of waiting again', async () => {
+    let calls = 0;
+    const { summary, outline, events } = await runOutline({
+      deps: {
+        // 有 key → 判定为可达 → 第一个角度真会去调；注入必挂的 completeChat 模拟网络不可达
+        modelOptions: { apiKey: 'sk-test', baseUrl: 'https://example.invalid/v1' },
+        completeChat: async () => { calls++; return null; },
+        heartbeatMs: 50,
+      },
+    });
+    assert.equal(calls, 1, `短路失效：LLM 已失败仍为每个角度重试（调用 ${calls} 次）`);
+    assert.equal(summary.llmReachable, true, '可达性按配置判定，应记录为 true（是试过失败的）');
+    assert.equal(summary.llmAttempted, true);
+    assert.equal(summary.llmShortCircuited, true, '应记录发生过短路');
+    assert.equal(summary.llmUsed, 0);
+    assert.ok(summary.llmFailed > 0);
+    assert.ok(events.some((e) => e.type === 'progress' && e.step === 'angle' && e.detail?.shortCircuited === true),
+      '短路角度要发可见事件，前端才知道没在等网络');
+    // 短路不能让大纲变成空壳
+    assert.ok(outline.angles.length >= 6);
+    assert.deepEqual(validateOutline(outline), [], `短路后大纲不合契约：${validateOutline(outline).join('；')}`);
+    assert.ok(outline.angles.every((a) => a.generatedBy === 'fallback'));
+  });
+
+  it('an LLM call that throws also short-circuits the remaining angles', async () => {
+    let calls = 0;
+    const { summary, outline } = await runOutline({
+      deps: {
+        modelOptions: { apiKey: 'sk-test', baseUrl: 'https://example.invalid/v1' },
+        completeChat: async () => { calls++; throw new Error('ECONNREFUSED'); },
+        heartbeatMs: 50,
+      },
+    });
+    assert.equal(calls, 1, `抛错后仍逐角度重试（调用 ${calls} 次）`);
+    assert.equal(summary.llmShortCircuited, true);
+    assert.match(summary.llmReason, /ECONNREFUSED/, '真实异常原因要如实上报');
+    assert.ok(outline.angles.length >= 6, '异常短路后仍须产出完整大纲');
+  });
+
+  it('garbage-but-connected LLM does NOT short-circuit (content problem ≠ dead link)', async () => {
+    let calls = 0;
+    const { summary } = await runOutline({
+      deps: {
+        modelOptions: { apiKey: 'sk-test', baseUrl: 'https://example.invalid/v1' },
+        completeChat: async () => { calls++; return { content: '抱歉，我做不到。' }; },
+        heartbeatMs: 50,
+      },
+    });
+    assert.ok(calls >= 2, `链路是通的、只是内容不合格，后续角度应继续尝试，实际调用 ${calls} 次`);
+    assert.equal(summary.llmShortCircuited, false);
+    assert.equal(summary.llmReachable, true);
   });
 });
 
